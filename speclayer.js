@@ -1,33 +1,65 @@
 /*!
- * SpecLayer v0.1 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * SpecLayer v0.2 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
- * 사용법:
+ * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
- *   2) window.SPECLAYER 설정 정의 (화면 메타 + 기능정의)
+ *   2) window.SPECLAYER = { screen:{...}, specs:[...] } 정의
  *   3) 이 스크립트를 <body> 마지막에 로드
  *
- * window.SPECLAYER = {
- *   screen: { id:"SCR-XXX-001", name:"화면명", path:["홈","메뉴","상세"] },
- *   widths: { mobile:430, pc:1440 },          // 선택 (기본값 그대로면 생략)
- *   specs: [{
- *     n:1, target:"1", anno:"box"|"arrow"|"action", title:"영역명",
- *     defs:[{ t:"기능정의 한 줄", subs:["하위 조건"] }],
- *     play:{ selector:"#btn", label:"동작 재생" }   // anno:"action"일 때
- *   }]
- * }
+ * 사용법 (다중 화면 SPA — 화면 전환 시 헤더·기능정의 자동 추적):
+ *   window.SPECLAYER = {
+ *     screens: [
+ *       { id:"SCR-XXX-001", name:"목록", path:["홈","목록"],
+ *         root:'[data-sl-screen="SCR-XXX-001"]',   // 이 화면의 컨테이너 셀렉터
+ *         specs:[...] },
+ *       { id:"SCR-XXX-002", name:"상세", path:["홈","목록","상세"],
+ *         root:'[data-sl-screen="SCR-XXX-002"]', specs:[...] }
+ *     ]
+ *   }
+ *   - 화면 컨테이너가 표시/숨김(display 등)으로 전환되면 자동 감지해 따라간다.
+ *   - 수동 전환도 가능: window.SpecLayer.setScreen("SCR-XXX-002")
+ *   - data-spec 번호는 화면(root) 안에서만 찾으므로 화면마다 1부터 다시 시작 가능.
  *
- * 반응형 훅: 라이브러리가 시트 폭에 따라 .sl-pc(≥1100px) / .sl-narrow(≤520px)
- * 클래스를 시트에 부여한다. 프로토타입 CSS는 미디어쿼리 대신 이 훅으로 분기.
+ * anno 타입 8종 (SKILL.md §5) — 의미(라벨)와 시각 동작(mech)을 분리한 레지스트리:
+ *   box    영역   | mech box  | 기본값. 영역 하이라이트
+ *   arrow  화살표 | mech arrow| 아이콘·버튼 등 작은 요소 지시
+ *   input  입력   | mech box  | 입력 필드 정책 (글자수·형식·검증·placeholder)
+ *   state  상태   | mech box  | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무 등)
+ *   motion 모션   | mech box  | 등장·전환 애니메이션 정의
+ *   action 동작   | mech play | 클릭 시 실제 동작 재생. play:{selector,label}
+ *   popup  팝업   | mech play | 클릭 시 모달·레이어 열림. play:{selector,label}
+ *   flow   이동   | mech flow | 다른 화면으로 전환. flowTo:"SCR-ID" (+선택 play.selector)
+ *
+ * 반응형 훅: 시트 폭에 따라 .sl-pc(≥1100px) / .sl-narrow(≤520px)가 시트에 붙는다.
+ * 프로토타입 CSS는 미디어쿼리 대신 이 훅으로 분기.
+ *
+ * z-index 스케일 (프로토타입은 이 대역을 지킬 것):
+ *      0 ~ 7999  프로토타입 자유 영역 (시트 내부 콘텐츠)
+ *   8000 ~ 8099  SpecLayer 시트 오버레이 — anno 8030 · markers 8040 · resize 8050
+ *   9000 ~ 9099  SpecLayer 크롬 — docmode 9000 · toolbar 9020 · tip 9040
+ *   9500 이상    프로토타입 전역 오버레이 (data-sl-ignore 모달·토스트) — 모든 것 위 (의도)
  */
 (function () {
   "use strict";
-  const CFG = window.SPECLAYER || {};
-  const SCREEN = CFG.screen || { id: "SCR-000", name: "화면명 미정", path: [] };
-  const SPECS = CFG.specs || [];
-  const WIDTHS = Object.assign({ mobile: 430, pc: 1440 }, CFG.widths || {});
-  const ANNO_LABEL = { box: "영역", arrow: "화살표", action: "동작" };
+  const RAW = window.SPECLAYER || {};
+  const SCREENS = (RAW.screens && RAW.screens.length)
+    ? RAW.screens
+    : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
+  const WIDTHS = Object.assign({ mobile: 430, pc: 1440 }, RAW.widths || {});
+  /* anno 타입 레지스트리 — label(의미 구분) + mech(시각 동작). 새 타입은 여기 한 줄 추가 */
+  const ANNO = {
+    box:    { label: "영역",   mech: "box" },
+    arrow:  { label: "화살표", mech: "arrow" },
+    input:  { label: "입력",   mech: "box" },
+    state:  { label: "상태",   mech: "box" },
+    motion: { label: "모션",   mech: "box" },
+    action: { label: "동작",   mech: "play" },
+    popup:  { label: "팝업",   mech: "play" },
+    flow:   { label: "이동",   mech: "flow" }
+  };
+  function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
 
-  /* ============ 스타일 주입 (그레이스케일 + 포인트 1색) ============ */
+  /* ============ 스타일 (그레이스케일 + 포인트 1색) ============ */
   const CSS = `
   :root{--sl-canvas:#F1F1F0;--sl-ink:#191919;--sl-ink2:#50524E;--sl-ink3:#9B9A97;
     --sl-line:#E9E9E7;--sl-line2:#D3D1CB;--sl-accent:#2952E3;--sl-accent-soft:#EEF2FF;
@@ -35,7 +67,7 @@
   body{margin:0;background:var(--sl-canvas)}
   .sl-ui,.sl-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .sl-ui button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
-  .sl-toolbar{position:fixed;top:0;left:0;right:0;z-index:9060;height:50px;background:#fff;
+  .sl-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
     border-bottom:1px solid var(--sl-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
   .sl-modes{display:flex;border:1px solid var(--sl-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
   .sl-modes button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;color:var(--sl-ink2)}
@@ -50,7 +82,7 @@
   body.sl-mode-doc .sl-proto-wrap{display:none}
   .sl-holder{margin:0 auto;width:max-content}
   .sl-docmode{display:none}
-  body.sl-mode-doc .sl-docmode{display:flex;flex-direction:column;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:9050}
+  body.sl-mode-doc .sl-docmode{display:flex;flex-direction:column;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:9000}
   .sl-doc-header{background:#fff;border-bottom:1px solid var(--sl-line2);padding:12px 24px;display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap}
   .sl-dh .sl-k{font-size:10.5px;font-weight:700;color:var(--sl-ink3);letter-spacing:.06em;display:block;margin-bottom:1px}
   .sl-dh .sl-v{font-size:14px;font-weight:800;color:var(--sl-ink)}
@@ -85,25 +117,31 @@
   .sl-items li::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--sl-ink)}
   .sl-items li.sl-sub{margin-left:18px}
   .sl-items li.sl-sub::before{background:#fff;border:1.3px solid var(--sl-ink2);left:2px}
-  .sl-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
-    color:var(--sl-accent);border:1px solid var(--sl-accent);border-radius:7px;padding:5px 12px;background:#fff}
-  .sl-play:hover{background:var(--sl-accent-soft)}
+  .sl-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
+    color:#fff;border-radius:8px;padding:7px 14px;background:var(--sl-accent);
+    box-shadow:0 2px 8px rgba(41,82,227,.35);transition:background .12s}
+  .sl-play:hover{background:#1E3FC4}
+  .sl-play:active{transform:translateY(1px)}
   .sl-sheet{position:relative;background:#fff;border-radius:16px;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
   .sl-sheet.sl-narrow{padding:20px 14px 32px}
-  .sl-resize{position:absolute;top:0;right:-14px;width:14px;height:100%;cursor:ew-resize;display:flex;align-items:center;justify-content:center}
-  .sl-resize::after{content:"";width:4px;height:44px;border-radius:99px;background:var(--sl-line2);transition:background .15s}
-  .sl-resize:hover::after,.sl-resize.sl-dragging::after{background:var(--sl-accent)}
-  body.sl-mode-doc .sl-resize{display:none}
+  .sl-resize{position:absolute;z-index:8050;top:0;right:-18px;width:18px;height:100%;cursor:ew-resize;
+    display:flex;align-items:flex-start;justify-content:center;padding-top:230px}
+  .sl-resize .sl-grip{position:sticky;top:230px;width:6px;height:64px;border-radius:99px;background:#C6C4BD;
+    transition:background .15s;box-shadow:0 1px 3px rgba(17,24,39,.15)}
+  .sl-resize:hover .sl-grip,.sl-resize.sl-dragging .sl-grip{background:var(--sl-accent)}
+  /* 마커 — 흰 배경 + 검은 숫자, 활성 시 포인트색 배경 + 흰 숫자 (v0.2 가독성 수정) */
+  .sl-ui.sl-marker,.sl-ui.sl-marker:hover{
+    position:absolute;width:24px;height:24px;border-radius:50%;pointer-events:auto;padding:0;
+    background:#fff;color:var(--sl-ink);border:1.5px solid var(--sl-line2);
+    font-size:12px;font-weight:800;font-family:var(--sl-mono);
+    display:grid;place-items:center;box-shadow:0 2px 8px rgba(17,24,39,.28);cursor:pointer}
+  .sl-ui.sl-marker.sl-hot,.sl-ui.sl-marker.sl-hot:hover{background:var(--sl-accent);color:#fff;border-color:var(--sl-accent)}
   .sl-markers,.sl-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
-  .sl-anno{z-index:8039;overflow:visible}
-  .sl-marker{position:absolute;width:23px;height:23px;border-radius:50%;pointer-events:auto;
-    background:var(--sl-ink);color:#fff;font-size:12px;font-weight:800;font-family:var(--sl-mono);
-    display:grid;place-items:center;box-shadow:0 0 0 2.5px #fff,0 2px 8px rgba(17,24,39,.35);border:0;cursor:pointer}
-  .sl-marker.sl-hot{background:var(--sl-accent)}
+  .sl-anno{z-index:8030;overflow:visible}
   body.sl-mode-proto .sl-marker,body.sl-mode-proto .sl-anno{display:none}
   .sl-hl{box-shadow:0 0 0 2px var(--sl-accent),0 0 0 6px rgba(41,82,227,.15)!important;border-radius:12px}
-  .sl-tip{position:fixed;z-index:9065;max-width:280px;background:#fff;border:1px solid var(--sl-line2);
+  .sl-tip{position:fixed;z-index:9040;max-width:280px;background:#fff;border:1px solid var(--sl-line2);
     border-radius:10px;box-shadow:0 10px 30px rgba(17,24,39,.18);padding:10px 13px;display:none;pointer-events:none}
   .sl-tip .sl-tn{font-family:var(--sl-mono);font-size:10px;font-weight:800;color:var(--sl-accent)}
   .sl-tip .sl-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--sl-ink)}
@@ -133,7 +171,6 @@
     });
     keep.forEach((n) => sheet.appendChild(n));
 
-    /* 오버레이 레이어 */
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "sl-anno");
     annoSvg.innerHTML =
@@ -141,12 +178,12 @@
       '<path d="M0,0 L8,4 L0,8 Z" fill="#2952E3"></path></marker></defs>' +
       '<line id="sl-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#sl-arrowhead)" visibility="hidden"></line>';
     const markerLayer = h("div", { class: "sl-markers" });
-    const resize = h("div", { class: "sl-resize", title: "드래그로 폭 조절" });
+    const resize = h("div", { class: "sl-resize", title: "드래그로 폭 조절" }, '<div class="sl-grip"></div>');
     sheet.appendChild(annoSvg);
     sheet.appendChild(markerLayer);
     sheet.appendChild(resize);
 
-    /* ---- 툴바 (로고 없음: 모드 + 폭 프리셋 2개) ---- */
+    /* ---- 툴바 ---- */
     const toolbar = h("header", { class: "sl-toolbar sl-ui" }, `
       <nav class="sl-modes" aria-label="보기 모드">
         <button id="sl-mProto" aria-pressed="true">프로토타입</button>
@@ -161,19 +198,12 @@
       </div>`);
 
     /* ---- 화면정의서 모드 ---- */
-    const pathHtml = (SCREEN.path || [])
-      .map((p) => `<span>${p}</span>`)
-      .join('<span class="sl-sep">›</span>');
     const docmode = h("div", { class: "sl-docmode sl-ui" }, `
-      <div class="sl-doc-header">
-        <div class="sl-dh"><span class="sl-k">화면 ID</span><span class="sl-v sl-monoV">${SCREEN.id}</span></div>
-        <div class="sl-dh"><span class="sl-k">화면명</span><span class="sl-v">${SCREEN.name}</span></div>
-        ${pathHtml ? `<div class="sl-dh"><span class="sl-k">화면 경로</span><span class="sl-v">${pathHtml}</span></div>` : ""}
-      </div>
+      <div class="sl-doc-header" id="sl-dh-wrap"></div>
       <div class="sl-doc-body">
         <div class="sl-stage" id="sl-stage"><div class="sl-fit" id="sl-fit"><div class="sl-holder" id="sl-docHolder"></div></div></div>
         <aside class="sl-defs" aria-label="기능정의">
-          <div class="sl-defs-head"><h2>기능정의</h2><span class="sl-cnt">${SPECS.length}항목</span></div>
+          <div class="sl-defs-head"><h2>기능정의</h2><span class="sl-cnt" id="sl-cnt"></span></div>
           <div class="sl-defs-list" id="sl-defsList"></div>
         </aside>
       </div>`);
@@ -189,14 +219,112 @@
     const docHolder = document.getElementById("sl-docHolder");
     const stage = document.getElementById("sl-stage");
     const fit = document.getElementById("sl-fit");
+    const dhWrap = document.getElementById("sl-dh-wrap");
+    const cntEl = document.getElementById("sl-cnt");
+    const defsList = document.getElementById("sl-defsList");
+    const wpx = document.getElementById("sl-wpx");
     const annoLine = annoSvg.querySelector("#sl-line");
     protoHolder.appendChild(sheet);
     document.body.classList.add("sl-mode-proto");
 
-    /* ---- 폭: 프리셋 2 + 우측 드래그, 프리셋 클릭 = 기본값 복귀 ---- */
+    /* ---- 현재 화면 상태 ---- */
+    let current = SCREENS[0];
+    let activeN = null;
+    let markerEls = {};
+
+    function rootEl() {
+      return current.root ? document.querySelector(current.root) || document : document;
+    }
+    function targetOf(s) {
+      const r = rootEl();
+      return (r.querySelector ? r : document).querySelector('[data-spec="' + s.target + '"]');
+    }
+
+    /* ---- 화면별 렌더 ---- */
+    function renderHeader() {
+      const pathHtml = (current.path || []).map((p) => "<span>" + p + "</span>").join('<span class="sl-sep">›</span>');
+      dhWrap.innerHTML = `
+        <div class="sl-dh"><span class="sl-k">화면 ID</span><span class="sl-v sl-monoV">${current.id}</span></div>
+        <div class="sl-dh"><span class="sl-k">화면명</span><span class="sl-v">${current.name}</span></div>
+        ${pathHtml ? `<div class="sl-dh"><span class="sl-k">화면 경로</span><span class="sl-v">${pathHtml}</span></div>` : ""}`;
+    }
+    function renderDefs() {
+      cntEl.textContent = (current.specs || []).length + "항목";
+      defsList.innerHTML = "";
+      (current.specs || []).forEach((s) => {
+        let items = "";
+        (s.defs || []).forEach((d) => {
+          items += "<li>" + d.t + "</li>";
+          (d.subs || []).forEach((sub) => { items += '<li class="sl-sub">' + sub + "</li>"; });
+        });
+        const type = annoOf(s);
+        let play = "";
+        if (type.mech === "play" && s.play)
+          play = '<button class="sl-play" data-play="' + s.n + '">▶ ' + (s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
+        else if (type.mech === "flow" && (s.flowTo || s.play))
+          play = '<button class="sl-play" data-play="' + s.n + '">▶ ' + ((s.play && s.play.label) || "이동 — " + s.flowTo) + "</button>";
+        const row = h("div", { class: "sl-row", id: "sl-def-" + s.n, tabindex: "0" }, `
+          <div class="sl-no">${s.n}</div>
+          <div class="sl-main">
+            <div class="sl-title"><span class="sl-t">${s.title}</span><span class="sl-tag">${type.label}</span></div>
+            <ul class="sl-items">${items}</ul>${play}
+          </div>`);
+        row.onclick = () => activate(s.n, "panel");
+        row.onkeydown = (e) => { if (e.key === "Enter") activate(s.n, "panel"); };
+        defsList.appendChild(row);
+      });
+    }
+    function rebuildMarkers() {
+      markerLayer.innerHTML = "";
+      markerEls = {};
+      (current.specs || []).forEach((s) => {
+        const el = h("button", { class: "sl-ui sl-marker", "aria-label": "기능 " + s.n + ": " + s.title });
+        el.textContent = s.n;
+        el.onclick = (e) => { e.stopPropagation(); activate(s.n, "marker"); };
+        el.onmouseenter = () => showTip(s, el);
+        el.onmouseleave = () => (tip.style.display = "none");
+        markerLayer.appendChild(el);
+        markerEls[s.n] = el;
+      });
+    }
+    function renderScreen() {
+      renderHeader();
+      renderDefs();
+      rebuildMarkers();
+      requestAnimationFrame(layout);
+    }
+    function setScreen(id) {
+      const next = SCREENS.find((s) => s.id === id);
+      if (!next || next === current) return;
+      clearActive();
+      current = next;
+      renderScreen();
+    }
+
+    /* ---- 다중 화면 자동 감지 (root 표시/숨김 추적) ---- */
+    function detectScreen() {
+      if (SCREENS.length < 2) return;
+      for (const sc of SCREENS) {
+        if (!sc.root) continue;
+        const el = document.querySelector(sc.root);
+        if (el && el.getClientRects().length > 0) {
+          if (sc !== current) setScreen(sc.id);
+          return;
+        }
+      }
+    }
+    if (SCREENS.length > 1) {
+      let detTimer = null;
+      const mo = new MutationObserver(() => {
+        clearTimeout(detTimer);
+        detTimer = setTimeout(detectScreen, 80);
+      });
+      mo.observe(sheet, { subtree: true, attributes: true, childList: true, attributeFilter: ["style", "class", "hidden"] });
+    }
+
+    /* ---- 폭: 프리셋 2 + 드래그(양 모드), 프리셋 클릭 = 복귀 ---- */
     let sheetW = WIDTHS.mobile;
     let scale = 1;
-    const wpx = document.getElementById("sl-wpx");
     function applyWidth(px) {
       sheetW = Math.max(320, Math.min(1920, Math.round(px)));
       sheet.style.width = sheetW + "px";
@@ -212,17 +340,16 @@
       seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
       applyWidth(WIDTHS[btn.dataset.w]);
     });
-    /* 드래그 리사이즈 (프로토타입 모드) */
     let dragging = null;
     resize.addEventListener("pointerdown", (e) => {
-      dragging = { x: e.clientX, w: sheetW };
+      dragging = { x: e.clientX, w: sheetW, s: scale };
       resize.classList.add("sl-dragging");
       resize.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
     resize.addEventListener("pointermove", (e) => {
       if (!dragging) return;
-      applyWidth(dragging.w + (e.clientX - dragging.x) * 2); /* 중앙정렬이라 양쪽 성장 보정 */
+      applyWidth(dragging.w + ((e.clientX - dragging.x) * 2) / dragging.s); /* 중앙정렬 보정 + 축소 배율 보정 */
     });
     ["pointerup", "pointercancel"].forEach((ev) =>
       resize.addEventListener(ev, () => { dragging = null; resize.classList.remove("sl-dragging"); }));
@@ -257,28 +384,20 @@
         sheet.style.transform = "";
         fit.style.width = ""; fit.style.height = "";
       }
+      /* 드래그 그립은 축소 배율과 무관하게 잡히는 크기 유지 */
+      resize.style.width = Math.round(18 / scale) + "px";
+      resize.style.right = "-" + Math.round(18 / scale) + "px";
       placeMarkers();
     }
 
-    /* ---- 마커 ---- */
-    const markerEls = {};
-    SPECS.forEach((s) => {
-      const el = h("button", { class: "sl-marker sl-ui", "aria-label": "기능 " + s.n + ": " + s.title });
-      el.textContent = s.n;
-      el.onclick = (e) => { e.stopPropagation(); activate(s.n, "marker"); };
-      el.onmouseenter = () => showTip(s, el);
-      el.onmouseleave = () => (tip.style.display = "none");
-      markerLayer.appendChild(el);
-      markerEls[s.n] = el;
-    });
-    function targetOf(s) {
-      return document.querySelector('[data-spec="' + s.target + '"]');
-    }
+    /* ---- 마커 배치 ---- */
     function placeMarkers() {
       const sr = sheet.getBoundingClientRect();
-      SPECS.forEach((s) => {
+      (current.specs || []).forEach((s) => {
         const t = targetOf(s), m = markerEls[s.n];
-        if (!t || !m) return;
+        if (!m) return;
+        if (!t || t.getClientRects().length === 0) { m.style.display = "none"; return; }
+        m.style.display = "";
         const r = t.getBoundingClientRect();
         m.style.left = (r.left - sr.left) / scale + "px";
         m.style.top = (r.top - sr.top) / scale + "px";
@@ -288,7 +407,7 @@
     }
     function showTip(s, m) {
       tip.innerHTML =
-        '<div class="sl-tn">NO.' + s.n + " · " + (ANNO_LABEL[s.anno] || s.anno) + "</div>" +
+        '<div class="sl-tn">NO.' + s.n + " · " + annoOf(s).label + "</div>" +
         '<div class="sl-tt">' + s.title + "</div>" +
         '<div class="sl-td">' + ((s.defs && s.defs[0] && s.defs[0].t) || "") + "</div>";
       tip.style.display = "block";
@@ -302,8 +421,8 @@
 
     /* ---- 화살표 (anno: arrow) ---- */
     function drawArrow() {
-      const s = SPECS.find((x) => x.n === activeN);
-      if (!s || s.anno !== "arrow") { annoLine.setAttribute("visibility", "hidden"); return; }
+      const s = (current.specs || []).find((x) => x.n === activeN);
+      if (!s || annoOf(s).mech !== "arrow") { annoLine.setAttribute("visibility", "hidden"); return; }
       const t = targetOf(s);
       if (!t) return;
       const sr = sheet.getBoundingClientRect();
@@ -315,43 +434,26 @@
       annoLine.setAttribute("visibility", "visible");
     }
 
-    /* ---- 기능정의 목록 (넘버 + ● / ○ 불렛) ---- */
-    const defsList = document.getElementById("sl-defsList");
-    SPECS.forEach((s) => {
-      let items = "";
-      (s.defs || []).forEach((d) => {
-        items += "<li>" + d.t + "</li>";
-        (d.subs || []).forEach((sub) => { items += '<li class="sl-sub">' + sub + "</li>"; });
-      });
-      const play = s.anno === "action" && s.play
-        ? '<button class="sl-play" data-play="' + s.n + '">▶ ' + (s.play.label || "동작 재생") + "</button>" : "";
-      const row = h("div", { class: "sl-row", id: "sl-def-" + s.n, tabindex: "0" }, `
-        <div class="sl-no">${s.n}</div>
-        <div class="sl-main">
-          <div class="sl-title"><span class="sl-t">${s.title}</span><span class="sl-tag">${ANNO_LABEL[s.anno] || s.anno}</span></div>
-          <ul class="sl-items">${items}</ul>${play}
-        </div>`);
-      row.onclick = () => activate(s.n, "panel");
-      row.onkeydown = (e) => { if (e.key === "Enter") activate(s.n, "panel"); };
-      defsList.appendChild(row);
-    });
+    /* ---- play/flow 버튼: 실제 동작 재생 · 화면 이동 ---- */
     defsList.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-play]");
       if (!btn) return;
       e.stopPropagation();
-      const s = SPECS.find((x) => x.n === Number(btn.dataset.play));
+      const s = (current.specs || []).find((x) => x.n === Number(btn.dataset.play));
+      if (!s) return;
       activate(s.n, "panel");
       if (s.play && s.play.selector) {
         const el = document.querySelector(s.play.selector);
-        if (el) el.click();
+        if (el) el.click(); /* flow는 실제 내비 클릭 → 화면 감지가 헤더·정의를 자동 전환 */
+      } else if (annoOf(s).mech === "flow" && s.flowTo) {
+        setScreen(s.flowTo);
       }
     });
 
     /* ---- 양방향 연결 ---- */
-    let activeN = null;
     function clearActive() {
       if (activeN == null) return;
-      const s = SPECS.find((x) => x.n === activeN);
+      const s = (current.specs || []).find((x) => x.n === activeN);
       if (s) { const t = targetOf(s); if (t) t.classList.remove("sl-hl"); }
       if (markerEls[activeN]) markerEls[activeN].classList.remove("sl-hot");
       const row = document.getElementById("sl-def-" + activeN);
@@ -363,7 +465,8 @@
       if (document.body.classList.contains("sl-mode-proto")) setMode("doc");
       clearActive();
       activeN = n;
-      const s = SPECS.find((x) => x.n === n);
+      const s = (current.specs || []).find((x) => x.n === n);
+      if (!s) return;
       const t = targetOf(s);
       if (t) t.classList.add("sl-hl");
       if (markerEls[n]) markerEls[n].classList.add("sl-hot");
@@ -379,6 +482,11 @@
     document.querySelectorAll("img").forEach((im) => im.addEventListener("load", layout));
     document.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => requestAnimationFrame(layout)));
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(placeMarkers)).observe(sheet);
+
+    /* ---- 공개 API ---- */
+    window.SpecLayer = { setScreen: setScreen, refresh: layout, current: () => current.id };
+
+    renderScreen();
     applyWidth(WIDTHS.mobile);
   }
 
