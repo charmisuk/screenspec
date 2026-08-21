@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpecLayer 예제 — AI 아기 사진 상세</title>
+<style>
+  /* ============ 프로토타입 고유 스타일 (제품 디자인) ============ */
+  :root{--ink:#191919;--ink-2:#50524E;--ink-3:#9B9A97;--line:#E9E9E7;--brand:#FF6B8A;--brand-2:#FF8E53;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace}
+  body{color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  input{font:inherit}
+  img{max-width:100%;display:block}
+  .page-inner{max-width:720px;margin:0 auto}
+
+  /* 반응형: 미디어쿼리 대신 SpecLayer 훅 (.sl-pc / .sl-narrow) */
+  .sl-sheet.sl-pc .page-inner{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start}
+  .pc-side{display:none}
+  .sl-sheet.sl-pc .pc-side{display:block;position:sticky;top:20px}
+  .sl-sheet.sl-narrow .themes{grid-template-columns:1fr}
+  .sl-sheet.sl-narrow .rel-grid{grid-template-columns:repeat(2,1fr)}
+
+  .side-cta{border:2px solid var(--brand);border-radius:16px;background:linear-gradient(150deg,#FFF5F7,#fff);padding:20px}
+  .side-cta h3{font-size:15px;font-weight:800;margin:0 0 6px}
+  .side-cta p{font-size:12px;color:var(--ink-2);margin:0 0 12px}
+  .side-cta .price{font-size:13px;color:var(--ink-2);margin-bottom:12px}
+  .side-cta .price b{color:var(--brand-2);font-size:17px}
+  .side-cta .go{display:block;text-align:center;background:linear-gradient(90deg,var(--brand),var(--brand-2));color:#fff;font-weight:800;font-size:13.5px;border-radius:10px;padding:11px;text-decoration:none}
+
+  .ad{border:1.5px dashed var(--line);border-radius:12px;background:#FAFAF9;color:var(--ink-3);display:grid;place-items:center;font-size:12px;letter-spacing:.04em;height:90px;margin-bottom:16px}
+  .hero{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 4px 14px rgba(17,24,39,.10);margin-bottom:16px;background:#F1F5F9}
+  .bookmark{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);display:grid;place-items:center;font-size:18px;box-shadow:0 2px 8px rgba(17,24,39,.18)}
+  .hub-anchor{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--ink-2);text-decoration:none;margin-bottom:8px}
+  h1.title{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px}
+  .howmade h2{font-size:15px;font-weight:700;margin:12px 0 6px}
+  .howmade p{font-size:14px;color:var(--ink-2);margin:0;max-width:62ch}
+  .prep{border:1px solid var(--line);background:#FAFAF9;border-radius:12px;padding:14px 16px;margin:16px 0}
+  .prep h2{font-size:13px;font-weight:700;margin:0 0 8px}
+  .prep ul{margin:0;padding:0}
+  .prep li{font-size:13px;color:#37352F;list-style:none;display:flex;gap:6px;margin:3px 0}
+  .prep .tip{font-size:12px;color:var(--ink-2);margin:8px 0 0}
+  .promptbox{border:1px solid var(--line);border-radius:16px;overflow:hidden;margin:18px 0}
+  .pb-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:#FCFCFB}
+  .pb-head .pb-title{font-size:14px;font-weight:800}
+  .aichip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2)}
+  .aichip.on{background:#191919;color:#fff;border-color:#191919}
+  .options{padding:14px 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--line)}
+  .opt label{font-size:12px;font-weight:700;color:#37352F;display:block;margin-bottom:5px}
+  .opt input{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;background:#fff;color:var(--ink);box-sizing:border-box}
+  .themes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .theme{border:1.5px solid var(--line);border-radius:11px;padding:10px;text-align:left}
+  .theme.on{border-color:var(--brand);background:#FFF7F9}
+  .theme .sw{display:flex;gap:3px;margin-bottom:6px}
+  .theme .sw i{width:14px;height:14px;border-radius:4px;border:1px solid rgba(17,24,39,.08)}
+  .theme .nm{font-size:12px;font-weight:700}
+  .theme .ds{font-size:10.5px;color:var(--ink-3)}
+  .prompt-body{position:relative;background:#191919;color:#D7DEEA}
+  .prompt-body pre{margin:0;padding:16px 18px;font-family:var(--mono);font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word;max-height:230px;overflow:hidden}
+  .prompt-body.open pre{max-height:none}
+  .prompt-body .fade{position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(transparent,#191919);pointer-events:none}
+  .prompt-body.open .fade{display:none}
+  .pb-expand{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:700;color:#A9B4CC;background:rgba(255,255,255,.1);padding:4px 14px;border-radius:99px}
+  .prompt-body.open .pb-expand{position:static;transform:none;display:block;margin:0 auto 10px}
+  .pb-actions{display:flex;gap:8px;padding:14px 16px;background:#FCFCFB}
+  .btn-copy{flex:1;background:linear-gradient(90deg,var(--brand),var(--brand-2));color:#fff;font-weight:800;font-size:14px;border-radius:11px;padding:12px}
+  .btn-gpt{border:1.5px solid var(--line);border-radius:11px;padding:12px 16px;font-size:14px;font-weight:700;color:#37352F;background:#fff}
+  .longform{font-size:14px;color:var(--ink-2);max-width:64ch}
+  .longform h2{font-size:16px;font-weight:800;color:var(--ink);margin:0 0 8px}
+  section.blk{margin:26px 0}
+  .related h2,.faq h2{font-size:17px;font-weight:800;margin:0 0 12px}
+  .rel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .rel-card{position:relative;aspect-ratio:3/4;border-radius:12px;overflow:hidden;display:flex;align-items:flex-end}
+  .rel-card .bg{position:absolute;inset:0;display:grid;place-items:center;font-size:34px}
+  .rel-card .cap{position:relative;width:100%;padding:8px 10px;font-size:11.5px;font-weight:700;color:#fff;background:linear-gradient(transparent,rgba(17,24,39,.72))}
+  .faq details{border:1px solid var(--line);border-radius:12px;background:#fff;padding:13px 16px;margin-bottom:8px}
+  .faq summary{font-size:13.5px;font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .faq summary::after{content:"▾";color:var(--ink-3);font-size:11px}
+  .faq details p{font-size:13px;color:var(--ink-2);margin:10px 0 0}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:22px}
+  .tags span{font-size:10px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2)}
+  #toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;z-index:9070;
+    background:#191919;color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:99px;
+    transition:opacity .25s,transform .25s;pointer-events:none}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="page-inner">
+    <div class="page-main">
+      <div class="ad" data-spec="1">AD · 상단 광고 영역</div>
+
+      <div class="hero" data-spec="2">
+        <img id="heroImg" src="https://storage.googleapis.com/ezdodal-concepts/cards/baby-100-day-studio-portrait.jpg" alt="백일사진 백일 셀프 사진 화보" width="1024" height="1536">
+        <div class="bookmark" data-spec="3" aria-hidden="true">🤍</div>
+      </div>
+
+      <a class="hub-anchor" href="#" onclick="return false" data-spec="4"><span aria-hidden="true">←</span> 백일사진 모두 보기</a>
+
+      <div class="howmade" data-spec="5">
+        <h1 class="title">백일 셀프 사진 화보</h1>
+        <h2>이렇게 만들어집니다</h2>
+        <p>첨부한 아기 사진을 풍선·꽃·곰돌이 비니 데코의 백일 셀프 화보로 변환합니다. 헤드라인 메시지와 디자인 톤(크림·블러쉬·세이지)을 골라 카카오·인스타로 보내세요.</p>
+      </div>
+
+      <aside class="prep" data-spec="6">
+        <h2>📷 이렇게 준비하세요</h2>
+        <ul>
+          <li><span>✓</span><span>아기 정면 사진 1장</span></li>
+          <li><span>✓</span><span>얼굴이 또렷한 자연광 사진 권장</span></li>
+        </ul>
+        <p class="tip">💡 정면·고해상도·단순 배경일수록 결과 품질 ↑</p>
+      </aside>
+
+      <div class="promptbox" data-spec="7">
+        <div class="pb-head">
+          <span class="pb-title">무료 프롬프트</span>
+          <span class="aichip on">ChatGPT</span>
+          <span class="aichip">Gemini</span>
+        </div>
+        <div class="options" data-spec="8">
+          <div class="opt">
+            <label for="optSub">상단 부제</label>
+            <input id="optSub" value="우리 아기" maxlength="10">
+          </div>
+          <div class="opt">
+            <label for="optHead">메인 헤드라인 *</label>
+            <input id="optHead" value="백일 축하해" maxlength="12">
+          </div>
+          <div class="opt">
+            <label>디자인 안</label>
+            <div class="themes">
+              <button class="theme on">
+                <span class="sw"><i style="background:#F2EAD6"></i><i style="background:#B8826A"></i><i style="background:#F6D8D2"></i><i style="background:#D4B687"></i></span>
+                <span class="nm">크림 클래식</span><br><span class="ds">크림 베이지 · 브라운 풍선 · 핑크 장미</span>
+              </button>
+              <button class="theme">
+                <span class="sw"><i style="background:#F8D4D4"></i><i style="background:#D4A0A0"></i><i style="background:#C8385C"></i><i style="background:#FFE5E5"></i></span>
+                <span class="nm">블러쉬 핑크</span><br><span class="ds">블러쉬 · 로즈골드 풍선 · 빨간 장미</span>
+              </button>
+              <button class="theme">
+                <span class="sw"><i style="background:#C9DBC1"></i><i style="background:#F2EAD6"></i><i style="background:#FFFFFF"></i><i style="background:#D4B687"></i></span>
+                <span class="nm">세이지 내추럴</span><br><span class="ds">세이지 그린 · 화이트 풍선 · 유칼립투스</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-body" id="promptBody">
+<pre id="promptText">[Purpose]
+Convert the user's attached baby photo into a premium Korean 100-day (백일) studio portrait celebration card.
+
+[Scene]
+Use the attached photo as the base. Preserve the original baby's face, expression, body shape, gaze, pose, and composition (identity intact). Naturally composite the baby in a cozy ivory cream cotton fleece jumpsuit with a matching ivory bear-ear beanie, sitting comfortably in a soft cream chair facing the camera. Stage a warm 100-day studio scene with balloons, florals, a "100 Days" easel sign, a teddy bear, and a gold "Happy 100th Day" cake-topper.
+
+[Style]
+Warm cream-peach mood, soft cream beige backdrop, premium 100-day Korean baby studio aesthetic. Soft diffused natural daylight, gentle highlight bloom, subtle film grain.
+
+[Text]
+Top small Hangul subheader: "우리 아기" in Cafe24 handwritten pen style.
+Main headline: "백일 축하해" in warm brush-pen Hangul with a tiny ❤ accent.
+English subtitle: "100th Day" in Cormorant Garamond serif.
+
+[Aspect]
+2:3 portrait (1024x1536), top 25% typography, middle 50% baby + scene, bottom 25% floor props.
+
+[🚫 IMPORTANT]
+- Preserve original baby's face, expression, body shape, and composition from the attached photo
+- Do NOT generate a new person
+- Hangul text must be precise (no broken or misrendered characters)
+- Natural baby face and fingers, no anatomical distortion</pre>
+          <div class="fade"></div>
+          <button class="pb-expand" id="pbExpand">프롬프트 전체 보기</button>
+        </div>
+        <div class="pb-actions">
+          <button class="btn-copy" id="btnCopy">프롬프트 복사</button>
+          <button class="btn-gpt" id="btnGpt">ChatGPT로 열기</button>
+        </div>
+      </div>
+
+      <div class="ad" style="height:70px">AD · 본문 중간 광고 영역</div>
+
+      <section class="blk longform">
+        <h2>백일 스튜디오, 예약 없이 사진 한 장으로</h2>
+        <p>백일 스냅 촬영 대신 갖고 있는 아기 사진 한 장으로 스튜디오 화보를 만드는 방법입니다. 정면 사진이 가장 깔끔하게 합성되고, 헤드라인은 8자 이내가 손글씨 톤으로 가장 잘 떨어져요.</p>
+      </section>
+
+      <section class="blk related" data-spec="9">
+        <h2>비슷한 사진</h2>
+        <div class="rel-grid">
+          <div class="rel-card"><div class="bg" style="background:linear-gradient(150deg,#FFE8EE,#FFD3DE)">🌸</div><div class="cap">백일 플라워 축하 카드</div></div>
+          <div class="rel-card"><div class="bg" style="background:linear-gradient(150deg,#FFF3E0,#FFE0B8)">🧸</div><div class="cap">창문 볼 꾹 백일 사진</div></div>
+          <div class="rel-card"><div class="bg" style="background:linear-gradient(150deg,#E8F1FF,#D2E3FF)">🎈</div><div class="cap">200일 풍선 카드</div></div>
+          <div class="rel-card"><div class="bg" style="background:linear-gradient(150deg,#EFFAEF,#DBF2DA)">📅</div><div class="cap">먼슬리 성장 카드</div></div>
+          <div class="rel-card"><div class="bg" style="background:linear-gradient(150deg,#FDF0FF,#F4DBFA)">📸</div><div class="cap">인생네컷 3컷 카드</div></div>
+          <div class="rel-card"><div class="bg" style="background:linear-gradient(150deg,#FFF9E3,#FFEFB8)">😊</div><div class="cap">표정 9분할 그리드</div></div>
+        </div>
+      </section>
+
+      <section class="blk faq" data-spec="10">
+        <h2>자주 묻는 질문</h2>
+        <details>
+          <summary>헤드라인을 다른 문구로 바꿀 수 있나요?</summary>
+          <p>메인 헤드라인은 자유롭게 변경 가능합니다. 8자 이내 손글씨 톤이 가장 잘 떨어집니다.</p>
+        </details>
+        <details>
+          <summary>디자인을 우리 아이에 맞게 바꾸려면?</summary>
+          <p>디자인 안 3가지 중 1클릭이면 풍선·꽃·비니·리본 톤이 풀세트로 바뀝니다.</p>
+        </details>
+        <details>
+          <summary>백일이 아니라 200일에도 쓸 수 있나요?</summary>
+          <p>가능합니다. 후속 지시로 헤드라인과 토퍼 텍스트를 바꿔달라고 보내면 재생성됩니다.</p>
+        </details>
+        <details>
+          <summary>인쇄해서 백일 상에 두려는데 화질이 충분한가요?</summary>
+          <p>엽서 크기까지는 깔끔하게 인쇄됩니다. A4 이상은 인쇄소 화질 보정 옵션을 권장합니다.</p>
+        </details>
+      </section>
+
+      <div class="tags">
+        <span>카드</span><span>백일</span><span>아기</span><span>캐주얼</span>
+      </div>
+    </div>
+
+    <aside class="pc-side">
+      <div class="side-cta">
+        <h3>보이는 사진 그대로</h3>
+        <p>얼굴만 우리 아이로 합성해드려요.<br>약 2분이면 사진함에 도착해요.</p>
+        <div class="price"><b>⭐ 별 4개</b> <span>· 첫 생성 무료</span></div>
+        <a class="go" href="#" onclick="return false">우리 아이로 만들기</a>
+      </div>
+    </aside>
+  </div>
+
+  <div id="toast" data-sl-ignore></div>
+
+  <script>
+  /* ---- 프로토타입 자체 상호작용 ---- */
+  const pb = document.getElementById("promptBody");
+  document.getElementById("pbExpand").onclick = function(e){
+    e.stopPropagation();
+    pb.classList.toggle("open");
+    this.textContent = pb.classList.contains("open") ? "접기" : "프롬프트 전체 보기";
+  };
+  document.querySelectorAll(".theme").forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    document.querySelectorAll(".theme").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+  });
+  const toast = document.getElementById("toast");
+  let toastTimer;
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+  }
+  document.getElementById("btnCopy").onclick = async (e) => {
+    e && e.stopPropagation && e.stopPropagation();
+    const txt = document.getElementById("promptText").textContent;
+    try { await navigator.clipboard.writeText(txt); showToast("프롬프트가 복사되었습니다 · trackEvent('prompt_copy')"); }
+    catch { showToast("복사가 차단된 환경입니다 · trackEvent('prompt_copy')"); }
+  };
+  document.getElementById("btnGpt").onclick = (e) => { e.stopPropagation(); showToast("데모: 실제 페이지에선 ChatGPT가 열립니다"); };
+  document.querySelector(".bookmark").onclick = function(e){ e.stopPropagation(); this.textContent = this.textContent === "🤍" ? "❤️" : "🤍"; };
+  </script>
+
+  <!-- ---- SpecLayer 설정 + 로드 ---- -->
+  <script>
+  window.SPECLAYER = {
+    screen: {
+      id: "SCR-BP-DTL-001",
+      name: "AI 아기 사진 상세 (무료 카드)",
+      path: ["홈", "AI 아기 사진", "갤러리", "카드 상세"]
+    },
+    widths: { mobile: 430, pc: 1440 },
+    specs: [
+      { n:1, target:"1", anno:"box", title:"상단 광고 슬롯", defs:[
+        { t:"AdSense 슬롯 1795139148, 페이지 최상단 고정 노출", subs:[
+          "광고 미로드 시 영역 자동 축소 — 고정 높이 예약으로 화면 밀림(CLS) 방지"]},
+        { t:"대표 이미지보다 위 배치 — 상단 노출 우선" }]},
+      { n:2, target:"2", anno:"box", title:"대표 이미지", defs:[
+        { t:"GCS ezdodal-concepts 버킷 cards/{slug}.jpg · 1024×1536 (2:3 세로)" },
+        { t:"alt 텍스트 = 허브 라벨 + 카드명 자동 합성", subs:[
+          "구글 이미지 검색 키워드 흡수 목적"]}]},
+      { n:3, target:"3", anno:"arrow", title:"북마크 버튼", defs:[
+        { t:"이미지 우상단 오버레이 · 로그인 없이 기기에 저장" },
+        { t:"저장 키 card:{slug} — 유료 컨셉(concept:)과 즐겨찾기 분리" },
+        { t:"클릭 시 즉시 토글 — 서버 왕복 없음" }]},
+      { n:4, target:"4", anno:"box", title:"허브 분류 앵커", defs:[
+        { t:"'백일사진 모두 보기' 클릭 시 백일사진 허브로 이동" },
+        { t:"상세→허브 내부링크는 1개만 — 검색엔진 신호 집중" }]},
+      { n:5, target:"5", anno:"box", title:"제목 + 변환 설명", defs:[
+        { t:"H1 = 카드명(title_ko), 페이지당 1개 고정" },
+        { t:"부제 '이렇게 만들어집니다' + DB description_ko 그대로 표시", subs:[
+          "개발 단계 즉흥 카피 금지 — 텍스트는 기획이 최종 작성"]}]},
+      { n:6, target:"6", anno:"box", title:"준비물 안내 박스", defs:[
+        { t:"카드별 input_requirements 데이터 우선 표시", subs:[
+          "데이터 없으면 공통 폴백: '아기 정면 사진 1장 · 자연광 권장'"]}]},
+      { n:7, target:"7", anno:"action", title:"프롬프트 박스 (핵심)",
+        play:{ selector:"#btnCopy", label:"동작 재생 — 복사 토스트" }, defs:[
+        { t:"화면 접힘선(fold) 위 배치 — 검색 진입자 5초 이탈 방어" },
+        { t:"'프롬프트 복사' 클릭 시", subs:[
+          "클립보드 복사 + 완료 토스트 표시",
+          "trackEvent('prompt_copy') 발화 — PostHog·GA 동시"]},
+        { t:"'ChatGPT로 열기' = 프롬프트 첨부 딥링크" }]},
+      { n:8, target:"8", anno:"box", title:"맞춤 옵션 (variations)", defs:[
+        { t:"텍스트 2종: 부제 최대 10자 · 헤드라인 최대 12자 (필수)" },
+        { t:"디자인 번들 3종 — 1클릭에 색상 6요소 동시 교체" },
+        { t:"선택값이 프롬프트의 {변수} 자리에 실시간 치환" }]},
+      { n:9, target:"9", anno:"box", title:"비슷한 사진 추천", defs:[
+        { t:"태그 유사도(Jaccard) 상위 6장 자동 선정 · 수동 큐레이션 없음" },
+        { t:"카드 간 내부링크 순환 — 상세 페이지 색인 강화" }]},
+      { n:10, target:"10", anno:"box", title:"FAQ 아코디언", defs:[
+        { t:"카드별 전용 질문 4건 · 기본 접힘" },
+        { t:"FAQPage 구조화 데이터(JSON-LD) 자동 생성 — 검색 리치결과" }]}
+    ]
+  };
+  </script>
+  <script src="../speclayer.js"></script>
+</body>
+</html>
