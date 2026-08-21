@@ -1,5 +1,5 @@
 /*!
- * SpecLayer v0.2 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * SpecLayer v0.3 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -38,6 +38,9 @@
  *   8000 ~ 8099  SpecLayer 시트 오버레이 — anno 8030 · markers 8040 · resize 8050
  *   9000 ~ 9099  SpecLayer 크롬 — docmode 9000 · toolbar 9020 · tip 9040
  *   9500 이상    프로토타입 전역 오버레이 (data-sl-ignore 모달·토스트) — 모든 것 위 (의도)
+ *
+ * 크기 시뮬레이터 (DevTools 벤치마크): 시트 = 기기 뷰포트(폭×높이, 내부 스크롤).
+ * 프리셋 모바일 360×800 · PC 1920×1080 + 우측/하단/코너 드래그. 프리셋 클릭 = 복귀.
  */
 (function () {
   "use strict";
@@ -45,7 +48,16 @@
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
     : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
-  const WIDTHS = Object.assign({ mobile: 430, pc: 1440 }, RAW.widths || {});
+  /* 프리셋 = 가장 대중화된 실기기 사이즈 (statcounter 최다) */
+  const DEVICES = {
+    mobile: { w: 360, h: 800 },   /* 갤럭시 표준 해상도 */
+    pc:     { w: 1920, h: 1080 }  /* FHD 데스크톱 */
+  };
+  if (RAW.devices) for (const k in RAW.devices) DEVICES[k] = Object.assign({}, DEVICES[k], RAW.devices[k]);
+  else if (RAW.widths) { /* v0.2 호환 */
+    if (RAW.widths.mobile) DEVICES.mobile.w = RAW.widths.mobile;
+    if (RAW.widths.pc) DEVICES.pc.w = RAW.widths.pc;
+  }
   /* anno 타입 레지스트리 — label(의미 구분) + mech(시각 동작). 새 타입은 여기 한 줄 추가 */
   const ANNO = {
     box:    { label: "영역",   mech: "box" },
@@ -59,14 +71,18 @@
   };
   function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
 
-  /* ============ 스타일 (그레이스케일 + 포인트 1색) ============ */
+  /* ============ 디자인 시스템 ============
+     1. 토큰: 색·서체는 --sl-* 변수로만 사용 (하드코딩 금지)
+     2. 리셋: :where()로 특이도 0 — 컴포넌트 클래스가 항상 이긴다
+     3. 컴포넌트: 단일 클래스(.sl-play, .sl-marker ...)가 형태·색을 완결 정의
+     4. 포인트 컬러(--sl-accent) 위에는 항상 흰 텍스트 */
   const CSS = `
   :root{--sl-canvas:#F1F1F0;--sl-ink:#191919;--sl-ink2:#50524E;--sl-ink3:#9B9A97;
     --sl-line:#E9E9E7;--sl-line2:#D3D1CB;--sl-accent:#2952E3;--sl-accent-soft:#EEF2FF;
     --sl-mono:ui-monospace,"Cascadia Code",Consolas,monospace}
   body{margin:0;background:var(--sl-canvas)}
   .sl-ui,.sl-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
-  .sl-ui button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  .sl-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
   .sl-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
     border-bottom:1px solid var(--sl-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
   .sl-modes{display:flex;border:1px solid var(--sl-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
@@ -122,21 +138,31 @@
     box-shadow:0 2px 8px rgba(41,82,227,.35);transition:background .12s}
   .sl-play:hover{background:#1E3FC4}
   .sl-play:active{transform:translateY(1px)}
-  .sl-sheet{position:relative;background:#fff;border-radius:16px;
+  .sl-frame{position:relative}
+  .sl-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
   .sl-sheet.sl-narrow{padding:20px 14px 32px}
-  .sl-resize{position:absolute;z-index:8050;top:0;right:-18px;width:18px;height:100%;cursor:ew-resize;
-    display:flex;align-items:flex-start;justify-content:center;padding-top:230px}
-  .sl-resize .sl-grip{position:sticky;top:230px;width:6px;height:64px;border-radius:99px;background:#C6C4BD;
-    transition:background .15s;box-shadow:0 1px 3px rgba(17,24,39,.15)}
-  .sl-resize:hover .sl-grip,.sl-resize.sl-dragging .sl-grip{background:var(--sl-accent)}
+  /* DevTools식 리사이즈: 우측 바(폭) + 하단 바(높이) + 코너(양방향) */
+  .sl-edge{position:absolute;z-index:8050}
+  .sl-edge-r{top:0;right:-16px;width:16px;height:100%;cursor:ew-resize}
+  .sl-edge-b{left:0;bottom:-16px;width:100%;height:16px;cursor:ns-resize}
+  .sl-edge-c{right:-16px;bottom:-16px;width:20px;height:20px;cursor:nwse-resize}
+  .sl-edge-r::after{content:"";position:absolute;top:50%;left:5px;transform:translateY(-50%);
+    width:5px;height:48px;border-radius:99px;background:#C6C4BD;box-shadow:0 1px 3px rgba(17,24,39,.15);transition:background .15s}
+  .sl-edge-b::after{content:"";position:absolute;left:50%;top:5px;transform:translateX(-50%);
+    height:5px;width:48px;border-radius:99px;background:#C6C4BD;box-shadow:0 1px 3px rgba(17,24,39,.15);transition:background .15s}
+  .sl-edge-c::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;
+    border-right:3px solid #C6C4BD;border-bottom:3px solid #C6C4BD;border-radius:2px;transition:border-color .15s}
+  .sl-edge-r:hover::after,.sl-edge-r.sl-dragging::after,
+  .sl-edge-b:hover::after,.sl-edge-b.sl-dragging::after{background:var(--sl-accent)}
+  .sl-edge-c:hover::after,.sl-edge-c.sl-dragging::after{border-color:var(--sl-accent)}
   /* 마커 — 흰 배경 + 검은 숫자, 활성 시 포인트색 배경 + 흰 숫자 (v0.2 가독성 수정) */
-  .sl-ui.sl-marker,.sl-ui.sl-marker:hover{
+  .sl-marker{
     position:absolute;width:24px;height:24px;border-radius:50%;pointer-events:auto;padding:0;
     background:#fff;color:var(--sl-ink);border:1.5px solid var(--sl-line2);
     font-size:12px;font-weight:800;font-family:var(--sl-mono);
     display:grid;place-items:center;box-shadow:0 2px 8px rgba(17,24,39,.28);cursor:pointer}
-  .sl-ui.sl-marker.sl-hot,.sl-ui.sl-marker.sl-hot:hover{background:var(--sl-accent);color:#fff;border-color:var(--sl-accent)}
+  .sl-marker.sl-hot{background:var(--sl-accent);color:#fff;border-color:var(--sl-accent)}
   .sl-markers,.sl-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
   .sl-anno{z-index:8030;overflow:visible}
   body.sl-mode-proto .sl-marker,body.sl-mode-proto .sl-anno{display:none}
@@ -178,10 +204,15 @@
       '<path d="M0,0 L8,4 L0,8 Z" fill="#2952E3"></path></marker></defs>' +
       '<line id="sl-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#sl-arrowhead)" visibility="hidden"></line>';
     const markerLayer = h("div", { class: "sl-markers" });
-    const resize = h("div", { class: "sl-resize", title: "드래그로 폭 조절" }, '<div class="sl-grip"></div>');
     sheet.appendChild(annoSvg);
     sheet.appendChild(markerLayer);
-    sheet.appendChild(resize);
+    /* frame = 시트(기기 뷰포트) + 리사이즈 핸들. 핸들은 overflow 클리핑을 피해 시트 밖에 */
+    const frame = h("div", { class: "sl-frame" });
+    frame.appendChild(sheet);
+    const edgeR = h("div", { class: "sl-edge sl-edge-r", title: "드래그로 폭 조절" });
+    const edgeB = h("div", { class: "sl-edge sl-edge-b", title: "드래그로 높이 조절" });
+    const edgeC = h("div", { class: "sl-edge sl-edge-c", title: "드래그로 크기 조절" });
+    frame.appendChild(edgeR); frame.appendChild(edgeB); frame.appendChild(edgeC);
 
     /* ---- 툴바 ---- */
     const toolbar = h("header", { class: "sl-toolbar sl-ui" }, `
@@ -224,7 +255,7 @@
     const defsList = document.getElementById("sl-defsList");
     const wpx = document.getElementById("sl-wpx");
     const annoLine = annoSvg.querySelector("#sl-line");
-    protoHolder.appendChild(sheet);
+    protoHolder.appendChild(frame);
     document.body.classList.add("sl-mode-proto");
 
     /* ---- 현재 화면 상태 ---- */
@@ -322,15 +353,18 @@
       mo.observe(sheet, { subtree: true, attributes: true, childList: true, attributeFilter: ["style", "class", "hidden"] });
     }
 
-    /* ---- 폭: 프리셋 2 + 드래그(양 모드), 프리셋 클릭 = 복귀 ---- */
-    let sheetW = WIDTHS.mobile;
+    /* ---- 크기: 프리셋 2(폭×높이) + DevTools식 드래그 3핸들, 프리셋 클릭 = 복귀 ---- */
+    let sheetW = DEVICES.mobile.w;
+    let sheetH = DEVICES.mobile.h;
     let scale = 1;
-    function applyWidth(px) {
-      sheetW = Math.max(320, Math.min(1920, Math.round(px)));
+    function applySize(w, hgt) {
+      sheetW = Math.max(320, Math.min(2200, Math.round(w)));
+      sheetH = Math.max(400, Math.min(1600, Math.round(hgt)));
       sheet.style.width = sheetW + "px";
+      sheet.style.height = sheetH + "px";
       sheet.classList.toggle("sl-pc", sheetW >= 1100);
       sheet.classList.toggle("sl-narrow", sheetW <= 520);
-      wpx.textContent = sheetW + "px";
+      wpx.textContent = sheetW + "×" + sheetH;
       requestAnimationFrame(layout);
     }
     const seg = document.getElementById("sl-seg");
@@ -338,21 +372,30 @@
       const btn = e.target.closest("button");
       if (!btn) return;
       seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
-      applyWidth(WIDTHS[btn.dataset.w]);
+      const d = DEVICES[btn.dataset.w];
+      applySize(d.w, d.h);
     });
-    let dragging = null;
-    resize.addEventListener("pointerdown", (e) => {
-      dragging = { x: e.clientX, w: sheetW, s: scale };
-      resize.classList.add("sl-dragging");
-      resize.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    });
-    resize.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      applyWidth(dragging.w + ((e.clientX - dragging.x) * 2) / dragging.s); /* 중앙정렬 보정 + 축소 배율 보정 */
-    });
-    ["pointerup", "pointercancel"].forEach((ev) =>
-      resize.addEventListener(ev, () => { dragging = null; resize.classList.remove("sl-dragging"); }));
+    let drag = null;
+    function makeDrag(el, useW, useH) {
+      el.addEventListener("pointerdown", (e) => {
+        drag = { x: e.clientX, y: e.clientY, w: sheetW, h: sheetH, s: scale };
+        el.classList.add("sl-dragging");
+        el.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      el.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        applySize(
+          useW ? drag.w + ((e.clientX - drag.x) * 2) / drag.s : sheetW, /* 중앙정렬 보정 */
+          useH ? drag.h + (e.clientY - drag.y) / drag.s : sheetH
+        );
+      });
+      ["pointerup", "pointercancel"].forEach((ev) =>
+        el.addEventListener(ev, () => { drag = null; el.classList.remove("sl-dragging"); }));
+    }
+    makeDrag(edgeR, true, false);
+    makeDrag(edgeB, false, true);
+    makeDrag(edgeC, true, true);
 
     /* ---- 모드 전환 ---- */
     const mProto = document.getElementById("sl-mProto");
@@ -363,8 +406,8 @@
       mProto.setAttribute("aria-pressed", String(m === "proto"));
       mDoc.setAttribute("aria-pressed", String(m === "doc"));
       clearActive();
-      if (m === "doc") docHolder.appendChild(sheet);
-      else { protoHolder.appendChild(sheet); sheet.style.transform = ""; }
+      if (m === "doc") docHolder.appendChild(frame);
+      else { protoHolder.appendChild(frame); frame.style.transform = ""; }
       requestAnimationFrame(layout);
     }
     mProto.onclick = () => setMode("proto");
@@ -375,22 +418,24 @@
       if (document.body.classList.contains("sl-mode-doc")) {
         const avail = stage.clientWidth - 48;
         scale = Math.min(1, avail / sheetW);
-        sheet.style.transformOrigin = "top left";
-        sheet.style.transform = "scale(" + scale + ")";
+        frame.style.transformOrigin = "top left";
+        frame.style.transform = "scale(" + scale + ")";
         fit.style.width = sheetW * scale + "px";
-        fit.style.height = sheet.offsetHeight * scale + "px";
+        fit.style.height = sheetH * scale + "px";
       } else {
         scale = 1;
-        sheet.style.transform = "";
+        frame.style.transform = "";
         fit.style.width = ""; fit.style.height = "";
       }
-      /* 드래그 그립은 축소 배율과 무관하게 잡히는 크기 유지 */
-      resize.style.width = Math.round(18 / scale) + "px";
-      resize.style.right = "-" + Math.round(18 / scale) + "px";
+      /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 */
+      edgeR.style.width = Math.round(16 / scale) + "px";
+      edgeR.style.right = "-" + Math.round(16 / scale) + "px";
+      edgeB.style.height = Math.round(16 / scale) + "px";
+      edgeB.style.bottom = "-" + Math.round(16 / scale) + "px";
       placeMarkers();
     }
 
-    /* ---- 마커 배치 ---- */
+    /* ---- 마커 배치 (시트 내부 스크롤 좌표계) ---- */
     function placeMarkers() {
       const sr = sheet.getBoundingClientRect();
       (current.specs || []).forEach((s) => {
@@ -399,8 +444,8 @@
         if (!t || t.getClientRects().length === 0) { m.style.display = "none"; return; }
         m.style.display = "";
         const r = t.getBoundingClientRect();
-        m.style.left = (r.left - sr.left) / scale + "px";
-        m.style.top = (r.top - sr.top) / scale + "px";
+        m.style.left = (r.left - sr.left) / scale + sheet.scrollLeft + "px";
+        m.style.top = (r.top - sr.top) / scale + sheet.scrollTop + "px";
         m.style.transform = "translate(-40%,-40%) scale(" + 1 / scale + ")";
       });
       drawArrow();
@@ -427,8 +472,8 @@
       if (!t) return;
       const sr = sheet.getBoundingClientRect();
       const r = t.getBoundingClientRect();
-      const cx = (r.left + r.width / 2 - sr.left) / scale;
-      const cy = (r.top + r.height / 2 - sr.top) / scale;
+      const cx = (r.left + r.width / 2 - sr.left) / scale + sheet.scrollLeft;
+      const cy = (r.top + r.height / 2 - sr.top) / scale + sheet.scrollTop;
       annoLine.setAttribute("x1", cx - 120); annoLine.setAttribute("y1", cy + 80);
       annoLine.setAttribute("x2", cx - r.width / scale / 2 - 8); annoLine.setAttribute("y2", cy + 8);
       annoLine.setAttribute("visibility", "visible");
@@ -487,7 +532,7 @@
     window.SpecLayer = { setScreen: setScreen, refresh: layout, current: () => current.id };
 
     renderScreen();
-    applyWidth(WIDTHS.mobile);
+    applySize(DEVICES.mobile.w, DEVICES.mobile.h);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
