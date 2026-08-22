@@ -168,17 +168,25 @@
   .ss-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
   .ss-sheet.ss-narrow{padding:20px 14px 32px}
-  /* DevTools식 리사이즈: 우측 바(폭) + 하단 바(높이) + 코너(양방향) */
-  .ss-edge{position:absolute;z-index:8050}
-  .ss-edge-r{top:0;right:-16px;width:16px;height:100%;cursor:ew-resize}
-  .ss-edge-b{left:0;bottom:-16px;width:100%;height:16px;cursor:ns-resize}
-  .ss-edge-c{right:-16px;bottom:-16px;width:20px;height:20px;cursor:nwse-resize}
-  .ss-edge-r::after{content:"";position:absolute;top:50%;left:5px;transform:translateY(-50%);
-    width:5px;height:48px;border-radius:99px;background:#C6C4BD;box-shadow:0 1px 3px rgba(17,24,39,.15);transition:background .15s}
-  .ss-edge-b::after{content:"";position:absolute;left:50%;top:5px;transform:translateX(-50%);
-    height:5px;width:48px;border-radius:99px;background:#C6C4BD;box-shadow:0 1px 3px rgba(17,24,39,.15);transition:background .15s}
-  .ss-edge-c::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;
-    border-right:3px solid #C6C4BD;border-bottom:3px solid #C6C4BD;border-radius:2px;transition:border-color .15s}
+  /* DevTools식 리사이즈: 우측·하단 풀렝스 거터 바 + 코너 (touch-action:none = 모바일 드래그 필수) */
+  .ss-edge{position:absolute;z-index:8050;touch-action:none}
+  .ss-edge-r{top:0;right:-20px;width:20px;height:100%;cursor:ew-resize}
+  .ss-edge-b{left:0;bottom:-20px;width:100%;height:20px;cursor:ns-resize}
+  .ss-edge-c{right:-20px;bottom:-20px;width:26px;height:26px;cursor:nwse-resize}
+  /* 트랙: 변 전체를 덮는 바 */
+  .ss-edge-r::before{content:"";position:absolute;top:0;left:7px;width:6px;height:100%;
+    border-radius:99px;background:#DEDCD6;transition:background .15s}
+  .ss-edge-b::before{content:"";position:absolute;left:0;top:7px;width:100%;height:6px;
+    border-radius:99px;background:#DEDCD6;transition:background .15s}
+  /* 그립: 트랙 중앙의 진한 표시 */
+  .ss-edge-r::after{content:"";position:absolute;top:50%;left:7px;transform:translateY(-50%);
+    width:6px;height:56px;border-radius:99px;background:#B3B1AA;transition:background .15s}
+  .ss-edge-b::after{content:"";position:absolute;left:50%;top:7px;transform:translateX(-50%);
+    height:6px;width:56px;border-radius:99px;background:#B3B1AA;transition:background .15s}
+  .ss-edge-c::after{content:"";position:absolute;right:4px;bottom:4px;width:14px;height:14px;
+    border-right:4px solid #B3B1AA;border-bottom:4px solid #B3B1AA;border-radius:3px;transition:border-color .15s}
+  .ss-edge-r:hover::before,.ss-edge-r.ss-dragging::before,
+  .ss-edge-b:hover::before,.ss-edge-b.ss-dragging::before{background:var(--ss-accent-soft)}
   .ss-edge-r:hover::after,.ss-edge-r.ss-dragging::after,
   .ss-edge-b:hover::after,.ss-edge-b.ss-dragging::after{background:var(--ss-accent)}
   .ss-edge-c:hover::after,.ss-edge-c.ss-dragging::after{border-color:var(--ss-accent)}
@@ -545,7 +553,7 @@
       el.addEventListener("pointerdown", (e) => {
         drag = { x: e.clientX, y: e.clientY, w: sheetW, h: sheetH, s: scale };
         el.classList.add("ss-dragging");
-        el.setPointerCapture(e.pointerId);
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* 일부 환경(합성 이벤트 등) 방어 */ }
         e.preventDefault();
       });
       el.addEventListener("pointermove", (e) => {
@@ -593,10 +601,10 @@
         fit.style.width = ""; fit.style.height = "";
       }
       /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 */
-      edgeR.style.width = Math.round(16 / scale) + "px";
-      edgeR.style.right = "-" + Math.round(16 / scale) + "px";
-      edgeB.style.height = Math.round(16 / scale) + "px";
-      edgeB.style.bottom = "-" + Math.round(16 / scale) + "px";
+      edgeR.style.width = Math.round(20 / scale) + "px";
+      edgeR.style.right = "-" + Math.round(20 / scale) + "px";
+      edgeB.style.height = Math.round(20 / scale) + "px";
+      edgeB.style.bottom = "-" + Math.round(20 / scale) + "px";
       core.placeMarkers();
     }
 

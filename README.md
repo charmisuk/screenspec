@@ -24,10 +24,10 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 **방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.0/screenspec.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.1/screenspec.js"></script>
 ```
 
-버전 태그(@v0.6.0)로 고정 — @main은 CDN 캐시(~12h) 때문에 업데이트 반영이 늦다.
+버전 태그(@v0.6.1)로 고정 — @main은 CDN 캐시(~12h) 때문에 업데이트 반영이 늦다.
 
 **방법 B — 파일 복사 (오프라인·사내망):**
 
