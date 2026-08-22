@@ -18,6 +18,7 @@
 화면 ID   : SCR-{프로젝트 약어}-{화면 약어}-{3자리 번호}   ex. SCR-BMD-CAL-001
 화면명    : 한국어 명사구, 15자 이내                       ex. 식단 캘린더 주간
 화면 경로 : 기획 IA 관점 배열 (URL 아님)                   ex. ["홈","식단 캘린더","주간 탭"]
+            이 배열이 그대로 화면 목록의 계층 트리가 된다 (마지막 = 화면 자신, 앞 = 그룹, 최대 4뎁스 표시)
 ```
 
 - 같은 프로젝트에서 번호는 001부터 순차 증가.
@@ -78,7 +79,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.7.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.8.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)

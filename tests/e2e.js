@@ -91,9 +91,22 @@ function check(name, ok, detail) {
     const t = document.querySelector(".ss-toc");
     return t.classList.contains("ss-open") && t.textContent.includes("2/2 정의됨");
   }));
+  check("목차 뎁스 트리 (그룹 렌더)", await page.evaluate(() =>
+    !!document.querySelector('[data-grp="/홈"]') && !!document.querySelector('[data-grp="/홈/과일 상점"]')));
   await page.click('[data-toc="SCR-EX-LST-001"]');
   await page.waitForTimeout(400);
   check("목차 행 클릭 → 정의서 전환", await page.evaluate(() => window.ScreenSpec.current()) === "SCR-EX-LST-001");
+  /* 모바일: 목차 = 전체 화면 시트 */
+  await page.setViewportSize({ width: 480, height: 800 });
+  await page.waitForTimeout(300);
+  await page.click(".ss-toc-btn");
+  await page.waitForTimeout(300);
+  check("모바일 목차 풀스크린", await page.evaluate(() => {
+    const r = document.querySelector(".ss-toc").getBoundingClientRect();
+    return Math.round(r.width) === innerWidth && r.top === 0;
+  }));
+  await page.click(".ss-toc-x");
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   /* ============ overlay: 하위경로(basePath) 환경 ============ */
   console.log("[overlay] SPA (하위경로 서빙)");
