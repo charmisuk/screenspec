@@ -39,11 +39,16 @@
  * 반응형 훅(wrap): 시트 폭에 따라 .ss-pc(≥1100px) / .ss-narrow(≤520px)가 시트에 붙는다.
  * 프로토타입 CSS는 미디어쿼리 대신 이 훅으로 분기.
  *
- * z-index 스케일 (프로토타입은 이 대역을 지킬 것):
- *      0 ~ 7999  프로토타입 자유 영역 (시트 내부 콘텐츠)
- *   8000 ~ 8099  ScreenSpec 시트 오버레이 — anno 8030 · markers 8040 · resize 8050
- *   9000 ~ 9099  ScreenSpec 크롬 — docmode 9000 · toolbar 9020 · pill 9030 · tip 9040
- *   9500 이상    프로토타입 전역 오버레이 (data-ss-ignore 모달·토스트) — 모든 것 위 (의도)
+ * z-index 원칙 — 모드별로 다르다:
+ *   overlay 모드(남의 앱 위에 얹음): ScreenSpec UI는 브라우저 최대 대역(2147482990~)에서 항상 맨 위.
+ *     앱의 z-index와 경쟁하지 않는다 (Vercel 툴바·Hotjar 방식). 앱 모달이 패널 아래 깔릴 수 있으나
+ *     본문은 밀어내기로 가리지 않고, '프로토타입' 필 한 번으로 전체 확인 가능.
+ *   wrap 모드(단일 HTML, AI 하네스가 전체 통제): 대역 규칙 사용 —
+ *      0 ~ 7999  프로토타입 (시트 내부)
+ *   8000 ~ 8099  시트 오버레이 — anno 8030 · markers 8040 · resize 8050
+ *   9000 ~ 9099  크롬 — docmode 9000 · toolbar 9020
+ *   9500 이상    프로토타입 전역 오버레이 (data-ss-ignore 모달·토스트) — 의도적으로 최상위
+ *   공용 부유 요소(목차·툴팁·전환 토스트)는 양 모드 모두 최대 대역.
  *
  * 크기 시뮬레이터 (wrap, DevTools 벤치마크): 시트 = 기기 뷰포트(폭×높이, 내부 스크롤).
  * 프리셋 모바일 360×800 · PC 1920×1080 + 우측/하단/코너 드래그. 프리셋 클릭 = 복귀.
@@ -234,7 +239,7 @@
   .ss-hl::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
     border:2px solid var(--ss-accent);border-radius:inherit;
     background:color-mix(in srgb,var(--ss-accent) 8%,transparent)}
-  .ss-tip{position:fixed;z-index:9040;max-width:280px;background:#fff;border:1px solid var(--ss-line2);
+  .ss-tip{position:fixed;z-index:2147483060;max-width:280px;background:#fff;border:1px solid var(--ss-line2);
     border-radius:10px;box-shadow:0 10px 30px rgba(17,24,39,.18);padding:10px 13px;display:none;pointer-events:none}
   .ss-tip .ss-tn{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:var(--ss-accent)}
   .ss-tip .ss-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--ss-ink)}
@@ -244,7 +249,7 @@
   .ss-toc-btn:hover{background:var(--ss-accent-soft);color:var(--ss-accent)}
   .ss-toc-caret{font-style:normal;font-size:9px;color:var(--ss-ink3)}
   .ss-toc-btn:hover .ss-toc-caret{color:var(--ss-accent)}
-  .ss-toc{position:fixed;z-index:9045;min-width:300px;max-width:380px;max-height:62vh;overflow-y:auto;
+  .ss-toc{position:fixed;z-index:2147483050;min-width:300px;max-width:380px;max-height:62vh;overflow-y:auto;
     background:#fff;border:1px solid var(--ss-line2);border-radius:12px;
     box-shadow:0 14px 44px rgba(17,24,39,.22);display:none}
   .ss-toc.ss-open{display:block}
@@ -272,7 +277,7 @@
   .ss-toc-row .ss-toc-dot{margin-top:5px;align-self:flex-start}
   .ss-toc-row{align-items:flex-start}
   /* 화면 전환 알림 토스트 — 이동 인지용 */
-  .ss-nav-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:9046;
+  .ss-nav-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:2147483055;
     background:var(--ss-ink);color:#fff;font-size:12.5px;font-weight:700;padding:7px 16px;border-radius:99px;
     opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:80vw;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
@@ -287,17 +292,17 @@
     .ss-toc-row{padding-top:12px;padding-bottom:12px}
   }
   /* ---- 오버레이 모드 (React·Next·SPA — DOM을 감싸지 않음) ---- */
-  .ss-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9030;display:flex;gap:2px;
+  .ss-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483040;display:flex;gap:2px;
     background:#fff;border:1px solid var(--ss-line2);border-radius:99px;padding:3px;box-shadow:0 4px 16px rgba(17,24,39,.18)}
   .ss-pill button{padding:5px 14px;border-radius:99px;font-size:12.5px;font-weight:700;color:var(--ss-ink2)}
   .ss-pill button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
-  .ss-ov-header{position:fixed;top:0;left:0;right:0;height:48px;z-index:9010;background:#fff;
+  .ss-ov-header{position:fixed;top:0;left:0;right:0;height:48px;z-index:2147483010;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:none;align-items:center;gap:28px;padding:0 16px}
-  .ss-ov-panel{position:fixed;top:48px;right:0;bottom:0;width:400px;z-index:9010;background:#fff;
+  .ss-ov-panel{position:fixed;top:48px;right:0;bottom:0;width:400px;z-index:2147483010;background:#fff;
     border-left:1px solid var(--ss-line2);display:none;flex-direction:column;box-shadow:-8px 0 30px rgba(17,24,39,.12)}
-  .ss-ov-markers{position:absolute;top:0;left:0;width:100%;height:0;z-index:8040;pointer-events:none;display:none}
+  .ss-ov-markers{position:absolute;top:0;left:0;width:100%;height:0;z-index:2147483000;pointer-events:none;display:none}
   .ss-ov-markers .ss-marker{pointer-events:auto}
-  .ss-ov-anno{position:absolute;top:0;left:0;width:100%;height:0;z-index:8030;overflow:visible;pointer-events:none;display:none}
+  .ss-ov-anno{position:absolute;top:0;left:0;width:100%;height:0;z-index:2147482990;overflow:visible;pointer-events:none;display:none}
   body.ss-ov-doc .ss-ov-header{display:flex}
   body.ss-ov-doc .ss-ov-panel{display:flex}
   body.ss-ov-doc .ss-ov-markers,body.ss-ov-doc .ss-ov-anno{display:block}
