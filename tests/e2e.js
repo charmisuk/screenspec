@@ -125,6 +125,10 @@ function check(name, ok, detail) {
   await page.click("#ss-mDoc");
   await page.waitForTimeout(500);
   check("MOA 홈 기능 설명 9행", (await page.locator(".ss-defs-list .ss-row").count()) === 9);
+  check("앱형 시트 여백 0 (탭바 하단 밀착)", await page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector(".ss-sheet"));
+    return cs.paddingBottom === "0px" && cs.paddingTop === "0px";
+  }));
   await page.click('[data-play="6"]');
   await page.waitForTimeout(400);
   check("쿠폰 popup → 실제 바텀시트", await page.evaluate(() => document.getElementById("couponSheet").classList.contains("open")));

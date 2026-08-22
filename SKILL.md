@@ -91,7 +91,7 @@ import Script from "next/script";
 
 **액센트 컬러**: `accent` 옵션으로 포인트 컬러 묶음(마커·하이라이트·버튼·드래그 그립·목차 활성 전체)을 교체할 수 있다 — 프리셋 `blue`(기본)·`red`·`orange`·`green`·`purple` 또는 hex(`"#7C3AED"`).
 
-**앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `.ss-wrap .ss-sheet{padding:0}`
+**앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 
 **screenspec.js 로드**: 이 저장소의 `screenspec.js`를 프로토타입 파일 옆에 복사하고 `<script src="./screenspec.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
 
