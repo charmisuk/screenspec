@@ -2,6 +2,12 @@
 
 **프로토타입 자체가 화면정의서가 되는 오버레이.**
 
+▶ **라이브 데모**: [단일 HTML(wrap)](https://charmisuk.github.io/screenspec/examples/demo.html) · [다중 화면+flow](https://charmisuk.github.io/screenspec/examples/multi-screen.html) · [SPA 오버레이 모드](https://charmisuk.github.io/screenspec/examples/overlay-spa.html)
+
+| 프로토타입 모드 | 화면정의서 모드 |
+|---|---|
+| ![프로토타입 모드](docs/shot-proto.png) | ![화면정의서 모드](docs/shot-doc.png) |
+
 AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 파일이 두 모드를 갖는다:
 
 | 모드 | 내용 |
