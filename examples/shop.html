@@ -273,7 +273,7 @@
   </div>
   <div class="pdp-wrap">
     <div class="pdp-hero" data-spec="2" id="pdpHero"><span class="nm" id="pdpHeroNm"></span>
-      <button class="heart" id="pdpHeart" aria-label="찜">
+      <button class="heart" id="pdpHeart" data-spec="6" aria-label="찜">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2"><path d="M12 20s-7-4.3-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.7-9 9-9 9Z"/></svg>
       </button>
     </div>
@@ -468,9 +468,8 @@ window.SCREENSPEC = {
         { n:1, target:"1", anno:"flow", title:"뒤로가기", flowTo:"SCR-MOA-HOME-001",
           play:{ selector:".back", label:"이동 — 홈" }, defs:[
           { t:"탭 시 홈으로 복귀 · 스크롤 위치는 초기화" }]},
-        { n:2, target:"2", anno:"arrow", title:"상품 이미지 + 찜", defs:[
-          { t:"1:1 대표 이미지 · 우상단 찜 하트" },
-          { t:"찜 탭 즉시 토글 + 0.2초 팝 모션 — 서버 왕복 없음" }]},
+        { n:2, target:"2", anno:"box", title:"상품 이미지", defs:[
+          { t:"1:1 대표 이미지 · 목록에서 탭한 상품으로 채움" }]},
         { n:3, target:"3", anno:"box", title:"상품 정보", defs:[
           { t:"브랜드 라벨 + 상품명 + 할인율·판매가·정가(취소선)" },
           { t:"가격은 목록에서 탭한 상품 데이터로 채움" }]},
@@ -480,7 +479,10 @@ window.SCREENSPEC = {
         { n:5, target:"5", anno:"action", title:"구매 바",
           play:{ selector:"#buyBtn", label:"동작 재생 — 장바구니 담기" }, defs:[
           { t:"하단 고정 · 찜 버튼 + [장바구니 담기]" },
-          { t:"담기 성공 시 토스트 + 상단 장바구니 뱃지 수량 증가" }]}
+          { t:"담기 성공 시 토스트 + 상단 장바구니 뱃지 수량 증가" }]},
+        { n:6, target:"6", anno:"arrow", title:"찜 버튼", defs:[
+          { t:"이미지 우상단 하트 · 탭 즉시 토글 + 0.2초 팝 모션" },
+          { t:"서버 왕복 없음 — 찜 목록은 기기에 저장" }]}
       ]
     }
   ]

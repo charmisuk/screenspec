@@ -24,12 +24,12 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 **방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.10.1/screenspec.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.10.2/screenspec.js"></script>
 ```
 
 주소 선택 — 용도에 따라:
 
-- 박제(산출물 보존): `@v0.10.1` — 그 시점 그대로 영원히
+- 박제(산출물 보존): `@v0.10.2` — 그 시점 그대로 영원히
 - **자동 최신(권장)**: `@0` — 정식 릴리스(태그)가 나올 때마다 자동 반영. CI 통과본만 흘러온다
 
 ```html
@@ -107,7 +107,7 @@ window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·gre
 | 타입 | 라벨 | 용도 | 시각 동작 |
 |---|---|---|---|
 | `box` | 영역 | 기본. 영역 설명 | 바운더리 하이라이트 |
-| `arrow` | 화살표 | 작은 요소 지시 | 화살표 |
+| `arrow` | 화살표 | 작은 요소 지시 (마커→요소) · `arrowTo`로 요소→요소 관계선 | 화살표 |
 | `input` | 입력 | 입력 필드 정책 | 하이라이트 |
 | `state` | 상태 | 조건부 표시·상태 분기 | 하이라이트 |
 | `motion` | 모션 | 애니메이션 정의 | 하이라이트 |

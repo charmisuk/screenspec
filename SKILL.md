@@ -82,7 +82,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.10.1/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.10.2/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -112,7 +112,7 @@ import Script from "next/script";
 | 타입 | 라벨 | 언제 | 추가 필드 |
 |---|---|---|---|
 | `box` | 영역 | 기본값. 영역 설명 | — |
-| `arrow` | 화살표 | 작은 요소(아이콘·버튼)라 박스가 안 보일 때 | — |
+| `arrow` | 화살표 | 작은 요소(아이콘·버튼)라 박스가 안 보일 때. 위치 지정 없음 — 바깥에서 요소를 가리키는 지시선이 자동으로 그려짐 | 관계선이 필요하면 `arrowTo:"#selector"` (요소→다른 요소, "여기 누르면 저기") |
 | `input` | 입력 | 입력 필드 정책 (글자수·형식·검증·placeholder) | — |
 | `state` | 상태 | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무, 빈 상태) | — |
 | `motion` | 모션 | 등장·전환 애니메이션 정의 | — |

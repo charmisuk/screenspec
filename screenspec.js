@@ -385,7 +385,8 @@
      ctx = {
        headerEl, cntEl, listEl, markerLayer, tip, annoLine,
        posOf(target)   → {left, top, transform}   마커 좌표 (부트별 좌표계)
-       centerOf(target)→ {cx, cy, halfW}          화살표 좌표
+       rectOf(target)  → {l,t,r,b}               화살표 좌표 (콘텐츠 좌표계)
+       viewCenter()    → {x,y}                   화살표 시작 방향 기준(보이는 영역 중심)
        ensureDoc()                                 프로토타입 모드면 정의서 모드로
        afterRender()                               렌더 후 배치 트리거
      }
@@ -471,14 +472,38 @@
       });
       drawArrow();
     }
+    /* 화살표 규칙 (유저가 좌표를 정하지 않는다 — 위치는 항상 자동)
+       - 기본(지시선): 요소 밖 56px 지점에서 요소 가장자리로. 시작 방향은 화면 중심 쪽(= 빈 공간 쪽)이라
+         모서리의 작은 아이콘이든 큰 영역이든 같은 규칙으로 "바깥에서 안으로 가리키는" 콜아웃이 된다.
+       - arrowTo 지정(관계선): 대상 요소 가장자리 → arrowTo 요소 가장자리. "여기를 누르면 저기" */
+    const ARROW_STANDOFF = 56;
+    function clampPt(x, y, B) { return { x: Math.min(Math.max(x, B.l), B.r), y: Math.min(Math.max(y, B.t), B.b) }; }
     function drawArrow() {
       const s = specs().find((x) => x.n === activeN);
       if (!s || annoOf(s).mech !== "arrow") { ctx.annoLine.setAttribute("visibility", "hidden"); return; }
       const t = targetOf(s);
       if (!t) return;
-      const c = ctx.centerOf(t);
-      ctx.annoLine.setAttribute("x1", c.cx - 120); ctx.annoLine.setAttribute("y1", c.cy + 80);
-      ctx.annoLine.setAttribute("x2", c.cx - c.halfW - 8); ctx.annoLine.setAttribute("y2", c.cy + 8);
+      const A = ctx.rectOf(t);
+      const C = { x: (A.l + A.r) / 2, y: (A.t + A.b) / 2 };
+      let from, to;
+      if (s.arrowTo) {
+        const bEl = document.querySelector(s.arrowTo);
+        if (!bEl) { ctx.annoLine.setAttribute("visibility", "hidden"); return; }
+        const B = ctx.rectOf(bEl);
+        from = clampPt((B.l + B.r) / 2, (B.t + B.b) / 2, A);
+        to = clampPt(C.x, C.y, B);
+      } else {
+        const V = ctx.viewCenter();
+        let dx = V.x - C.x, dy = V.y - C.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) { dx = -0.7; dy = 0.7; } else { dx /= len; dy /= len; }
+        const hw = (A.r - A.l) / 2, hh = (A.b - A.t) / 2;
+        const tEdge = Math.min(dx ? hw / Math.abs(dx) : Infinity, dy ? hh / Math.abs(dy) : Infinity);
+        to = { x: C.x + dx * tEdge, y: C.y + dy * tEdge };
+        from = { x: C.x + dx * (tEdge + ARROW_STANDOFF), y: C.y + dy * (tEdge + ARROW_STANDOFF) };
+      }
+      ctx.annoLine.setAttribute("x1", from.x); ctx.annoLine.setAttribute("y1", from.y);
+      ctx.annoLine.setAttribute("x2", to.x); ctx.annoLine.setAttribute("y2", to.y);
       ctx.annoLine.setAttribute("visibility", "visible");
     }
     function showTip(s, m) {
@@ -833,14 +858,12 @@
           transform: "translate(-40%,-40%) scale(" + 1 / scale + ")"
         };
       },
-      centerOf: (t) => {
+      viewCenter: () => ({ x: sheet.scrollLeft + sheet.clientWidth / 2, y: sheet.scrollTop + sheet.clientHeight / 2 }),
+      rectOf: (t) => {
         const sr = sheet.getBoundingClientRect();
         const r = t.getBoundingClientRect();
-        return {
-          cx: (r.left + r.width / 2 - sr.left) / scale + sheet.scrollLeft,
-          cy: (r.top + r.height / 2 - sr.top) / scale + sheet.scrollTop,
-          halfW: r.width / scale / 2
-        };
+        const ox = sheet.scrollLeft - sr.left / scale, oy = sheet.scrollTop - sr.top / scale;
+        return { l: r.left / scale + ox, t: r.top / scale + oy, r: r.right / scale + ox, b: r.bottom / scale + oy };
       },
       ensureDoc: () => { if (document.body.classList.contains("ss-mode-proto")) setMode("doc"); },
       isDoc: () => document.body.classList.contains("ss-mode-doc"),
@@ -940,9 +963,10 @@
         const r = t.getBoundingClientRect();
         return { left: r.left + scrollX, top: r.top + scrollY, transform: "translate(-40%,-40%)" };
       },
-      centerOf: (t) => {
+      viewCenter: () => ({ x: scrollX + innerWidth / 2, y: scrollY + innerHeight / 2 }),
+      rectOf: (t) => {
         const r = t.getBoundingClientRect();
-        return { cx: r.left + r.width / 2 + scrollX, cy: r.top + r.height / 2 + scrollY, halfW: r.width / 2 };
+        return { l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY };
       },
       ensureDoc: () => { if (!document.body.classList.contains("ss-ov-doc")) setMode("doc"); },
       isDoc: () => document.body.classList.contains("ss-ov-doc"),
