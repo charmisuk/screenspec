@@ -12,6 +12,8 @@
     --sale:#FF4D2E;
     --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
   }
+  /* 앱형 프로토타입: ScreenSpec 시트 기본 여백 제거 — 탭바가 하단에 밀착 */
+  .ss-wrap .ss-sheet{padding:0}
   body{color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;background:var(--sheet)}
   button{font:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
   input{font:inherit}
@@ -109,7 +111,7 @@
   .gcard .rating b{color:var(--ink);font-weight:700}
 
   /* ---- 하단 탭바 ---- */
-  .tabbar{position:sticky;bottom:0;display:flex;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);
+  .tabbar{position:sticky;bottom:0;display:flex;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);
     border-top:1px solid var(--line);padding:7px 0 10px;margin-top:6px}
   .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--faint);font-weight:600}
   .tab.on{color:var(--ink)}

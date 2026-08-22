@@ -24,12 +24,12 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 **방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.9.2/screenspec.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.10.0/screenspec.js"></script>
 ```
 
 주소 선택 — 용도에 따라:
 
-- 박제(산출물 보존): `@v0.9.2` — 그 시점 그대로 영원히
+- 박제(산출물 보존): `@v0.10.0` — 그 시점 그대로 영원히
 - **자동 최신(권장)**: `@0` — 정식 릴리스(태그)가 나올 때마다 자동 반영. CI 통과본만 흘러온다
 
 ```html
@@ -84,6 +84,14 @@ window.SCREENSPEC = {
   ]
 };
 ```
+
+## 액센트 컬러 (묶음 테마)
+
+```js
+window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·green·purple 또는 "#7C3AED"
+```
+
+포인트 컬러 하나로 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 세트로 바뀐다.
 
 ## 두 가지 모드 (자동 판별)
 

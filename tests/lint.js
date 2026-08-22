@@ -65,7 +65,15 @@ try {
   }
 }
 
-/* 5) LICENSE */
+/* 5) 액센트 묶음 무결성 — 액센트 계열 하드코딩 금지 (프리셋 정의부만 허용) */
+{
+  const lib = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8")
+    .replace(/const ACCENT_PRESETS = \{[\s\S]*?\};/, "");
+  const hard = lib.match(/#2952E3|#1E3FC4|41,\s*82,\s*227/gi) || [];
+  check("액센트 하드코딩 없음 (토큰·color-mix만)", hard.length === 0, hard.length + "곳 발견");
+}
+
+/* 6) LICENSE */
 check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));

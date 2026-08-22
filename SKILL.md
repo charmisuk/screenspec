@@ -82,12 +82,16 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.9.2/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.10.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
 - 오버레이 모드에는 기기 뷰포트 시뮬레이터가 없다 (앱 자체 반응형 사용) — 미디어쿼리 훅(§6)도 불필요
 - 주의: 앱이 자체 고정 헤더(top:0)를 쓰면 정의서 모드에서 ScreenSpec 헤더(48px)와 겹칠 수 있다 — 이 경우 사용자에게 보고
+
+**액센트 컬러**: `accent` 옵션으로 포인트 컬러 묶음(마커·하이라이트·버튼·드래그 그립·목차 활성 전체)을 교체할 수 있다 — 프리셋 `blue`(기본)·`red`·`orange`·`green`·`purple` 또는 hex(`"#7C3AED"`).
+
+**앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `.ss-wrap .ss-sheet{padding:0}`
 
 **screenspec.js 로드**: 이 저장소의 `screenspec.js`를 프로토타입 파일 옆에 복사하고 `<script src="./screenspec.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
 

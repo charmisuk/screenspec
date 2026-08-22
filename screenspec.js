@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.9 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.10 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -83,6 +83,24 @@
   };
   function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
 
+  /* 하이라이트·마커·버튼 등 포인트 컬러 — accent: 프리셋명 또는 hex
+     window.SCREENSPEC = { accent: "orange" } 또는 { accent: "#7C3AED" } */
+  const ACCENT_PRESETS = {
+    blue:   "#2952E3",  /* 기본 */
+    red:    "#E5484D",
+    orange: "#F76B15",
+    green:  "#18794E",
+    purple: "#8E4EC6"
+  };
+  const ACCENT = (function () {
+    const a = RAW.accent;
+    if (!a) return ACCENT_PRESETS.blue;
+    if (ACCENT_PRESETS[a]) return ACCENT_PRESETS[a];
+    if (/^#[0-9a-fA-F]{3,8}$/.test(a)) return a;
+    console.warn("[ScreenSpec] accent \"" + a + "\" 인식 불가 — 기본(blue) 사용. 프리셋: " + Object.keys(ACCENT_PRESETS).join(", ") + " 또는 hex");
+    return ACCENT_PRESETS.blue;
+  })();
+
   /* 사용자 텍스트는 전부 이걸 거쳐 innerHTML에 들어간다 */
   function esc(x) {
     return String(x == null ? "" : x)
@@ -95,10 +113,13 @@
      1. 토큰: 색·서체는 --ss-* 변수로만 사용 (하드코딩 금지)
      2. 리셋: :where()로 특이도 0 — 컴포넌트 클래스가 항상 이긴다
      3. 컴포넌트: 단일 클래스(.ss-play, .ss-marker ...)가 형태·색을 완결 정의
-     4. 포인트 컬러(--ss-accent) 위에는 항상 흰 텍스트 */
+     4. 포인트 컬러(--ss-accent) 위에는 항상 흰 텍스트
+     5. 액센트는 묶음(테마 세트): --ss-accent 단일 토큰이 마커·하이라이트·재생버튼·
+        드래그 그립·목차 활성까지 견인하고, 파생색(soft·hover·그림자)은 color-mix로만.
+        액센트 계열 hex·rgba 하드코딩 금지 — tests/lint.js가 기계 검증 */
   const CSS = `
   :root{--ss-canvas:#F1F1F0;--ss-ink:#191919;--ss-ink2:#50524E;--ss-ink3:#9B9A97;
-    --ss-line:#E9E9E7;--ss-line2:#D3D1CB;--ss-accent:#2952E3;--ss-accent-soft:#EEF2FF;
+    --ss-line:#E9E9E7;--ss-line2:#D3D1CB;--ss-accent:${ACCENT};--ss-accent-soft:color-mix(in srgb,${ACCENT} 9%,#fff);
     --ss-mono:ui-monospace,"Cascadia Code",Consolas,monospace}
   body.ss-wrap{margin:0;background:var(--ss-canvas)}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
@@ -161,8 +182,8 @@
   .ss-items li.ss-sub::before{background:#fff;border:1.3px solid var(--ss-ink2);left:2px}
   .ss-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
     color:#fff;border-radius:8px;padding:7px 14px;background:var(--ss-accent);
-    box-shadow:0 2px 8px rgba(41,82,227,.35);transition:background .12s}
-  .ss-play:hover{background:#1E3FC4}
+    box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent);transition:background .12s}
+  .ss-play:hover{background:color-mix(in srgb,var(--ss-accent) 82%,#000)}
   .ss-play:active{transform:translateY(1px)}
   .ss-frame{position:relative}
   .ss-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
@@ -209,7 +230,10 @@
   .ss-markers,.ss-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
   .ss-anno{z-index:8030;overflow:visible}
   body.ss-mode-proto .ss-marker,body.ss-mode-proto .ss-anno{display:none}
-  .ss-hl{box-shadow:0 0 0 2px var(--ss-accent),0 0 0 6px rgba(41,82,227,.15)!important;border-radius:12px}
+  :where(.ss-hl){position:relative}
+  .ss-hl::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+    border:2px solid var(--ss-accent);border-radius:inherit;
+    background:color-mix(in srgb,var(--ss-accent) 8%,transparent)}
   .ss-tip{position:fixed;z-index:9040;max-width:280px;background:#fff;border:1px solid var(--ss-line2);
     border-radius:10px;box-shadow:0 10px 30px rgba(17,24,39,.18);padding:10px 13px;display:none;pointer-events:none}
   .ss-tip .ss-tn{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:var(--ss-accent)}
@@ -529,7 +553,8 @@
       const sections = [];
       const bySection = {};
       SCREENS.forEach((s) => {
-        const sec = (s.path && s.path.length > 1) ? s.path[0] : "";
+        /* 부모 화면(예: "홈")도 자기 이름 섹션 안에 포함되도록 path[0] 기준 그룹핑 */
+        const sec = (s.path && s.path.length) ? s.path[0] : "";
         if (!(sec in bySection)) { bySection[sec] = []; sections.push(sec); }
         bySection[sec].push(s);
       });
@@ -538,8 +563,9 @@
         if (sec) html += `<div class="ss-toc-sec">${esc(sec)}</div>`;
         bySection[sec].forEach((s) => {
           const n = (s.specs || []).length;
-          let parents = (s.path || []).slice(0, -1);
-          if (parents.length > MAX_TOC_DEPTH - 1) parents = parents.slice(0, MAX_TOC_DEPTH - 2).concat("…");
+          /* 크럼 = 섹션과 자신 사이의 중간 세그먼트만 (섹션명 중복 표기 방지) */
+          let parents = (s.path || []).slice(1, -1);
+          if (parents.length > MAX_TOC_DEPTH - 2) parents = parents.slice(0, MAX_TOC_DEPTH - 3).concat("…");
           const crumb = parents.join(" › ");
           /* ID는 뒷자리가 식별의 핵심 — 길면 앞을 자르고 뒤를 보존 */
           const idShow = s.id.length > 14 ? "…" + s.id.slice(-13) : s.id;
@@ -644,9 +670,7 @@
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-anno");
     annoSvg.innerHTML =
-      '<defs><marker id="ss-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
-      '<path d="M0,0 L8,4 L0,8 Z" fill="#2952E3"></path></marker></defs>' +
-      '<line id="ss-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#ss-arrowhead)" visibility="hidden"></line>';
+      `<defs><marker id="ss-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${ACCENT}"></path></marker></defs><line id="ss-line" x1="0" y1="0" x2="0" y2="0" stroke="${ACCENT}" stroke-width="2" marker-end="url(#ss-arrowhead)" visibility="hidden"></line>`;
     const markerLayer = h("div", { class: "ss-markers" });
     sheet.appendChild(annoSvg);
     sheet.appendChild(markerLayer);
@@ -680,7 +704,7 @@
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.9</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.10</div>
         </aside>
       </div>`);
 
@@ -798,8 +822,9 @@
         const sr = sheet.getBoundingClientRect();
         const r = t.getBoundingClientRect();
         return {
-          left: (r.left - sr.left) / scale + sheet.scrollLeft,
-          top: (r.top - sr.top) / scale + sheet.scrollTop,
+          /* 시트 가장자리(여백 0 앱형)에서 마커가 잘리지 않게 최소 위치 클램프 */
+          left: Math.max(12, (r.left - sr.left) / scale + sheet.scrollLeft),
+          top: Math.max(12, (r.top - sr.top) / scale + sheet.scrollTop),
           transform: "translate(-40%,-40%) scale(" + 1 / scale + ")"
         };
       },
@@ -849,7 +874,7 @@
 
     core.setCurrent(SCREENS[0]);
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
-    console.info("[ScreenSpec v0.9] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.10] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -866,14 +891,12 @@
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.9</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.10</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
     annoSvg.innerHTML =
-      '<defs><marker id="ss-ov-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
-      '<path d="M0,0 L8,4 L0,8 Z" fill="#2952E3"></path></marker></defs>' +
-      '<line id="ss-ov-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#ss-ov-arrowhead)" visibility="hidden"></line>';
+      `<defs><marker id="ss-ov-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${ACCENT}"></path></marker></defs><line id="ss-ov-line" x1="0" y1="0" x2="0" y2="0" stroke="${ACCENT}" stroke-width="2" marker-end="url(#ss-ov-arrowhead)" visibility="hidden"></line>`;
     const tip = h("div", { class: "ss-tip ss-ui", role: "tooltip" });
     document.body.appendChild(annoSvg);
     document.body.appendChild(markerLayer);
@@ -982,7 +1005,7 @@
 
     core.setCurrent(SCREENS[0]);
     detectScreen();
-    console.info("[ScreenSpec v0.9] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.10] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

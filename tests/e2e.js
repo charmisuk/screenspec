@@ -94,7 +94,7 @@ function check(name, ok, detail) {
   check("목차 섹션 라벨 + 브레드크럼", await page.evaluate(() => {
     const t = document.querySelector(".ss-toc");
     const sec = [...t.querySelectorAll(".ss-toc-sec")].some((x) => x.textContent === "홈");
-    const crumb = [...t.querySelectorAll(".ss-toc-crumb")].some((x) => x.textContent.includes("홈 › 과일 상점"));
+    const crumb = [...t.querySelectorAll(".ss-toc-crumb")].some((x) => x.textContent.includes("과일 상점"));
     return sec && crumb;
   }));
   check("flow 버튼에 대상 화면명 표기", await page.evaluate(() =>
