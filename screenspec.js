@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.6 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.7 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -215,6 +215,30 @@
   .ss-tip .ss-tn{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:var(--ss-accent)}
   .ss-tip .ss-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--ss-ink)}
   .ss-tip .ss-td{font-size:12px;color:var(--ss-ink2)}
+  /* ---- 화면 목록 (목차) — 헤더의 화면 ID 클릭으로 열림 ---- */
+  .ss-toc-btn{cursor:pointer;display:inline-flex;align-items:center;gap:5px;border-radius:7px;padding:1px 6px;margin:-1px -6px;transition:background .12s}
+  .ss-toc-btn:hover{background:var(--ss-accent-soft);color:var(--ss-accent)}
+  .ss-toc-caret{font-style:normal;font-size:9px;color:var(--ss-ink3)}
+  .ss-toc-btn:hover .ss-toc-caret{color:var(--ss-accent)}
+  .ss-toc{position:fixed;z-index:9045;min-width:300px;max-width:380px;max-height:62vh;overflow-y:auto;
+    background:#fff;border:1px solid var(--ss-line2);border-radius:12px;
+    box-shadow:0 14px 44px rgba(17,24,39,.22);display:none}
+  .ss-toc.ss-open{display:block}
+  .ss-toc-head{display:flex;align-items:baseline;gap:8px;padding:11px 16px;border-bottom:1px solid var(--ss-line);
+    position:sticky;top:0;background:#fff;font-size:13px;color:var(--ss-ink)}
+  .ss-toc-head b{font-weight:800}
+  .ss-toc-row{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;font-size:12.5px;
+    border-bottom:1px solid var(--ss-line);transition:background .12s}
+  .ss-toc-row:last-child{border-bottom:0}
+  .ss-toc-row:hover{background:#FAFAF9}
+  .ss-toc-row.ss-cur{background:var(--ss-accent-soft)}
+  .ss-toc-dot{width:7px;height:7px;border-radius:50%;background:var(--ss-ink);flex-shrink:0}
+  .ss-toc-row.ss-undef .ss-toc-dot{background:#fff;border:1.3px solid var(--ss-ink3)}
+  .ss-toc-id{font-family:var(--ss-mono);font-size:11.5px;font-weight:800;color:var(--ss-ink2);flex-shrink:0}
+  .ss-toc-row.ss-cur .ss-toc-id{color:var(--ss-accent)}
+  .ss-toc-name{font-weight:700;color:var(--ss-ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ss-toc-row.ss-undef .ss-toc-name{color:var(--ss-ink3);font-weight:500}
+  .ss-toc-cnt{font-family:var(--ss-mono);font-size:10.5px;color:var(--ss-ink3);flex-shrink:0}
   /* ---- 오버레이 모드 (React·Next·SPA — DOM을 감싸지 않음) ---- */
   .ss-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9030;display:flex;gap:2px;
     background:#fff;border:1px solid var(--ss-line2);border-radius:99px;padding:3px;box-shadow:0 4px 16px rgba(17,24,39,.18)}
@@ -282,7 +306,7 @@
   function headerFieldsHTML(screen) {
     const pathHtml = (screen.path || []).map((p) => "<span>" + esc(p) + "</span>").join('<span class="ss-sep">›</span>');
     return `
-      <div class="ss-dh"><span class="ss-k">화면 ID</span><span class="ss-v ss-monoV">${esc(screen.id)}</span></div>
+      <div class="ss-dh"><span class="ss-k">화면 ID</span><button class="ss-v ss-monoV ss-toc-btn" title="화면 목록 열기">${esc(screen.id)}<i class="ss-toc-caret">▾</i></button></div>
       <div class="ss-dh"><span class="ss-k">화면명</span><span class="ss-v">${esc(screen.name)}</span></div>
       ${pathHtml ? `<div class="ss-dh"><span class="ss-k">화면 경로</span><span class="ss-v">${pathHtml}</span></div>` : ""}`;
   }
@@ -456,6 +480,64 @@
       if (row && e.key === "Enter") activate(Number(row.dataset.defrow), "panel");
     });
 
+    /* ---- 화면 목록 (목차) — screens 배열에서 자동 생성, 커버리지 카운터 포함 ---- */
+    const toc = h("div", { class: "ss-ui ss-toc" });
+    document.body.appendChild(toc);
+    function renderToc() {
+      const defined = SCREENS.filter((s) => (s.specs || []).length > 0).length;
+      let rows = "";
+      SCREENS.forEach((s) => {
+        const n = (s.specs || []).length;
+        rows += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}">
+          <span class="ss-toc-dot"></span>
+          <span class="ss-toc-id">${esc(s.id)}</span>
+          <span class="ss-toc-name">${esc(s.name)}</span>
+          <span class="ss-toc-cnt">${n ? n + "항목" : "미정의"}</span></div>`;
+      });
+      toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span></div>` + rows;
+    }
+    function openToc(anchor) {
+      renderToc();
+      const r = anchor.getBoundingClientRect();
+      toc.style.left = Math.max(8, Math.min(r.left, innerWidth - 320)) + "px";
+      toc.style.top = r.bottom + 8 + "px";
+      toc.classList.add("ss-open");
+    }
+    function closeToc() { toc.classList.remove("ss-open"); }
+    ctx.headerEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".ss-toc-btn");
+      if (!btn) return;
+      e.stopPropagation();
+      if (toc.classList.contains("ss-open")) closeToc();
+      else openToc(btn);
+    });
+    toc.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-toc]");
+      if (!row) return;
+      const sc = SCREENS.find((s) => s.id === row.dataset.toc);
+      closeToc();
+      if (!sc) return;
+      setCurrent(sc);
+      /* route가 있으면 소프트 내비게이션 시도 — popstate 리스너형 라우터(SPA)는 화면도 따라온다.
+         라우터가 반응하지 않는 앱이면 정의서만 전환되고 마커는 자동 숨김(콘솔 진단). */
+      if (sc.route && location.pathname !== sc.route) {
+        try {
+          history.pushState({}, "", sc.route);
+          dispatchEvent(new PopStateEvent("popstate"));
+        } catch (err) { /* file:// 등 pushState 불가 환경 방어 */ }
+      } else if (!sc.route && sc.root) {
+        /* root 기반 화면: 앱 화면도 같은 방식(표시/숨김)으로 전환 — 정의서·앱 동기 유지.
+           안 하면 화면 감지가 "앱은 그대로"라며 이전 화면으로 되돌린다. */
+        SCREENS.forEach((o) => {
+          if (!o.root) return;
+          const el = document.querySelector(o.root);
+          if (el) el.style.display = o === sc ? "" : "none";
+        });
+      }
+    });
+    document.addEventListener("click", (e) => { if (!toc.contains(e.target)) closeToc(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToc(); });
+
     return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render };
   }
 
@@ -520,10 +602,10 @@
       <div class="ss-doc-header" id="ss-dh-wrap"></div>
       <div class="ss-doc-body">
         <div class="ss-stage" id="ss-stage"><div class="ss-fit" id="ss-fit"><div class="ss-holder" id="ss-docHolder"></div></div></div>
-        <aside class="ss-defs" aria-label="기능정의">
-          <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-cnt"></span></div>
+        <aside class="ss-defs" aria-label="기능 설명">
+          <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.6</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.7</div>
         </aside>
       </div>`);
 
@@ -691,7 +773,7 @@
 
     core.setCurrent(SCREENS[0]);
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
-    console.info("[ScreenSpec v0.6] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.7] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -705,10 +787,10 @@
       <button id="ss-ovProto" aria-pressed="true">프로토타입</button>
       <button id="ss-ovDoc" aria-pressed="false">화면정의서</button>`);
     const header = h("div", { class: "ss-ui ss-ov-header" });
-    const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능정의" }, `
-      <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
+    const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
+      <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.6</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.7</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -821,7 +903,7 @@
 
     core.setCurrent(SCREENS[0]);
     detectScreen();
-    console.info("[ScreenSpec v0.6] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.7] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

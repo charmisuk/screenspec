@@ -7,8 +7,8 @@
 
 프로토타입 HTML에 ScreenSpec를 심어, 같은 파일이 두 모드를 갖게 한다:
 - **프로토타입 모드**: 원본 그대로 (마커 숨김)
-- **화면정의서 모드**: 헤더(화면 ID·화면명·화면 경로) + 좌측 축소 미리보기 + 우측 기능정의.
-  프로토타입은 이 모드에서도 살아 있다 — 버튼·내비게이션 동작, 화면이 바뀌면 헤더·기능정의 자동 전환.
+- **화면정의서 모드**: 헤더(화면 ID·화면명·화면 경로) + 좌측 축소 미리보기 + 우측 기능 설명.
+  프로토타입은 이 모드에서도 살아 있다 — 버튼·내비게이션 동작, 화면이 바뀌면 헤더·기능 설명 자동 전환.
 
 ## 작업 순서
 
@@ -39,7 +39,7 @@ window.SCREENSPEC = {
   widths: { mobile:430, pc:1440 },
   specs: [
     { n:1, target:"1", anno:"box", title:"영역명", defs:[
-      { t:"기능정의 한 줄", subs:["하위 조건 한 줄"] }
+      { t:"기능 설명 한 줄", subs:["하위 조건 한 줄"] }
     ]},
   ]
 };
@@ -61,7 +61,7 @@ window.SCREENSPEC = {
 </script>
 ```
 - 각 화면의 컨테이너 요소에 `data-ss-screen="SCR-XXX-001"` 부여.
-- 화면 전환이 표시/숨김(display 등)으로 일어나면 **자동 감지**되어 헤더·기능정의가 따라 바뀐다.
+- 화면 전환이 표시/숨김(display 등)으로 일어나면 **자동 감지**되어 헤더·기능 설명가 따라 바뀐다.
 - 감지가 안 되는 구조(동일 DOM 재사용 등)면 프로토타입의 내비 코드에 `window.ScreenSpec.setScreen("SCR-XXX-002")` 한 줄 추가.
 
 ### 3-B. 프레임워크 프로토타입(React·Next·Vue) = 오버레이 모드
@@ -78,7 +78,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.3/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.7.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -87,7 +87,7 @@ import Script from "next/script";
 
 **screenspec.js 로드**: 이 저장소의 `screenspec.js`를 프로토타입 파일 옆에 복사하고 `<script src="./screenspec.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
 
-### 4. 기능정의 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
+### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 
 1. **한 줄 = 사실 하나.** 결과·값·개수 중심. 과정 서술 금지
 2. **명사형 종결**: "~표시" "~이동" "~금지" (문장체 X)
@@ -128,10 +128,10 @@ import Script from "next/script";
 ### 7. 완료 전 자가 검증
 
 - [ ] 두 모드 전환 시 에러 없음 (콘솔 확인)
-- [ ] 마커 번호와 기능정의 번호 일치, 누락 없음
-- [ ] 기능정의 전 항목이 4번 작성 룰 통과
+- [ ] 마커 번호와 기능 설명 번호 일치, 누락 없음
+- [ ] 기능 설명 전 항목이 4번 작성 룰 통과
 - [ ] PC 폭(1440)에서 화면정의서 모드 축소 배치 정상
-- [ ] 다중 화면이면: 화면 전환 시 헤더·기능정의가 따라 바뀌는지 확인
+- [ ] 다중 화면이면: 화면 전환 시 헤더·기능 설명가 따라 바뀌는지 확인
 - [ ] `data-spec` 없는 specs 항목 없음 (마커가 숨겨지면 이것)
 
 검증 후 사용자에게: 화면 ID 목록, 항목 수, 열어보는 법(모드 전환 위치)만 짧게 보고.

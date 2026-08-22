@@ -31,7 +31,7 @@ function check(name, ok, detail) {
   await page.waitForTimeout(1200);
   await page.click("#ss-mDoc");
   await page.waitForTimeout(500);
-  check("기능정의 10행", (await page.locator(".ss-defs-list .ss-row").count()) === 10);
+  check("기능 설명 10행", (await page.locator(".ss-defs-list .ss-row").count()) === 10);
   await page.click("#ss-def-5");
   await page.waitForTimeout(300);
   check("행 클릭 → 영역 강조", await page.evaluate(() => !!document.querySelector(".ss-hl")));
@@ -82,6 +82,18 @@ function check(name, ok, detail) {
   await page.click('[data-play="4"]');
   await page.waitForTimeout(400);
   check("popup → 실제 모달 열림", await page.evaluate(() => document.getElementById("sheetModal").classList.contains("open")));
+  await page.click("#sheetModal .ok"); /* 모달 닫고 다음 검사로 */
+  await page.waitForTimeout(200);
+  /* 화면 목록 (목차) — wrap */
+  await page.click(".ss-toc-btn");
+  await page.waitForTimeout(300);
+  check("목차 열림 + 커버리지", await page.evaluate(() => {
+    const t = document.querySelector(".ss-toc");
+    return t.classList.contains("ss-open") && t.textContent.includes("2/2 정의됨");
+  }));
+  await page.click('[data-toc="SCR-EX-LST-001"]');
+  await page.waitForTimeout(400);
+  check("목차 행 클릭 → 정의서 전환", await page.evaluate(() => window.ScreenSpec.current()) === "SCR-EX-LST-001");
 
   /* ============ overlay: 하위경로(basePath) 환경 ============ */
   console.log("[overlay] SPA (하위경로 서빙)");
@@ -110,6 +122,14 @@ function check(name, ok, detail) {
   await page.waitForTimeout(400);
   check("미정의 화면 표시", await page.evaluate(() =>
     window.ScreenSpec.current() === "—" && !!document.querySelector(".ss-empty")));
+  /* 목차 소프트 내비게이션 — overlay: route까지 실제 이동 */
+  await page.click(".ss-toc-btn");
+  await page.waitForTimeout(300);
+  await page.click('[data-toc="S-09"]');
+  await page.waitForTimeout(400);
+  check("목차 → route 소프트 내비게이션", await page.evaluate(() =>
+    window.ScreenSpec.current() === "S-09" && location.pathname === "/members" &&
+    document.body.innerText.includes("이용자 명단")));
   await page.addScriptTag({ content: LIB });
   await page.waitForTimeout(300);
   check("이중 로드 가드", (await page.locator(".ss-pill").count()) === 1);
