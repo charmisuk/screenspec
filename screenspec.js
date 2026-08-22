@@ -190,6 +190,15 @@
   .ss-edge-r:hover::after,.ss-edge-r.ss-dragging::after,
   .ss-edge-b:hover::after,.ss-edge-b.ss-dragging::after{background:var(--ss-accent)}
   .ss-edge-c:hover::after,.ss-edge-c.ss-dragging::after{border-color:var(--ss-accent)}
+  /* 터치 기기: 핸들을 시트 가장자리에 걸치게(반 안쪽) + 히트영역 확대 — 폰에서 화면 밖으로 밀리는 문제 방지 */
+  @media(pointer:coarse){
+    .ss-edge-r{right:-10px;width:28px}
+    .ss-edge-b{bottom:-10px;height:28px}
+    .ss-edge-c{right:-10px;bottom:-10px;width:36px;height:36px}
+    .ss-edge-r::before,.ss-edge-r::after{left:9px;width:8px}
+    .ss-edge-b::before,.ss-edge-b::after{top:9px;height:8px}
+    .ss-edge-c::after{width:18px;height:18px;border-width:5px}
+  }
   /* 마커 — 흰 배경 + 검은 숫자, 활성 시 포인트색 배경 + 흰 숫자 */
   .ss-marker{
     position:absolute;width:24px;height:24px;border-radius:50%;pointer-events:auto;padding:0;
@@ -531,7 +540,10 @@
     let scale = 1;
     const wpx = document.getElementById("ss-wpx");
     function applySize(w, hgt) {
-      sheetW = Math.max(320, Math.min(2200, Math.round(w)));
+      /* 터치 기기: 시트가 화면보다 넓으면 핸들이 화면 밖으로 나가 조작 불가 → 뷰포트에 맞게 클램프 */
+      const coarse = window.matchMedia && matchMedia("(pointer:coarse)").matches;
+      const maxW = coarse ? Math.max(260, innerWidth - 44) : 2200;
+      sheetW = Math.max(coarse ? 260 : 320, Math.min(maxW, Math.round(w)));
       sheetH = Math.max(400, Math.min(1600, Math.round(hgt)));
       sheet.style.width = sheetW + "px";
       sheet.style.height = sheetH + "px";
@@ -600,11 +612,13 @@
         frame.style.transform = "";
         fit.style.width = ""; fit.style.height = "";
       }
-      /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 */
-      edgeR.style.width = Math.round(20 / scale) + "px";
-      edgeR.style.right = "-" + Math.round(20 / scale) + "px";
-      edgeB.style.height = Math.round(20 / scale) + "px";
-      edgeB.style.bottom = "-" + Math.round(20 / scale) + "px";
+      /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 (터치 기기는 더 크게·시트에 걸치게) */
+      const coarse = window.matchMedia && matchMedia("(pointer:coarse)").matches;
+      const hs = coarse ? 28 : 20, ho = coarse ? 10 : 20;
+      edgeR.style.width = Math.round(hs / scale) + "px";
+      edgeR.style.right = "-" + Math.round(ho / scale) + "px";
+      edgeB.style.height = Math.round(hs / scale) + "px";
+      edgeB.style.bottom = "-" + Math.round(ho / scale) + "px";
       core.placeMarkers();
     }
 

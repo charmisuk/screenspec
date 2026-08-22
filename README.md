@@ -2,7 +2,7 @@
 
 **프로토타입 자체가 화면정의서가 되는 오버레이.**
 
-▶ **라이브 데모**: [단일 HTML(wrap)](https://charmisuk.github.io/screenspec/examples/demo.html) · [다중 화면+flow](https://charmisuk.github.io/screenspec/examples/multi-screen.html) · [SPA 오버레이 모드](https://charmisuk.github.io/screenspec/examples/overlay-spa.html)
+▶ **[라이브 데모 바로가기](https://charmisuk.github.io/screenspec/examples/demo.html)**
 
 | 프로토타입 모드 | 화면정의서 모드 |
 |---|---|
@@ -24,12 +24,12 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 **방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.1/screenspec.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.2/screenspec.js"></script>
 ```
 
 주소 선택 — 용도에 따라:
 
-- 박제(산출물 보존): `@v0.6.1` — 그 시점 그대로 영원히
+- 박제(산출물 보존): `@v0.6.2` — 그 시점 그대로 영원히
 - **자동 최신(권장)**: `@0` — 정식 릴리스(태그)가 나올 때마다 자동 반영. CI 통과본만 흘러온다
 
 ```html
@@ -116,10 +116,13 @@ window.SCREENSPEC = {
 - 화면정의서 모드에서 좌측 스테이지 자동 축소 배치, 마커·그립 크기는 유지
 - 반응형 훅: `.ss-pc`(≥1100px) / `.ss-narrow`(≤520px) — 미디어쿼리 대신 사용 (SKILL.md §6)
 
-## 예제
+## 예제 (개발자용 — 모드·기능별 참고 코드)
 
-- [`examples/demo.html`](examples/demo.html) — 단일 화면 (ezdodal AI 아기 사진 상세, 10항목)
-- [`examples/multi-screen.html`](examples/multi-screen.html) — 다중 화면 + flow 타입
+대표 데모는 위 하나로 충분하다. 아래는 적용 코드를 볼 때 여는 참고용:
+
+- [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — wrap 단일 화면 (기능 전부, 10항목)
+- [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — wrap 다중 화면 + flow·popup
+- [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — overlay 모드 (React·Next 적용과 같은 구조)
 
 ## 테스트
 
