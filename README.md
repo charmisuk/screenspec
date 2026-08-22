@@ -8,6 +8,10 @@
 |---|---|
 | ![프로토타입 모드](docs/shot-proto.png) | ![화면정의서 모드](docs/shot-doc.png) |
 
+| 화면 목록 (헤더의 화면 ID 칩 클릭 → 트리) |
+|---|
+| ![화면 목록 트리](docs/shot-toc.png) |
+
 AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 파일이 두 모드를 갖는다:
 
 | 모드 | 내용 |
@@ -107,7 +111,7 @@ window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·gre
 | 타입 | 라벨 | 용도 | 시각 동작 |
 |---|---|---|---|
 | `box` | 영역 | 기본. 영역 설명 | 바운더리 하이라이트 |
-| `arrow` | 화살표 | 작은 요소 지시 (마커→요소) · `arrowTo`로 요소→요소 관계선 | 화살표 |
+| `arrow` | 화살표 | 작은 요소 지시 — 바깥에서 요소를 가리키는 지시선 자동 · `arrowTo`로 요소→요소 관계선 | 화살표 |
 | `input` | 입력 | 입력 필드 정책 | 하이라이트 |
 | `state` | 상태 | 조건부 표시·상태 분기 | 하이라이트 |
 | `motion` | 모션 | 애니메이션 정의 | 하이라이트 |
@@ -120,7 +124,7 @@ window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·gre
 ## 기능
 
 - 모드 토글: 프로토타입 / 화면정의서
-- **화면 목록(목차)**: 정의서 헤더의 화면 ID 클릭 → 커버리지(N/M 정의됨) + 행 클릭 이동. 커맨드 팔레트 스타일(Linear ⌘K 벤치마크): 1뎁스는 섹션 라벨, 하위 뎁스는 행 안 브레드크럼(최대 4뎁스 표시). 모바일은 전체 화면 시트. 화면 전환 시 "→ 화면명" 알림 토스트
+- **화면 목록(목차)**: 정의서 헤더의 화면 ID 칩 클릭 → 트리(Figma 레이어·Notion 사이드바 패턴). 뎁스 = 들여쓰기 + 세로 가이드선, 화면이 아닌 중간 경로는 회색 그룹 행, 화면 행은 ● 이름 + ID(미정의는 ○ + "미정의"), 커버리지(N/M 정의됨), 행 클릭 이동, 최대 6뎁스 들여쓰기. 모바일은 전체 화면 시트. 화면 전환 시 "→ 화면명" 알림 토스트
 - 기기 뷰포트(wrap): 모바일 360×800 · PC 1920×1080 프리셋 + 우측/하단/코너 드래그, 프리셋 클릭 시 복귀
 - 화면정의서 모드에서 좌측 스테이지 자동 축소 배치, 마커·그립 크기는 유지
 - 반응형 훅: `.ss-pc`(≥1100px) / `.ss-narrow`(≤520px) — 미디어쿼리 대신 사용 (SKILL.md §6)
@@ -133,6 +137,7 @@ window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·gre
 - [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — wrap 단일 화면 (콘텐츠형 페이지, 10항목)
 - [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — wrap 다중 화면 + flow·popup
 - [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — overlay 모드 (React·Next 적용과 같은 구조)
+- [tree.html](https://charmisuk.github.io/screenspec/examples/tree.html) — 화면 목록 트리 (11화면·4뎁스·그룹·미정의 혼합)
 
 ## 테스트
 
@@ -140,8 +145,8 @@ window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·gre
 
 ```bash
 # playwright가 설치된 폴더에서
-node tests/lint.js  # 문법·오염·버전 정합·예제 정합 (의존성 없음)
-node tests/e2e.js   # 19케이스 회귀 — 릴리스(태그) 전 전부 PASS 필수
+node tests/lint.js  # 문법·오염·버전 정합·예제 정합·문서 드리프트 (의존성 없음)
+node tests/e2e.js   # 브라우저 회귀 — 릴리스(태그) 전 전부 PASS 필수 (케이스 수는 실행 결과로 확인)
 ```
 
 ## 로드맵

@@ -3,3 +3,5 @@
 .env.*
 node_modules/
 examples/_*.png
+_*.png
+**/_*.png

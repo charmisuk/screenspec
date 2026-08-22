@@ -8,6 +8,9 @@
  *  3) 버전 문자열 드리프트 — 헤더 주석 ↔ 워터마크 배지 ↔ 문서 CDN 태그
  *  4) 예제의 specs target ↔ data-spec 속성 정합 (마커 누락 예방)
  *  5) LICENSE 존재
+ *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
+ *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
+ *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
 const path = require("path");
@@ -75,6 +78,36 @@ try {
 
 /* 6) LICENSE */
 check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
+
+/* 7) 문서 드리프트 — 폐기된 설계의 용어·클래스가 살아 있으면 에이전트가 옛 구조를 믿는다 */
+{
+  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|SpecLayer(?![^\n]*(별칭|alias|호환|legacy))/g;
+  for (const f of ["README.md", "SKILL.md", "screenspec.js"]) {
+    const d = fs.readFileSync(path.join(REPO, f), "utf8");
+    const hits = [...d.matchAll(STALE)].map((m) => m[0]);
+    check(f + " 폐기 용어 없음", hits.length === 0, JSON.stringify([...new Set(hits)]));
+  }
+}
+
+/* 8) README 예제 목록 ↔ examples/ 파일, 참조 이미지 존재 */
+{
+  const md = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+  const files = fs.readdirSync(path.join(REPO, "examples")).filter((x) => x.endsWith(".html") && !x.startsWith("_"));
+  const missingInReadme = files.filter((f) => !md.includes("examples/" + f));
+  check("README 예제 목록 = examples/ 전수", missingInReadme.length === 0, "README에 없는 예제: " + JSON.stringify(missingInReadme));
+  const imgs = [...md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m) => m[1]).filter((p) => !/^https?:/.test(p));
+  const missingImg = imgs.filter((p) => !fs.existsSync(path.join(REPO, p)));
+  check("README 참조 이미지 존재", missingImg.length === 0, JSON.stringify(missingImg));
+}
+
+/* 9) 케이스 수 하드코딩 금지 */
+{
+  for (const f of ["README.md", ".github/workflows/ci.yml", "SKILL.md"]) {
+    const d = fs.readFileSync(path.join(REPO, f), "utf8");
+    const hits = d.match(/\d+\s*케이스/g) || [];
+    check(f + " 케이스 수 하드코딩 없음", hits.length === 0, JSON.stringify(hits));
+  }
+}
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
 process.exit(fail ? 1 : 0);

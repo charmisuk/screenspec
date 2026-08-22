@@ -22,7 +22,8 @@
  *
  * anno 타입 8종 (SKILL.md §5) — 의미(라벨)와 시각 동작(mech)을 분리한 레지스트리:
  *   box    영역   | mech box  | 기본값. 영역 하이라이트
- *   arrow  화살표 | mech arrow| 아이콘·버튼 등 작은 요소 지시
+ *   arrow  화살표 | mech arrow| 작은 요소 지시 — 요소 밖 56px(화면 중심 쪽)에서 가장자리를 가리키는 콜아웃 자동.
+ *                              arrowTo:"#sel" 지정 시 요소→요소 관계선(가장자리↔가장자리)
  *   input  입력   | mech box  | 입력 필드 정책 (글자수·형식·검증·placeholder)
  *   state  상태   | mech box  | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무 등)
  *   motion 모션   | mech box  | 등장·전환 애니메이션 정의
@@ -35,6 +36,9 @@
  *   overlay React·Next·Vue 등 프레임워크 — DOM 불변, 라우트(route) 기반 화면 추적.
  *           screens[].route: "/members" 또는 "/members/[id]".
  *           basePath·정적 호스팅(경로 접두)도 suffix 매칭으로 지원.
+ *
+ * 액센트: accent 옵션 — 프리셋 blue(기본)·red·orange·green·purple 또는 hex. 마커·하이라이트·버튼·그립·목차 활성이 묶음으로 바뀐다.
+ * 화면 목록(목차): 헤더의 화면 ID 칩 클릭 → path 배열 기반 트리(들여쓰기 + 가이드선, 그룹 행, 최대 6뎁스 들여쓰기).
  *
  * 반응형 훅(wrap): 시트 폭에 따라 .ss-pc(≥1100px) / .ss-narrow(≤520px)가 시트에 붙는다.
  * 프로토타입 CSS는 미디어쿼리 대신 이 훅으로 분기.

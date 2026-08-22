@@ -18,7 +18,7 @@
 화면 ID   : SCR-{프로젝트 약어}-{화면 약어}-{3자리 번호}   ex. SCR-BMD-CAL-001
 화면명    : 한국어 명사구, 15자 이내                       ex. 식단 캘린더 주간
 화면 경로 : 기획 IA 관점 배열 (URL 아님)                   ex. ["홈","식단 캘린더","주간 탭"]
-            이 배열이 그대로 화면 목록의 계층 트리가 된다 (마지막 = 화면 자신, 앞 = 그룹, 최대 4뎁스 표시)
+            이 배열이 그대로 화면 목록의 계층 트리가 된다 (마지막 = 화면 자신, 앞 = 그룹 행. 들여쓰기는 최대 6뎁스, 더 깊어도 순서 유지)
 ```
 
 - **프로젝트에 이미 화면 ID 체계가 있으면 그것을 그대로 따른다** (예: S-01, SCR-#, 자유 형식 전부 허용 — 위 규칙은 체계가 없을 때의 기본값일 뿐, 새 체계를 강요하지 않는다). ID는 라이브러리에서 자유 형식 문자열로 취급된다.
@@ -94,7 +94,10 @@ import Script from "next/script";
 
 **앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 
-**screenspec.js 로드**: 이 저장소의 `screenspec.js`를 프로토타입 파일 옆에 복사하고 `<script src="./screenspec.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
+**screenspec.js 로드** (`</body>` 직전, 프로토타입 자체 스크립트보다 뒤):
+- 기본 = CDN 한 줄. 자동 최신 `@0` (CI 통과 릴리스만 흘러옴) 또는 박제 `@v0.11.0`
+  `<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>`
+- 오프라인·CDN 차단 환경만 파일 복사: `screenspec.js`를 프로토타입 옆에 두고 `<script src="./screenspec.js"></script>`
 
 ### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 
@@ -120,7 +123,7 @@ import Script from "next/script";
 | `popup` | 팝업 | 클릭하면 모달·레이어·바텀시트 열림 | `play:{selector:"#btn", label:"팝업 열기"}` |
 | `flow` | 이동 | 클릭하면 다른 화면으로 전환 | `flowTo:"SCR-XXX-002"` (+실제 내비 버튼 있으면 `play.selector`도) |
 
-- 판단 순서: 화면 이동? → flow / 레이어 열림? → popup / 그 외 동작? → action / 입력 필드? → input / 조건 분기? → state / 모션 정의? → motion / 작아서 안 보임? → arrow / 나머지 → box
+- 판단 순서: 화면 이동? → flow / 레이어 열림? → popup / 그 외 동작? → action / 입력 필드? → input / 조건 분기? → state / 모션 정의? → motion / 요소→요소 관계 표현? → arrow + arrowTo / 작아서 안 보임? → arrow / 나머지 → box
 - 새 타입이 필요하면 screenspec.js의 `ANNO` 레지스트리에 한 줄 추가 (label + mech: box·arrow·play·flow 중 택1).
 
 ### 6. 반응형 훅
@@ -142,6 +145,9 @@ import Script from "next/script";
 - [ ] PC 폭(1440)에서 화면정의서 모드 축소 배치 정상
 - [ ] 다중 화면이면: 화면 전환 시 헤더·기능 설명가 따라 바뀌는지 확인
 - [ ] `data-spec` 없는 specs 항목 없음 (마커가 숨겨지면 이것)
+- [ ] 헤더의 화면 ID 칩 클릭 → 화면 목록 트리가 path 계층대로 열림 (그룹 행·뎁스 확인)
+- [ ] arrow 항목 클릭 시 지시선이 대상 요소를 실제로 가리킴 (큰 영역에 arrow를 쓰지 않았는지)
+- [ ] accent를 지정했다면 마커·하이라이트·버튼 색이 함께 바뀌었는지
 
 검증 후 사용자에게: 화면 ID 목록, 항목 수, 열어보는 법(모드 전환 위치)만 짧게 보고.
 

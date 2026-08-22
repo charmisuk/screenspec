@@ -52,6 +52,25 @@ function check(name, ok, detail) {
   await page.waitForTimeout(300);
   check("모바일 복귀 360×800", await page.evaluate(() => document.querySelector(".ss-wpx").textContent === "360×800"));
   check("배지 표기", await page.evaluate(() => (document.querySelector(".ss-badge") || {}).textContent?.includes("ScreenSpec")));
+  check("화면 ID 칩: 12px 셰브론", await page.evaluate(() => {
+    const svg = document.querySelector(".ss-toc-btn .ss-toc-caret svg");
+    return !!svg && svg.getAttribute("width") === "12";
+  }));
+  check("arrowTo 관계선: 끝점이 대상 요소 안", await page.evaluate(() => {
+    const cfg = window.SCREENSPEC;
+    const s = (cfg.specs || []).find((x) => x.n === 3);
+    s.arrowTo = '[data-spec="5"]';
+    document.getElementById("ss-def-3").click();
+    const l = document.querySelector("#ss-line");
+    const sheet = document.querySelector(".ss-sheet");
+    const sr = sheet.getBoundingClientRect();
+    const scale = sr.width / parseFloat(sheet.style.width);
+    const B = document.querySelector('[data-spec="5"]').getBoundingClientRect();
+    const x2 = Number(l.getAttribute("x2")), y2 = Number(l.getAttribute("y2"));
+    const cx = sr.left + (x2 - sheet.scrollLeft) * scale, cy = sr.top + (y2 - sheet.scrollTop) * scale;
+    delete s.arrowTo;
+    return l.getAttribute("visibility") === "visible" && cx >= B.left - 1 && cx <= B.right + 1 && cy >= B.top - 1 && cy <= B.bottom + 1;
+  }));
   check("내부 스크롤 중 마커 정합", await page.evaluate(() => {
     const s = document.querySelector(".ss-sheet");
     s.scrollTop = 300;
@@ -160,7 +179,9 @@ function check(name, ok, detail) {
   const srv = http.createServer((req, res) => {
     if (req.url.endsWith("screenspec.js")) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
     res.setHeader("content-type", "text/html");
-    res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8").replace("../screenspec.js", "/screenspec.js"));
+    res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8")
+      .replace("../screenspec.js", "/screenspec.js")
+      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED",')); /* accent 주입 (e2e 전용) */
   });
   await new Promise((r) => srv.listen(4179, r));
   const bgBefore = "rgb(255, 255, 255)";
@@ -170,6 +191,15 @@ function check(name, ok, detail) {
   check("호스트 body 배경 보존", await page.evaluate(() => getComputedStyle(document.body).backgroundColor) === bgBefore);
   check("DOM 불변 (감싸지 않음)", await page.evaluate(() =>
     document.querySelector(".gnb").parentElement === document.body && !document.querySelector(".ss-sheet")));
+  check("accent hex 적용 (#7C3AED → 토큰·활성 필 배경)", await page.evaluate(() => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim().toUpperCase();
+    const on = document.querySelector(".ss-pill .ss-on");
+    return v === "#7C3AED" && (!on || getComputedStyle(on).backgroundColor !== "rgb(41, 82, 227)");
+  }));
+  check("overlay UI 최대 z 대역 (≥ 2147482990)", await page.evaluate(() => {
+    const z = (sel) => Number(getComputedStyle(document.querySelector(sel)).zIndex);
+    return z(".ss-pill") >= 2147482990 && z(".ss-ov-panel") >= 2147482990 && z(".ss-pill") > z(".ss-ov-panel");
+  }));
   await page.click("#ss-ovDoc");
   await page.waitForTimeout(400);
   await page.click('[data-nav][href="./members"]'); /* 정의서 모드에서 앱 조작 */
