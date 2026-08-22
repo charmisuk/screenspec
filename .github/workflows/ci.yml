@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: lint (문법·오염·버전 정합·예제 정합)
+        run: node tests/lint.js
+      - name: playwright 설치
+        run: |
+          npm init -y > /dev/null
+          npm i playwright > /dev/null
+          npx playwright install --with-deps chromium
+      - name: e2e 회귀 (19케이스)
+        run: node tests/e2e.js

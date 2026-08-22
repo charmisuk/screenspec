@@ -116,8 +116,11 @@ window.SCREENSPEC = {
 
 ## 테스트
 
+모든 push·PR·태그에서 GitHub Actions CI가 lint + e2e를 자동 실행한다 — CI가 빨간 상태에서는 릴리스하지 않는다.
+
 ```bash
 # playwright가 설치된 폴더에서
+node tests/lint.js  # 문법·오염·버전 정합·예제 정합 (의존성 없음)
 node tests/e2e.js   # 19케이스 회귀 — 릴리스(태그) 전 전부 PASS 필수
 ```
 
