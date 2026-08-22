@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.8 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.9 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -239,11 +239,19 @@
   .ss-toc-name{font-weight:700;color:var(--ss-ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ss-toc-row.ss-undef .ss-toc-name{color:var(--ss-ink3);font-weight:500}
   .ss-toc-cnt{font-family:var(--ss-mono);font-size:10.5px;color:var(--ss-ink3);flex-shrink:0}
-  .ss-toc-grp{display:flex;align-items:center;gap:6px;padding:8px 16px;font-size:11.5px;font-weight:800;
-    color:var(--ss-ink2);cursor:pointer;border-bottom:1px solid var(--ss-line);background:#FAFAF9}
-  .ss-toc-grp:hover{color:var(--ss-ink)}
-  .ss-toc-gcaret{font-style:normal;font-size:9px;color:var(--ss-ink3);transition:transform .12s}
-  .ss-toc-gcaret.ss-closed{transform:rotate(-90deg)}
+  /* 커맨드 팔레트 스타일: 섹션 라벨(비클릭) + 행 내 브레드크럼 */
+  .ss-toc-sec{padding:12px 16px 4px;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ss-ink3)}
+  .ss-toc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .ss-toc-crumb{font-size:10.5px;color:var(--ss-ink3);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ss-toc-crumb .ss-toc-id{font-size:10px;color:var(--ss-ink3);font-weight:700}
+  .ss-toc-row .ss-toc-dot{margin-top:5px;align-self:flex-start}
+  .ss-toc-row{align-items:flex-start}
+  /* 화면 전환 알림 토스트 — 이동 인지용 */
+  .ss-nav-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:9046;
+    background:var(--ss-ink);color:#fff;font-size:12.5px;font-weight:700;padding:7px 16px;border-radius:99px;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:80vw;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .ss-nav-toast.ss-show{opacity:1;transform:translateX(-50%) translateY(0)}
   .ss-toc-x{margin-left:auto;font-size:13px;color:var(--ss-ink3);padding:2px 6px;border-radius:6px}
   .ss-toc-x:hover{color:var(--ss-ink);background:var(--ss-line)}
   /* 모바일: 드롭다운 대신 전체 화면 시트 */
@@ -306,8 +314,10 @@
       let play = "";
       if (type.mech === "play" && s.play)
         play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + esc(s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
-      else if (type.mech === "flow" && (s.flowTo || s.play))
-        play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + esc((s.play && s.play.label) || "이동 — " + s.flowTo) + "</button>";
+      else if (type.mech === "flow" && (s.flowTo || s.play)) {
+        const dest = SCREENS.find((x) => x.id === s.flowTo);
+        play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + esc((s.play && s.play.label) || "이동 — " + (dest ? dest.name : s.flowTo)) + "</button>";
+      }
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
@@ -396,11 +406,22 @@
       }
       ctx.afterRender();
     }
+    const navToast = h("div", { class: "ss-ui ss-nav-toast" });
+    document.body.appendChild(navToast);
+    let navTimer = null;
+    function showNav(sc) {
+      navToast.textContent = "→ " + sc.id + " · " + sc.name;
+      navToast.classList.add("ss-show");
+      clearTimeout(navTimer);
+      navTimer = setTimeout(() => navToast.classList.remove("ss-show"), 1600);
+    }
     function setCurrent(sc) {
       if (!sc || sc === current) return;
+      const prev = current;
       clearActive();
       current = sc;
       render();
+      if (prev && !sc._unmapped && ctx.isDoc && ctx.isDoc()) showNav(sc);
     }
     function setScreen(id) {
       const next = SCREENS.find((s) => s.id === id);
@@ -494,45 +515,40 @@
       if (row && e.key === "Enter") activate(Number(row.dataset.defrow), "panel");
     });
 
-    /* ---- 화면 목록 (목차) — screens 배열에서 자동 생성, 커버리지 카운터 포함.
-       계층: path 배열이 그대로 트리가 된다 (마지막 세그먼트 = 화면 자신, 그 앞 = 그룹).
-       최대 MAX_TOC_DEPTH뎁스 표시(그룹 N-1 + 화면 1) — 더 깊은 path는 마지막 표시 뎁스로 접힘. ---- */
+    /* ---- 화면 목록 (목차) — 커맨드 팔레트 패턴 (Linear·Vercel ⌘K 벤치마크):
+       클릭 가능한 그룹 행 없이 플랫 리스트. 계층은 ① 1뎁스 = 섹션 라벨(비클릭)
+       ② 그 아래 뎁스 = 행 안의 브레드크럼("홈 › 과일 상점")으로 표현.
+       path가 아무리 깊어도 크럼이 흡수 — MAX_TOC_DEPTH는 크럼 표시 상한. ---- */
     const MAX_TOC_DEPTH = 4; /* 추후 6까지 확장 시 이 값만 변경 */
     const toc = h("div", { class: "ss-ui ss-toc" });
     document.body.appendChild(toc);
-    const tocCollapsed = {}; /* 그룹 접힘 상태 (세션 유지) */
     function renderToc() {
       const defined = SCREENS.filter((s) => (s.specs || []).length > 0).length;
-      /* 트리 구성 */
-      const root = { children: {}, order: [], screens: [] };
+      /* 1뎁스(섹션)별 그룹핑 — 순서는 첫 등장 순 */
+      const sections = [];
+      const bySection = {};
       SCREENS.forEach((s) => {
-        const parents = (s.path || []).slice(0, -1).slice(0, MAX_TOC_DEPTH - 1);
-        let node = root;
-        parents.forEach((seg) => {
-          if (!node.children[seg]) { node.children[seg] = { children: {}, order: [], screens: [] }; node.order.push(seg); }
-          node = node.children[seg];
-        });
-        node.screens.push(s);
+        const sec = (s.path && s.path.length > 1) ? s.path[0] : "";
+        if (!(sec in bySection)) { bySection[sec] = []; sections.push(sec); }
+        bySection[sec].push(s);
       });
       let html = "";
-      function leafRow(s, depth) {
-        const n = (s.specs || []).length;
-        return `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}" style="padding-left:${16 + depth * 14}px">
-          <span class="ss-toc-dot"></span>
-          <span class="ss-toc-id">${esc(s.id)}</span>
-          <span class="ss-toc-name">${esc(s.name)}</span>
-          <span class="ss-toc-cnt">${n ? n + "항목" : "미정의"}</span></div>`;
-      }
-      function walk(node, depth, keyPrefix) {
-        node.screens.forEach((s) => { html += leafRow(s, depth); });
-        node.order.forEach((seg) => {
-          const key = keyPrefix + "/" + seg;
-          const closed = !!tocCollapsed[key];
-          html += `<div class="ss-toc-grp" data-grp="${esc(key)}" style="padding-left:${16 + depth * 14}px"><i class="ss-toc-gcaret${closed ? " ss-closed" : ""}">▾</i>${esc(seg)}</div>`;
-          if (!closed) walk(node.children[seg], depth + 1, key);
+      sections.forEach((sec) => {
+        if (sec) html += `<div class="ss-toc-sec">${esc(sec)}</div>`;
+        bySection[sec].forEach((s) => {
+          const n = (s.specs || []).length;
+          let parents = (s.path || []).slice(0, -1);
+          if (parents.length > MAX_TOC_DEPTH - 1) parents = parents.slice(0, MAX_TOC_DEPTH - 2).concat("…");
+          const crumb = parents.join(" › ");
+          html += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}">
+            <span class="ss-toc-dot"></span>
+            <span class="ss-toc-main">
+              <span class="ss-toc-name">${esc(s.name)}</span>
+              <span class="ss-toc-crumb">${crumb ? esc(crumb) + " · " : ""}<span class="ss-toc-id">${esc(s.id)}</span></span>
+            </span>
+            <span class="ss-toc-cnt">${n ? n + "항목" : "미정의"}</span></div>`;
         });
-      }
-      walk(root, 0, "");
+      });
       toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div>` + html;
     }
     function openToc(anchor) {
@@ -555,9 +571,8 @@
       else openToc(btn);
     });
     toc.addEventListener("click", (e) => {
+      e.stopPropagation(); /* 목차 내부 클릭이 '바깥 클릭 닫기'로 오인되지 않게 */
       if (e.target.closest(".ss-toc-x")) { closeToc(); return; }
-      const grp = e.target.closest("[data-grp]");
-      if (grp) { tocCollapsed[grp.dataset.grp] = !tocCollapsed[grp.dataset.grp]; renderToc(); return; }
       const row = e.target.closest("[data-toc]");
       if (!row) return;
       const sc = SCREENS.find((s) => s.id === row.dataset.toc);
@@ -651,7 +666,7 @@
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.8</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.9</div>
         </aside>
       </div>`);
 
@@ -784,6 +799,7 @@
         };
       },
       ensureDoc: () => { if (document.body.classList.contains("ss-mode-proto")) setMode("doc"); },
+      isDoc: () => document.body.classList.contains("ss-mode-doc"),
       afterRender: () => requestAnimationFrame(layout)
     });
 
@@ -819,7 +835,7 @@
 
     core.setCurrent(SCREENS[0]);
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
-    console.info("[ScreenSpec v0.8] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.9] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -836,7 +852,7 @@
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.8</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.9</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -887,6 +903,7 @@
         return { cx: r.left + r.width / 2 + scrollX, cy: r.top + r.height / 2 + scrollY, halfW: r.width / 2 };
       },
       ensureDoc: () => { if (!document.body.classList.contains("ss-ov-doc")) setMode("doc"); },
+      isDoc: () => document.body.classList.contains("ss-ov-doc"),
       afterRender: () => requestAnimationFrame(place)
     });
 
@@ -949,7 +966,7 @@
 
     core.setCurrent(SCREENS[0]);
     detectScreen();
-    console.info("[ScreenSpec v0.8] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.9] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

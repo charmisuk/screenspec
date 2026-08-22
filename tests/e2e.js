@@ -91,11 +91,21 @@ function check(name, ok, detail) {
     const t = document.querySelector(".ss-toc");
     return t.classList.contains("ss-open") && t.textContent.includes("2/2 정의됨");
   }));
-  check("목차 뎁스 트리 (그룹 렌더)", await page.evaluate(() =>
-    !!document.querySelector('[data-grp="/홈"]') && !!document.querySelector('[data-grp="/홈/과일 상점"]')));
+  check("목차 섹션 라벨 + 브레드크럼", await page.evaluate(() => {
+    const t = document.querySelector(".ss-toc");
+    const sec = [...t.querySelectorAll(".ss-toc-sec")].some((x) => x.textContent === "홈");
+    const crumb = [...t.querySelectorAll(".ss-toc-crumb")].some((x) => x.textContent.includes("홈 › 과일 상점"));
+    return sec && crumb;
+  }));
+  check("flow 버튼에 대상 화면명 표기", await page.evaluate(() =>
+    (document.querySelector('[data-play="1"]') || {}).textContent?.includes("상품 목록") === true));
   await page.click('[data-toc="SCR-EX-LST-001"]');
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(300);
   check("목차 행 클릭 → 정의서 전환", await page.evaluate(() => window.ScreenSpec.current()) === "SCR-EX-LST-001");
+  check("화면 전환 알림 토스트", await page.evaluate(() => {
+    const t = document.querySelector(".ss-nav-toast");
+    return t.classList.contains("ss-show") && t.textContent.includes("상품 목록");
+  }));
   /* 모바일: 목차 = 전체 화면 시트 */
   await page.setViewportSize({ width: 480, height: 800 });
   await page.waitForTimeout(300);
