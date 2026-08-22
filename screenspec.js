@@ -120,6 +120,9 @@
   .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
   .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
   .ss-badge a:hover{color:var(--ss-accent)}
+  .ss-empty{padding:24px 18px;font-size:12.5px;color:var(--ss-ink3);line-height:1.7}
+  .ss-empty code{font-family:var(--ss-mono);font-size:11.5px;background:#F1F1F0;padding:1px 5px;border-radius:4px}
+  .ss-empty b{color:var(--ss-ink2)}
   @media(max-width:1000px){
     body.ss-mode-doc .ss-docmode{position:static;display:block;padding-top:50px}
     .ss-doc-body{display:block}.ss-stage{overflow:visible}
@@ -644,13 +647,25 @@
     }
 
     /* ---- 렌더 ---- */
+    const warned = {}; /* 화면당 1회만 진단 경고 */
     function renderScreen() {
       header.innerHTML = headerFieldsHTML(current);
+      /* 미정의 화면: 엉뚱한 정보 대신 상태를 정직하게 표시 */
+      if (current._unmapped) {
+        ovCnt.textContent = "0항목";
+        ovList.innerHTML = '<div class="ss-empty">이 화면은 아직 정의되지 않았습니다.<br>' +
+          '설정의 <b>screens</b>에 이 경로(<code>' + current._path + '</code>)를 추가하면 여기 나타납니다.</div>';
+        markerLayer.innerHTML = "";
+        markerEls = {};
+        return;
+      }
       ovCnt.textContent = (current.specs || []).length + "항목";
       ovList.innerHTML = defsRowsHTML(current.specs);
       markerLayer.innerHTML = "";
       markerEls = {};
+      let missing = 0;
       (current.specs || []).forEach((s) => {
+        if (!targetOf(s)) missing++;
         const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + s.n + ": " + s.title });
         el.textContent = s.n;
         el.style.position = "absolute";
@@ -660,14 +675,24 @@
         markerLayer.appendChild(el);
         markerEls[s.n] = el;
       });
+      if (missing && !warned[current.id]) {
+        warned[current.id] = true;
+        console.warn("[ScreenSpec] " + current.id + ": data-spec 요소를 못 찾은 정의 " + missing + "건 — 마커가 숨겨집니다. 해당 화면 JSX에 data-spec 속성이 있는지 확인하세요.");
+      }
       requestAnimationFrame(place);
+    }
+    function setCurrent(sc) {
+      if (sc === current) return;
+      clearActive();
+      current = sc;
+      renderScreen();
     }
     function setScreen(id) {
       const next = SCREENS.find((s) => s.id === id);
-      if (!next || next === current) return;
-      clearActive();
-      current = next;
-      renderScreen();
+      if (next) setCurrent(next);
+    }
+    function unmappedScreen(p) {
+      return { id: "—", name: "정의되지 않은 화면", path: [p], specs: [], _unmapped: true, _path: p };
     }
 
     /* ---- 화면 감지: 라우트 우선, 없으면 컨테이너 표시 여부 ---- */
@@ -683,14 +708,15 @@
             if (p.indexOf(base) === 0 && base.length > bestLen) { bestLen = base.length; hit = s; }
           });
         }
-        if (hit && hit !== current) setScreen(hit.id);
+        /* 어디에도 안 걸리면 = 미정의 화면 (stale 정보 잔류 방지) */
+        setCurrent(hit || (current._unmapped && current._path === p ? current : unmappedScreen(p)));
         return;
       }
       for (const sc of SCREENS) {
         if (!sc.root) continue;
         const el = document.querySelector(sc.root);
         if (el && el.getClientRects().length > 0) {
-          if (sc !== current) setScreen(sc.id);
+          if (sc !== current) setCurrent(sc);
           return;
         }
       }
@@ -828,6 +854,7 @@
 
     detectScreen();
     renderScreen();
+    console.info("[ScreenSpec v0.5] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
