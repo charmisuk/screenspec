@@ -21,8 +21,10 @@
             이 배열이 그대로 화면 목록의 계층 트리가 된다 (마지막 = 화면 자신, 앞 = 그룹, 최대 4뎁스 표시)
 ```
 
+- **프로젝트에 이미 화면 ID 체계가 있으면 그것을 그대로 따른다** (예: S-01, SCR-#, 자유 형식 전부 허용 — 위 규칙은 체계가 없을 때의 기본값일 뿐, 새 체계를 강요하지 않는다). ID는 라이브러리에서 자유 형식 문자열로 취급된다.
 - 같은 프로젝트에서 번호는 001부터 순차 증가.
 - 프로젝트 약어를 사용자가 안 줬으면 서비스명에서 3글자로 만들고 보고 시 명시.
+- ID 중복·존재하지 않는 flowTo는 브라우저 콘솔에 경고가 뜬다 — 적용 후 콘솔 확인.
 
 ### 2. 주요 영역에 `data-spec` 부여
 
@@ -79,7 +81,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.9.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.9.1/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)

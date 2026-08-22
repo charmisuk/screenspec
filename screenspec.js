@@ -243,7 +243,8 @@
   .ss-toc-sec{padding:12px 16px 4px;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ss-ink3)}
   .ss-toc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
   .ss-toc-crumb{font-size:10.5px;color:var(--ss-ink3);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .ss-toc-crumb .ss-toc-id{font-size:10px;color:var(--ss-ink3);font-weight:700}
+  .ss-toc-idr{font-family:var(--ss-mono);font-size:10.5px;font-weight:700;color:var(--ss-ink3);flex-shrink:0;max-width:40%}
+  .ss-toc-row.ss-cur .ss-toc-idr{color:var(--ss-accent)}
   .ss-toc-row .ss-toc-dot{margin-top:5px;align-self:flex-start}
   .ss-toc-row{align-items:flex-start}
   /* 화면 전환 알림 토스트 — 이동 인지용 */
@@ -540,13 +541,16 @@
           let parents = (s.path || []).slice(0, -1);
           if (parents.length > MAX_TOC_DEPTH - 1) parents = parents.slice(0, MAX_TOC_DEPTH - 2).concat("…");
           const crumb = parents.join(" › ");
+          /* ID는 뒷자리가 식별의 핵심 — 길면 앞을 자르고 뒤를 보존 */
+          const idShow = s.id.length > 14 ? "…" + s.id.slice(-13) : s.id;
+          const sub = crumb + (n ? "" : (crumb ? " · " : "") + "미정의");
           html += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}">
             <span class="ss-toc-dot"></span>
             <span class="ss-toc-main">
               <span class="ss-toc-name">${esc(s.name)}</span>
-              <span class="ss-toc-crumb">${crumb ? esc(crumb) + " · " : ""}<span class="ss-toc-id">${esc(s.id)}</span></span>
+              ${sub ? `<span class="ss-toc-crumb">${esc(sub)}</span>` : ""}
             </span>
-            <span class="ss-toc-cnt">${n ? n + "항목" : "미정의"}</span></div>`;
+            <span class="ss-toc-idr" title="${esc(s.id)}">${esc(idShow)}</span></div>`;
         });
       });
       toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div>` + html;
@@ -603,6 +607,16 @@
   }
 
   function boot() {
+    /* 설정 자가 진단 — ID는 자유 형식(불투명 문자열)이지만, 깨진 참조는 조용히 오동작하므로 경고 */
+    const seen = {};
+    SCREENS.forEach((s) => {
+      if (seen[s.id]) console.warn("[ScreenSpec] 화면 ID 중복: " + s.id + " — 뒤의 화면은 목차·이동에서 무시됩니다");
+      seen[s.id] = 1;
+    });
+    SCREENS.forEach((sc) => (sc.specs || []).forEach((sp) => {
+      if (sp.flowTo && !SCREENS.some((x) => x.id === sp.flowTo))
+        console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + ": flowTo \"" + sp.flowTo + "\" 화면이 screens에 없습니다 — 이동 버튼이 동작하지 않습니다");
+    }));
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
     const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
     const mode = RAW.mode || (isFramework ? "overlay" : "wrap");
