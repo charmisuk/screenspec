@@ -85,7 +85,7 @@
   :root{--ss-canvas:#F1F1F0;--ss-ink:#191919;--ss-ink2:#50524E;--ss-ink3:#9B9A97;
     --ss-line:#E9E9E7;--ss-line2:#D3D1CB;--ss-accent:#2952E3;--ss-accent-soft:#EEF2FF;
     --ss-mono:ui-monospace,"Cascadia Code",Consolas,monospace}
-  body{margin:0;background:var(--ss-canvas)}
+  body.ss-wrap{margin:0;background:var(--ss-canvas)}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
   .ss-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
@@ -258,6 +258,7 @@
   }
 
   function bootWrap() {
+    document.body.classList.add("ss-wrap");
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
