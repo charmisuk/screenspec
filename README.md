@@ -27,7 +27,14 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 <script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.1/screenspec.js"></script>
 ```
 
-버전 태그(@v0.6.1)로 고정 — @main은 CDN 캐시(~12h) 때문에 업데이트 반영이 늦다.
+주소 선택 — 용도에 따라:
+
+- 박제(산출물 보존): `@v0.6.1` — 그 시점 그대로 영원히
+- **자동 최신(권장)**: `@0` — 정식 릴리스(태그)가 나올 때마다 자동 반영. CI 통과본만 흘러온다
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>
+```
 
 **방법 B — 파일 복사 (오프라인·사내망):**
 
