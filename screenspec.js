@@ -49,6 +49,8 @@
  */
 (function () {
   "use strict";
+  if (window.__SCREENSPEC_BOOTED__) return; /* 이중 로드 가드 */
+  window.__SCREENSPEC_BOOTED__ = true;
   const RAW = window.SCREENSPEC || window.SPECLAYER || {}; /* 구명칭 호환 */
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
@@ -702,11 +704,13 @@
       if (routed.length) {
         const p = location.pathname;
         let hit = routed.find((s) => routeToRe(s.route).test(p));
-        if (!hit) { /* 미등록 하위 경로 → 가장 긴 prefix */
+        if (!hit) { /* 미등록 하위 경로 → 경계(/)가 일치하는 가장 긴 prefix */
           let bestLen = -1;
           routed.forEach((s) => {
-            const base = s.route.replace(/\[[^\]]+\]/g, "");
-            if (p.indexOf(base) === 0 && base.length > bestLen) { bestLen = base.length; hit = s; }
+            const base = s.route.replace(/\[[^\]]+\]/g, "").replace(/\/+$/, "");
+            if (!base) return; /* route "/"는 exact 매칭으로만 — 미정의 경로를 삼키지 않게 */
+            const bounded = p === base || (p.indexOf(base) === 0 && p.charAt(base.length) === "/");
+            if (bounded && base.length > bestLen) { bestLen = base.length; hit = s; }
           });
         }
         /* 어디에도 안 걸리면 = 미정의 화면 (stale 정보 잔류 방지) */
