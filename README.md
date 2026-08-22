@@ -116,7 +116,10 @@ window.SCREENSPEC = {
 
 ## 테스트
 
-
+```bash
+# playwright가 설치된 폴더에서
+node tests/e2e.js   # 19케이스 회귀 — 릴리스(태그) 전 전부 PASS 필수
+```
 
 ## 로드맵
 
