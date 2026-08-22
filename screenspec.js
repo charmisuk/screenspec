@@ -245,10 +245,12 @@
   .ss-tip .ss-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--ss-ink)}
   .ss-tip .ss-td{font-size:12px;color:var(--ss-ink2)}
   /* ---- 화면 목록 (목차) — 헤더의 화면 ID 클릭으로 열림 ---- */
-  .ss-toc-btn{cursor:pointer;display:inline-flex;align-items:center;gap:5px;border-radius:7px;padding:1px 6px;margin:-1px -6px;transition:background .12s}
-  .ss-toc-btn:hover{background:var(--ss-accent-soft);color:var(--ss-accent)}
-  .ss-toc-caret{font-style:normal;font-size:9px;color:var(--ss-ink3)}
-  .ss-toc-btn:hover .ss-toc-caret{color:var(--ss-accent)}
+  /* 화면 ID는 '드롭다운(select)' 모양 — 테두리+캐럿으로 누를 수 있음을 보이기 전부터 알게 한다 */
+  .ss-toc-btn{cursor:pointer;display:inline-flex;align-items:center;gap:7px;border-radius:7px;padding:2px 7px 2px 8px;margin:-3px 0;
+    border:1px solid var(--ss-line2);background:#fff;box-shadow:0 1px 0 rgba(17,24,39,.04);transition:border-color .12s,background .12s,color .12s}
+  .ss-toc-btn:hover{border-color:var(--ss-accent);background:var(--ss-accent-soft);color:var(--ss-accent)}
+  .ss-toc-caret{font-style:normal;font-size:9px;color:var(--ss-ink3);border-left:1px solid var(--ss-line2);padding-left:6px;line-height:1}
+  .ss-toc-btn:hover .ss-toc-caret{color:var(--ss-accent);border-left-color:color-mix(in srgb,var(--ss-accent) 30%,transparent)}
   .ss-toc{position:fixed;z-index:2147483050;min-width:300px;max-width:380px;max-height:62vh;overflow-y:auto;
     background:#fff;border:1px solid var(--ss-line2);border-radius:12px;
     box-shadow:0 14px 44px rgba(17,24,39,.22);display:none}
