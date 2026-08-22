@@ -1,0 +1,20 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>ScreenSpec 예제: 화면 목록 트리 (4뎁스·미정의 혼합)</title></head><body>
+<div data-ss-screen="A"><h1 data-spec="1">대시보드</h1><p style="font:14px system-ui;color:#666;padding:0 16px">화면정의서 모드에서 상단 <b>화면 ID</b> 칩을 누르면 11화면·4뎁스 트리가 열립니다.</p></div>
+<script>
+const S=(id,name,path,defined=true,root='[data-ss-screen="A"]')=>({id,name,path,root,specs:defined?[{n:1,target:"1",anno:"box",title:"제목",defs:[{t:"정의"}]}]:[]});
+window.SCREENSPEC={mode:"wrap",screens:[
+  S("S-00","대시보드",["대시보드"]),
+  S("S-01","이용자 명단",["이용자","명단"]),
+  S("S-02","이용자 상세",["이용자","명단","상세"]),
+  S("S-03","권한 변경",["이용자","명단","상세","권한 변경"]),
+  S("S-04","이용자 초대",["이용자","초대"],false),
+  S("S-05","초대 메일 미리보기",["이용자","초대","메일 미리보기"],false),
+  S("S-06","그룹 관리",["이용자","그룹"]),
+  S("S-10","일반 설정",["설정","일반"]),
+  S("S-11","결제 수단",["설정","결제","결제 수단"]),
+  S("S-12","청구서 내역",["설정","결제","청구서"]),
+  S("SCR-TENANT-ADMIN-REPORT-USAGE-0001","사용량 리포트",["리포트","사용량"],false),
+]};
+</script>
+<script src="../screenspec.js"></script>
+</body></html>
