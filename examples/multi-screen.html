@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpecLayer 예제 — 다중 화면 (목록 → 상세)</title>
+<title>ScreenSpec 예제 — 다중 화면 (목록 → 상세)</title>
 <style>
   body{color:#191919;line-height:1.6}
   button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -30,7 +30,7 @@
 </head>
 <body>
   <!-- ============ 화면 1: 목록 ============ -->
-  <div data-sl-screen="SCR-EX-LST-001">
+  <div data-ss-screen="SCR-EX-LST-001">
     <div class="topbar" data-spec="1"><h1>과일 상점</h1></div>
     <div class="card-list" data-spec="2">
       <button class="card" onclick="go('detail')">
@@ -49,7 +49,7 @@
   </div>
 
   <!-- ============ 화면 2: 상세 ============ -->
-  <div data-sl-screen="SCR-EX-DTL-002" style="display:none">
+  <div data-ss-screen="SCR-EX-DTL-002" style="display:none">
     <div class="topbar" data-spec="1">
       <button class="back" onclick="go('list')">← 목록</button><h1>상품 상세</h1>
     </div>
@@ -62,7 +62,7 @@
   </div>
 
   <!-- 구매 바텀시트 (팝업 데모) -->
-  <div id="sheetModal" data-sl-ignore onclick="if(event.target===this)closeSheet()">
+  <div id="sheetModal" data-ss-ignore onclick="if(event.target===this)closeSheet()">
     <div class="panel">
       <h3>구매 확인</h3>
       <p>복숭아 1박스 · 4,500원을 구매할까요?</p>
@@ -72,24 +72,24 @@
 
   <script>
   function go(which){
-    document.querySelector('[data-sl-screen="SCR-EX-LST-001"]').style.display = which==='list' ? '' : 'none';
-    document.querySelector('[data-sl-screen="SCR-EX-DTL-002"]').style.display = which==='detail' ? '' : 'none';
+    document.querySelector('[data-ss-screen="SCR-EX-LST-001"]').style.display = which==='list' ? '' : 'none';
+    document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]').style.display = which==='detail' ? '' : 'none';
   }
   function openSheet(){ document.getElementById('sheetModal').classList.add('open'); }
   function closeSheet(){ document.getElementById('sheetModal').classList.remove('open'); }
   </script>
 
   <script>
-  window.SPECLAYER = {
+  window.SCREENSPEC = {
     screens: [
       {
         id: "SCR-EX-LST-001", name: "상품 목록", path: ["홈", "과일 상점"],
-        root: '[data-sl-screen="SCR-EX-LST-001"]',
+        root: '[data-ss-screen="SCR-EX-LST-001"]',
         specs: [
           { n:1, target:"1", anno:"box", title:"타이틀 바", defs:[
             { t:"화면명 '과일 상점' 고정 표시" }]},
           { n:2, target:"2", anno:"flow", title:"상품 카드 목록", flowTo:"SCR-EX-DTL-002",
-            play:{ selector:'[data-sl-screen="SCR-EX-LST-001"] .card', label:"이동 — 상품 상세" }, defs:[
+            play:{ selector:'[data-ss-screen="SCR-EX-LST-001"] .card', label:"이동 — 상품 상세" }, defs:[
             { t:"상품 카드 세로 나열 · 등록순 정렬" },
             { t:"카드 클릭 시 상품 상세로 이동", subs:[
               "이동 시 화면정의서 헤더·기능정의도 상세 화면으로 자동 전환"]}]}
@@ -97,10 +97,10 @@
       },
       {
         id: "SCR-EX-DTL-002", name: "상품 상세", path: ["홈", "과일 상점", "상품 상세"],
-        root: '[data-sl-screen="SCR-EX-DTL-002"]',
+        root: '[data-ss-screen="SCR-EX-DTL-002"]',
         specs: [
           { n:1, target:"1", anno:"flow", title:"뒤로가기", flowTo:"SCR-EX-LST-001",
-            play:{ selector:'[data-sl-screen="SCR-EX-DTL-002"] .back', label:"이동 — 상품 목록" }, defs:[
+            play:{ selector:'[data-ss-screen="SCR-EX-DTL-002"] .back', label:"이동 — 상품 목록" }, defs:[
             { t:"'← 목록' 클릭 시 상품 목록으로 복귀" }]},
           { n:2, target:"2", anno:"box", title:"상품 이미지", defs:[
             { t:"1:1 히어로 · 상품 대표 이미지 표시" }]},
@@ -108,7 +108,7 @@
             { t:"상품명 + 당도·산지·가격 표시", subs:[
               "재고 0이면 가격 대신 '품절' 표시 + 구매 버튼 비활성"]}]},
           { n:4, target:"4", anno:"popup", title:"구매 버튼",
-            play:{ selector:'[data-sl-screen="SCR-EX-DTL-002"] .buy', label:"팝업 열기 — 구매 확인" }, defs:[
+            play:{ selector:'[data-ss-screen="SCR-EX-DTL-002"] .buy', label:"팝업 열기 — 구매 확인" }, defs:[
             { t:"클릭 시 구매 확인 바텀시트 표시" },
             { t:"시트 바깥 클릭 시 닫힘" }]}
         ]
@@ -116,6 +116,6 @@
     ]
   };
   </script>
-  <script src="../speclayer.js"></script>
+  <script src="../screenspec.js"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpecLayer 예제 — AI 아기 사진 상세</title>
+<title>ScreenSpec 예제 — AI 아기 사진 상세</title>
 <style>
   /* ============ 프로토타입 고유 스타일 (제품 디자인) ============ */
   :root{--ink:#191919;--ink-2:#50524E;--ink-3:#9B9A97;--line:#E9E9E7;--brand:#FF6B8A;--brand-2:#FF8E53;
@@ -14,12 +14,12 @@
   img{max-width:100%;display:block}
   .page-inner{max-width:720px;margin:0 auto}
 
-  /* 반응형: 미디어쿼리 대신 SpecLayer 훅 (.sl-pc / .sl-narrow) */
-  .sl-sheet.sl-pc .page-inner{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start}
+  /* 반응형: 미디어쿼리 대신 ScreenSpec 훅 (.ss-pc / .ss-narrow) */
+  .ss-sheet.ss-pc .page-inner{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start}
   .pc-side{display:none}
-  .sl-sheet.sl-pc .pc-side{display:block;position:sticky;top:20px}
-  .sl-sheet.sl-narrow .themes{grid-template-columns:1fr}
-  .sl-sheet.sl-narrow .rel-grid{grid-template-columns:repeat(2,1fr)}
+  .ss-sheet.ss-pc .pc-side{display:block;position:sticky;top:20px}
+  .ss-sheet.ss-narrow .themes{grid-template-columns:1fr}
+  .ss-sheet.ss-narrow .rel-grid{grid-template-columns:repeat(2,1fr)}
 
   .side-cta{border:2px solid var(--brand);border-radius:16px;background:linear-gradient(150deg,#FFF5F7,#fff);padding:20px}
   .side-cta h3{font-size:15px;font-weight:800;margin:0 0 6px}
@@ -231,7 +231,7 @@ English subtitle: "100th Day" in Cormorant Garamond serif.
     </aside>
   </div>
 
-  <div id="toast" data-sl-ignore></div>
+  <div id="toast" data-ss-ignore></div>
 
   <script>
   /* ---- 프로토타입 자체 상호작용 ---- */
@@ -264,9 +264,9 @@ English subtitle: "100th Day" in Cormorant Garamond serif.
   document.querySelector(".bookmark").onclick = function(e){ e.stopPropagation(); this.textContent = this.textContent === "🤍" ? "❤️" : "🤍"; };
   </script>
 
-  <!-- ---- SpecLayer 설정 + 로드 ---- -->
+  <!-- ---- ScreenSpec 설정 + 로드 ---- -->
   <script>
-  window.SPECLAYER = {
+  window.SCREENSPEC = {
     screen: {
       id: "SCR-BP-DTL-001",
       name: "AI 아기 사진 상세 (무료 카드)",
@@ -315,6 +315,6 @@ English subtitle: "100th Day" in Cormorant Garamond serif.
     ]
   };
   </script>
-  <script src="../speclayer.js"></script>
+  <script src="../screenspec.js"></script>
 </body>
 </html>

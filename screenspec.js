@@ -1,23 +1,23 @@
 /*!
- * SpecLayer v0.3 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.4 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
- *   2) window.SPECLAYER = { screen:{...}, specs:[...] } 정의
+ *   2) window.SCREENSPEC = { screen:{...}, specs:[...] } 정의
  *   3) 이 스크립트를 <body> 마지막에 로드
  *
  * 사용법 (다중 화면 SPA — 화면 전환 시 헤더·기능정의 자동 추적):
- *   window.SPECLAYER = {
+ *   window.SCREENSPEC = {
  *     screens: [
  *       { id:"SCR-XXX-001", name:"목록", path:["홈","목록"],
- *         root:'[data-sl-screen="SCR-XXX-001"]',   // 이 화면의 컨테이너 셀렉터
+ *         root:'[data-ss-screen="SCR-XXX-001"]',   // 이 화면의 컨테이너 셀렉터
  *         specs:[...] },
  *       { id:"SCR-XXX-002", name:"상세", path:["홈","목록","상세"],
- *         root:'[data-sl-screen="SCR-XXX-002"]', specs:[...] }
+ *         root:'[data-ss-screen="SCR-XXX-002"]', specs:[...] }
  *     ]
  *   }
  *   - 화면 컨테이너가 표시/숨김(display 등)으로 전환되면 자동 감지해 따라간다.
- *   - 수동 전환도 가능: window.SpecLayer.setScreen("SCR-XXX-002")
+ *   - 수동 전환도 가능: window.ScreenSpec.setScreen("SCR-XXX-002")
  *   - data-spec 번호는 화면(root) 안에서만 찾으므로 화면마다 1부터 다시 시작 가능.
  *
  * anno 타입 8종 (SKILL.md §5) — 의미(라벨)와 시각 동작(mech)을 분리한 레지스트리:
@@ -30,21 +30,21 @@
  *   popup  팝업   | mech play | 클릭 시 모달·레이어 열림. play:{selector,label}
  *   flow   이동   | mech flow | 다른 화면으로 전환. flowTo:"SCR-ID" (+선택 play.selector)
  *
- * 반응형 훅: 시트 폭에 따라 .sl-pc(≥1100px) / .sl-narrow(≤520px)가 시트에 붙는다.
+ * 반응형 훅: 시트 폭에 따라 .ss-pc(≥1100px) / .ss-narrow(≤520px)가 시트에 붙는다.
  * 프로토타입 CSS는 미디어쿼리 대신 이 훅으로 분기.
  *
  * z-index 스케일 (프로토타입은 이 대역을 지킬 것):
  *      0 ~ 7999  프로토타입 자유 영역 (시트 내부 콘텐츠)
- *   8000 ~ 8099  SpecLayer 시트 오버레이 — anno 8030 · markers 8040 · resize 8050
- *   9000 ~ 9099  SpecLayer 크롬 — docmode 9000 · toolbar 9020 · tip 9040
- *   9500 이상    프로토타입 전역 오버레이 (data-sl-ignore 모달·토스트) — 모든 것 위 (의도)
+ *   8000 ~ 8099  ScreenSpec 시트 오버레이 — anno 8030 · markers 8040 · resize 8050
+ *   9000 ~ 9099  ScreenSpec 크롬 — docmode 9000 · toolbar 9020 · tip 9040
+ *   9500 이상    프로토타입 전역 오버레이 (data-ss-ignore 모달·토스트) — 모든 것 위 (의도)
  *
  * 크기 시뮬레이터 (DevTools 벤치마크): 시트 = 기기 뷰포트(폭×높이, 내부 스크롤).
  * 프리셋 모바일 360×800 · PC 1920×1080 + 우측/하단/코너 드래그. 프리셋 클릭 = 복귀.
  */
 (function () {
   "use strict";
-  const RAW = window.SPECLAYER || {};
+  const RAW = window.SCREENSPEC || window.SPECLAYER || {}; /* 구명칭 호환 */
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
     : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
@@ -72,107 +72,110 @@
   function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
 
   /* ============ 디자인 시스템 ============
-     1. 토큰: 색·서체는 --sl-* 변수로만 사용 (하드코딩 금지)
+     1. 토큰: 색·서체는 --ss-* 변수로만 사용 (하드코딩 금지)
      2. 리셋: :where()로 특이도 0 — 컴포넌트 클래스가 항상 이긴다
-     3. 컴포넌트: 단일 클래스(.sl-play, .sl-marker ...)가 형태·색을 완결 정의
-     4. 포인트 컬러(--sl-accent) 위에는 항상 흰 텍스트 */
+     3. 컴포넌트: 단일 클래스(.ss-play, .ss-marker ...)가 형태·색을 완결 정의
+     4. 포인트 컬러(--ss-accent) 위에는 항상 흰 텍스트 */
   const CSS = `
-  :root{--sl-canvas:#F1F1F0;--sl-ink:#191919;--sl-ink2:#50524E;--sl-ink3:#9B9A97;
-    --sl-line:#E9E9E7;--sl-line2:#D3D1CB;--sl-accent:#2952E3;--sl-accent-soft:#EEF2FF;
-    --sl-mono:ui-monospace,"Cascadia Code",Consolas,monospace}
-  body{margin:0;background:var(--sl-canvas)}
-  .sl-ui,.sl-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
-  .sl-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
-  .sl-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
-    border-bottom:1px solid var(--sl-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
-  .sl-modes{display:flex;border:1px solid var(--sl-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
-  .sl-modes button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;color:var(--sl-ink2)}
-  .sl-modes button[aria-pressed="true"]{background:var(--sl-ink);color:#fff}
-  .sl-widthsim{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sl-ink2)}
-  .sl-widthsim .sl-seg{display:flex;border:1px solid var(--sl-line2);border-radius:8px;padding:2px;gap:2px;background:#FAFAF9}
-  .sl-widthsim .sl-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--sl-ink2)}
-  .sl-widthsim .sl-seg button[aria-pressed="true"]{background:#fff;color:var(--sl-ink);box-shadow:0 1px 2px rgba(17,24,39,.12)}
-  .sl-wpx{font-family:var(--sl-mono);font-size:11px;color:var(--sl-ink3);min-width:52px;text-align:right}
-  @media(max-width:640px){.sl-wpx{display:none}}
-  .sl-proto-wrap{padding:74px 16px 60px;overflow-x:auto}
-  body.sl-mode-doc .sl-proto-wrap{display:none}
-  .sl-holder{margin:0 auto;width:max-content}
-  .sl-docmode{display:none}
-  body.sl-mode-doc .sl-docmode{display:flex;flex-direction:column;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:9000}
-  .sl-doc-header{background:#fff;border-bottom:1px solid var(--sl-line2);padding:12px 24px;display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap}
-  .sl-dh .sl-k{font-size:10.5px;font-weight:700;color:var(--sl-ink3);letter-spacing:.06em;display:block;margin-bottom:1px}
-  .sl-dh .sl-v{font-size:14px;font-weight:800;color:var(--sl-ink)}
-  .sl-dh .sl-v.sl-monoV{font-family:var(--sl-mono);font-size:13px}
-  .sl-dh .sl-sep{color:var(--sl-ink3);font-weight:400;margin:0 4px}
-  .sl-doc-body{flex:1;display:flex;min-height:0;background:var(--sl-canvas)}
-  .sl-stage{flex:1;min-width:0;overflow:auto;padding:24px}
-  .sl-fit{position:relative;margin:0 auto;transition:width .15s,height .15s}
-  .sl-defs{width:460px;flex-shrink:0;background:#fff;border-left:1px solid var(--sl-line2);display:flex;flex-direction:column;min-height:0}
-  .sl-defs-head{padding:12px 18px;border-bottom:1px solid var(--sl-line);display:flex;align-items:center;gap:8px}
-  .sl-defs-head h2{font-size:13px;font-weight:800;margin:0;color:var(--sl-ink)}
-  .sl-defs-head .sl-cnt{font-family:var(--sl-mono);font-size:11px;color:var(--sl-ink3);font-weight:700}
-  .sl-defs-list{flex:1;overflow-y:auto}
+  :root{--ss-canvas:#F1F1F0;--ss-ink:#191919;--ss-ink2:#50524E;--ss-ink3:#9B9A97;
+    --ss-line:#E9E9E7;--ss-line2:#D3D1CB;--ss-accent:#2952E3;--ss-accent-soft:#EEF2FF;
+    --ss-mono:ui-monospace,"Cascadia Code",Consolas,monospace}
+  body{margin:0;background:var(--ss-canvas)}
+  .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+  .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  .ss-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
+    border-bottom:1px solid var(--ss-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
+  .ss-modes{display:flex;border:1px solid var(--ss-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
+  .ss-modes button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;color:var(--ss-ink2)}
+  .ss-modes button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
+  .ss-widthsim{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ss-ink2)}
+  .ss-widthsim .ss-seg{display:flex;border:1px solid var(--ss-line2);border-radius:8px;padding:2px;gap:2px;background:#FAFAF9}
+  .ss-widthsim .ss-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
+  .ss-widthsim .ss-seg button[aria-pressed="true"]{background:#fff;color:var(--ss-ink);box-shadow:0 1px 2px rgba(17,24,39,.12)}
+  .ss-wpx{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);min-width:52px;text-align:right}
+  @media(max-width:640px){.ss-wpx{display:none}}
+  .ss-proto-wrap{padding:74px 16px 60px;overflow-x:auto}
+  body.ss-mode-doc .ss-proto-wrap{display:none}
+  .ss-holder{margin:0 auto;width:max-content}
+  .ss-docmode{display:none}
+  body.ss-mode-doc .ss-docmode{display:flex;flex-direction:column;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:9000}
+  .ss-doc-header{background:#fff;border-bottom:1px solid var(--ss-line2);padding:12px 24px;display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap}
+  .ss-dh .ss-k{font-size:10.5px;font-weight:700;color:var(--ss-ink3);letter-spacing:.06em;display:block;margin-bottom:1px}
+  .ss-dh .ss-v{font-size:14px;font-weight:800;color:var(--ss-ink)}
+  .ss-dh .ss-v.ss-monoV{font-family:var(--ss-mono);font-size:13px}
+  .ss-dh .ss-sep{color:var(--ss-ink3);font-weight:400;margin:0 4px}
+  .ss-doc-body{flex:1;display:flex;min-height:0;background:var(--ss-canvas)}
+  .ss-stage{flex:1;min-width:0;overflow:auto;padding:24px}
+  .ss-fit{position:relative;margin:0 auto;transition:width .15s,height .15s}
+  .ss-defs{width:460px;flex-shrink:0;background:#fff;border-left:1px solid var(--ss-line2);display:flex;flex-direction:column;min-height:0}
+  .ss-defs-head{padding:12px 18px;border-bottom:1px solid var(--ss-line);display:flex;align-items:center;gap:8px}
+  .ss-defs-head h2{font-size:13px;font-weight:800;margin:0;color:var(--ss-ink)}
+  .ss-defs-head .ss-cnt{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);font-weight:700}
+  .ss-defs-list{flex:1;overflow-y:auto}
+  .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
+  .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
+  .ss-badge a:hover{color:var(--ss-accent)}
   @media(max-width:1000px){
-    body.sl-mode-doc .sl-docmode{position:static;display:block;padding-top:50px}
-    .sl-doc-body{display:block}.sl-stage{overflow:visible}
-    .sl-defs{width:100%;border-left:0;border-top:1px solid var(--sl-line2)}
+    body.ss-mode-doc .ss-docmode{position:static;display:block;padding-top:50px}
+    .ss-doc-body{display:block}.ss-stage{overflow:visible}
+    .ss-defs{width:100%;border-left:0;border-top:1px solid var(--ss-line2)}
   }
-  .sl-row{display:flex;border-bottom:1px solid var(--sl-line);cursor:pointer;transition:background .12s}
-  .sl-row:hover{background:#FAFAF9}
-  .sl-row.sl-active{background:var(--sl-accent-soft)}
-  .sl-no{width:46px;flex-shrink:0;display:flex;justify-content:center;padding-top:15px;
-    font-family:var(--sl-mono);font-size:13px;font-weight:800;color:var(--sl-ink3)}
-  .sl-row.sl-active .sl-no{color:var(--sl-accent)}
-  .sl-main{flex:1;padding:13px 16px 14px 0;min-width:0}
-  .sl-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-  .sl-title .sl-t{font-size:13.5px;font-weight:800;color:var(--sl-ink)}
-  .sl-title .sl-tag{font-size:10px;font-weight:700;color:var(--sl-ink3);border:1px solid var(--sl-line2);border-radius:5px;padding:1px 6px;margin-left:auto;flex-shrink:0}
-  .sl-row.sl-active .sl-tag{color:var(--sl-accent);border-color:var(--sl-accent)}
-  .sl-items{margin:0;padding:0;list-style:none}
-  .sl-items li{font-size:12.5px;color:#37352F;position:relative;padding-left:16px;margin:4px 0;line-height:1.6}
-  .sl-items li::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--sl-ink)}
-  .sl-items li.sl-sub{margin-left:18px}
-  .sl-items li.sl-sub::before{background:#fff;border:1.3px solid var(--sl-ink2);left:2px}
-  .sl-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
-    color:#fff;border-radius:8px;padding:7px 14px;background:var(--sl-accent);
+  .ss-row{display:flex;border-bottom:1px solid var(--ss-line);cursor:pointer;transition:background .12s}
+  .ss-row:hover{background:#FAFAF9}
+  .ss-row.ss-active{background:var(--ss-accent-soft)}
+  .ss-no{width:46px;flex-shrink:0;display:flex;justify-content:center;padding-top:15px;
+    font-family:var(--ss-mono);font-size:13px;font-weight:800;color:var(--ss-ink3)}
+  .ss-row.ss-active .ss-no{color:var(--ss-accent)}
+  .ss-main{flex:1;padding:13px 16px 14px 0;min-width:0}
+  .ss-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .ss-title .ss-t{font-size:13.5px;font-weight:800;color:var(--ss-ink)}
+  .ss-title .ss-tag{font-size:10px;font-weight:700;color:var(--ss-ink3);border:1px solid var(--ss-line2);border-radius:5px;padding:1px 6px;margin-left:auto;flex-shrink:0}
+  .ss-row.ss-active .ss-tag{color:var(--ss-accent);border-color:var(--ss-accent)}
+  .ss-items{margin:0;padding:0;list-style:none}
+  .ss-items li{font-size:12.5px;color:#37352F;position:relative;padding-left:16px;margin:4px 0;line-height:1.6}
+  .ss-items li::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--ss-ink)}
+  .ss-items li.ss-sub{margin-left:18px}
+  .ss-items li.ss-sub::before{background:#fff;border:1.3px solid var(--ss-ink2);left:2px}
+  .ss-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
+    color:#fff;border-radius:8px;padding:7px 14px;background:var(--ss-accent);
     box-shadow:0 2px 8px rgba(41,82,227,.35);transition:background .12s}
-  .sl-play:hover{background:#1E3FC4}
-  .sl-play:active{transform:translateY(1px)}
-  .sl-frame{position:relative}
-  .sl-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
+  .ss-play:hover{background:#1E3FC4}
+  .ss-play:active{transform:translateY(1px)}
+  .ss-frame{position:relative}
+  .ss-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
-  .sl-sheet.sl-narrow{padding:20px 14px 32px}
+  .ss-sheet.ss-narrow{padding:20px 14px 32px}
   /* DevTools식 리사이즈: 우측 바(폭) + 하단 바(높이) + 코너(양방향) */
-  .sl-edge{position:absolute;z-index:8050}
-  .sl-edge-r{top:0;right:-16px;width:16px;height:100%;cursor:ew-resize}
-  .sl-edge-b{left:0;bottom:-16px;width:100%;height:16px;cursor:ns-resize}
-  .sl-edge-c{right:-16px;bottom:-16px;width:20px;height:20px;cursor:nwse-resize}
-  .sl-edge-r::after{content:"";position:absolute;top:50%;left:5px;transform:translateY(-50%);
+  .ss-edge{position:absolute;z-index:8050}
+  .ss-edge-r{top:0;right:-16px;width:16px;height:100%;cursor:ew-resize}
+  .ss-edge-b{left:0;bottom:-16px;width:100%;height:16px;cursor:ns-resize}
+  .ss-edge-c{right:-16px;bottom:-16px;width:20px;height:20px;cursor:nwse-resize}
+  .ss-edge-r::after{content:"";position:absolute;top:50%;left:5px;transform:translateY(-50%);
     width:5px;height:48px;border-radius:99px;background:#C6C4BD;box-shadow:0 1px 3px rgba(17,24,39,.15);transition:background .15s}
-  .sl-edge-b::after{content:"";position:absolute;left:50%;top:5px;transform:translateX(-50%);
+  .ss-edge-b::after{content:"";position:absolute;left:50%;top:5px;transform:translateX(-50%);
     height:5px;width:48px;border-radius:99px;background:#C6C4BD;box-shadow:0 1px 3px rgba(17,24,39,.15);transition:background .15s}
-  .sl-edge-c::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;
+  .ss-edge-c::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;
     border-right:3px solid #C6C4BD;border-bottom:3px solid #C6C4BD;border-radius:2px;transition:border-color .15s}
-  .sl-edge-r:hover::after,.sl-edge-r.sl-dragging::after,
-  .sl-edge-b:hover::after,.sl-edge-b.sl-dragging::after{background:var(--sl-accent)}
-  .sl-edge-c:hover::after,.sl-edge-c.sl-dragging::after{border-color:var(--sl-accent)}
+  .ss-edge-r:hover::after,.ss-edge-r.ss-dragging::after,
+  .ss-edge-b:hover::after,.ss-edge-b.ss-dragging::after{background:var(--ss-accent)}
+  .ss-edge-c:hover::after,.ss-edge-c.ss-dragging::after{border-color:var(--ss-accent)}
   /* 마커 — 흰 배경 + 검은 숫자, 활성 시 포인트색 배경 + 흰 숫자 (v0.2 가독성 수정) */
-  .sl-marker{
+  .ss-marker{
     position:absolute;width:24px;height:24px;border-radius:50%;pointer-events:auto;padding:0;
-    background:#fff;color:var(--sl-ink);border:1.5px solid var(--sl-line2);
-    font-size:12px;font-weight:800;font-family:var(--sl-mono);
+    background:#fff;color:var(--ss-ink);border:1.5px solid var(--ss-line2);
+    font-size:12px;font-weight:800;font-family:var(--ss-mono);
     display:grid;place-items:center;box-shadow:0 2px 8px rgba(17,24,39,.28);cursor:pointer}
-  .sl-marker.sl-hot{background:var(--sl-accent);color:#fff;border-color:var(--sl-accent)}
-  .sl-markers,.sl-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
-  .sl-anno{z-index:8030;overflow:visible}
-  body.sl-mode-proto .sl-marker,body.sl-mode-proto .sl-anno{display:none}
-  .sl-hl{box-shadow:0 0 0 2px var(--sl-accent),0 0 0 6px rgba(41,82,227,.15)!important;border-radius:12px}
-  .sl-tip{position:fixed;z-index:9040;max-width:280px;background:#fff;border:1px solid var(--sl-line2);
+  .ss-marker.ss-hot{background:var(--ss-accent);color:#fff;border-color:var(--ss-accent)}
+  .ss-markers,.ss-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
+  .ss-anno{z-index:8030;overflow:visible}
+  body.ss-mode-proto .ss-marker,body.ss-mode-proto .ss-anno{display:none}
+  .ss-hl{box-shadow:0 0 0 2px var(--ss-accent),0 0 0 6px rgba(41,82,227,.15)!important;border-radius:12px}
+  .ss-tip{position:fixed;z-index:9040;max-width:280px;background:#fff;border:1px solid var(--ss-line2);
     border-radius:10px;box-shadow:0 10px 30px rgba(17,24,39,.18);padding:10px 13px;display:none;pointer-events:none}
-  .sl-tip .sl-tn{font-family:var(--sl-mono);font-size:10px;font-weight:800;color:var(--sl-accent)}
-  .sl-tip .sl-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--sl-ink)}
-  .sl-tip .sl-td{font-size:12px;color:var(--sl-ink2)}
-  @media (prefers-reduced-motion: reduce){.sl-ui *{transition:none!important}}
+  .ss-tip .ss-tn{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:var(--ss-accent)}
+  .ss-tip .ss-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--ss-ink)}
+  .ss-tip .ss-td{font-size:12px;color:var(--ss-ink2)}
+  @media (prefers-reduced-motion: reduce){.ss-ui *{transition:none!important}}
   `;
 
   function h(tag, attrs, html) {
@@ -188,75 +191,76 @@
     document.head.appendChild(style);
 
     /* ---- 프로토타입 본문을 시트로 감싸기 ---- */
-    const sheet = h("div", { class: "sl-sheet" });
+    const sheet = h("div", { class: "ss-sheet" });
     const keep = [];
     Array.from(document.body.childNodes).forEach((n) => {
       if (n.nodeType === 1 && (n.tagName === "SCRIPT" || n.tagName === "STYLE")) return;
-      if (n.nodeType === 1 && n.hasAttribute && n.hasAttribute("data-sl-ignore")) return;
+      if (n.nodeType === 1 && n.hasAttribute && n.hasAttribute("data-ss-ignore")) return;
       keep.push(n);
     });
     keep.forEach((n) => sheet.appendChild(n));
 
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    annoSvg.setAttribute("class", "sl-anno");
+    annoSvg.setAttribute("class", "ss-anno");
     annoSvg.innerHTML =
-      '<defs><marker id="sl-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
+      '<defs><marker id="ss-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
       '<path d="M0,0 L8,4 L0,8 Z" fill="#2952E3"></path></marker></defs>' +
-      '<line id="sl-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#sl-arrowhead)" visibility="hidden"></line>';
-    const markerLayer = h("div", { class: "sl-markers" });
+      '<line id="ss-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#ss-arrowhead)" visibility="hidden"></line>';
+    const markerLayer = h("div", { class: "ss-markers" });
     sheet.appendChild(annoSvg);
     sheet.appendChild(markerLayer);
     /* frame = 시트(기기 뷰포트) + 리사이즈 핸들. 핸들은 overflow 클리핑을 피해 시트 밖에 */
-    const frame = h("div", { class: "sl-frame" });
+    const frame = h("div", { class: "ss-frame" });
     frame.appendChild(sheet);
-    const edgeR = h("div", { class: "sl-edge sl-edge-r", title: "드래그로 폭 조절" });
-    const edgeB = h("div", { class: "sl-edge sl-edge-b", title: "드래그로 높이 조절" });
-    const edgeC = h("div", { class: "sl-edge sl-edge-c", title: "드래그로 크기 조절" });
+    const edgeR = h("div", { class: "ss-edge ss-edge-r", title: "드래그로 폭 조절" });
+    const edgeB = h("div", { class: "ss-edge ss-edge-b", title: "드래그로 높이 조절" });
+    const edgeC = h("div", { class: "ss-edge ss-edge-c", title: "드래그로 크기 조절" });
     frame.appendChild(edgeR); frame.appendChild(edgeB); frame.appendChild(edgeC);
 
     /* ---- 툴바 ---- */
-    const toolbar = h("header", { class: "sl-toolbar sl-ui" }, `
-      <nav class="sl-modes" aria-label="보기 모드">
-        <button id="sl-mProto" aria-pressed="true">프로토타입</button>
-        <button id="sl-mDoc" aria-pressed="false">화면정의서</button>
+    const toolbar = h("header", { class: "ss-toolbar ss-ui" }, `
+      <nav class="ss-modes" aria-label="보기 모드">
+        <button id="ss-mProto" aria-pressed="true">프로토타입</button>
+        <button id="ss-mDoc" aria-pressed="false">화면정의서</button>
       </nav>
-      <div class="sl-widthsim">
-        <div class="sl-seg" id="sl-seg">
+      <div class="ss-widthsim">
+        <div class="ss-seg" id="ss-seg">
           <button data-w="mobile" aria-pressed="true">모바일</button>
           <button data-w="pc" aria-pressed="false">PC</button>
         </div>
-        <span class="sl-wpx" id="sl-wpx"></span>
+        <span class="ss-wpx" id="ss-wpx"></span>
       </div>`);
 
     /* ---- 화면정의서 모드 ---- */
-    const docmode = h("div", { class: "sl-docmode sl-ui" }, `
-      <div class="sl-doc-header" id="sl-dh-wrap"></div>
-      <div class="sl-doc-body">
-        <div class="sl-stage" id="sl-stage"><div class="sl-fit" id="sl-fit"><div class="sl-holder" id="sl-docHolder"></div></div></div>
-        <aside class="sl-defs" aria-label="기능정의">
-          <div class="sl-defs-head"><h2>기능정의</h2><span class="sl-cnt" id="sl-cnt"></span></div>
-          <div class="sl-defs-list" id="sl-defsList"></div>
+    const docmode = h("div", { class: "ss-docmode ss-ui" }, `
+      <div class="ss-doc-header" id="ss-dh-wrap"></div>
+      <div class="ss-doc-body">
+        <div class="ss-stage" id="ss-stage"><div class="ss-fit" id="ss-fit"><div class="ss-holder" id="ss-docHolder"></div></div></div>
+        <aside class="ss-defs" aria-label="기능정의">
+          <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-cnt"></span></div>
+          <div class="ss-defs-list" id="ss-defsList"></div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.4</div>
         </aside>
       </div>`);
 
-    const protoWrap = h("div", { class: "sl-proto-wrap sl-ui" }, '<div class="sl-holder" id="sl-protoHolder"></div>');
-    const tip = h("div", { class: "sl-tip sl-ui", role: "tooltip" });
+    const protoWrap = h("div", { class: "ss-proto-wrap ss-ui" }, '<div class="ss-holder" id="ss-protoHolder"></div>');
+    const tip = h("div", { class: "ss-tip ss-ui", role: "tooltip" });
     document.body.appendChild(toolbar);
     document.body.appendChild(protoWrap);
     document.body.appendChild(docmode);
     document.body.appendChild(tip);
 
-    const protoHolder = document.getElementById("sl-protoHolder");
-    const docHolder = document.getElementById("sl-docHolder");
-    const stage = document.getElementById("sl-stage");
-    const fit = document.getElementById("sl-fit");
-    const dhWrap = document.getElementById("sl-dh-wrap");
-    const cntEl = document.getElementById("sl-cnt");
-    const defsList = document.getElementById("sl-defsList");
-    const wpx = document.getElementById("sl-wpx");
-    const annoLine = annoSvg.querySelector("#sl-line");
+    const protoHolder = document.getElementById("ss-protoHolder");
+    const docHolder = document.getElementById("ss-docHolder");
+    const stage = document.getElementById("ss-stage");
+    const fit = document.getElementById("ss-fit");
+    const dhWrap = document.getElementById("ss-dh-wrap");
+    const cntEl = document.getElementById("ss-cnt");
+    const defsList = document.getElementById("ss-defsList");
+    const wpx = document.getElementById("ss-wpx");
+    const annoLine = annoSvg.querySelector("#ss-line");
     protoHolder.appendChild(frame);
-    document.body.classList.add("sl-mode-proto");
+    document.body.classList.add("ss-mode-proto");
 
     /* ---- 현재 화면 상태 ---- */
     let current = SCREENS[0];
@@ -273,11 +277,11 @@
 
     /* ---- 화면별 렌더 ---- */
     function renderHeader() {
-      const pathHtml = (current.path || []).map((p) => "<span>" + p + "</span>").join('<span class="sl-sep">›</span>');
+      const pathHtml = (current.path || []).map((p) => "<span>" + p + "</span>").join('<span class="ss-sep">›</span>');
       dhWrap.innerHTML = `
-        <div class="sl-dh"><span class="sl-k">화면 ID</span><span class="sl-v sl-monoV">${current.id}</span></div>
-        <div class="sl-dh"><span class="sl-k">화면명</span><span class="sl-v">${current.name}</span></div>
-        ${pathHtml ? `<div class="sl-dh"><span class="sl-k">화면 경로</span><span class="sl-v">${pathHtml}</span></div>` : ""}`;
+        <div class="ss-dh"><span class="ss-k">화면 ID</span><span class="ss-v ss-monoV">${current.id}</span></div>
+        <div class="ss-dh"><span class="ss-k">화면명</span><span class="ss-v">${current.name}</span></div>
+        ${pathHtml ? `<div class="ss-dh"><span class="ss-k">화면 경로</span><span class="ss-v">${pathHtml}</span></div>` : ""}`;
     }
     function renderDefs() {
       cntEl.textContent = (current.specs || []).length + "항목";
@@ -286,19 +290,19 @@
         let items = "";
         (s.defs || []).forEach((d) => {
           items += "<li>" + d.t + "</li>";
-          (d.subs || []).forEach((sub) => { items += '<li class="sl-sub">' + sub + "</li>"; });
+          (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + sub + "</li>"; });
         });
         const type = annoOf(s);
         let play = "";
         if (type.mech === "play" && s.play)
-          play = '<button class="sl-play" data-play="' + s.n + '">▶ ' + (s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
+          play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + (s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
         else if (type.mech === "flow" && (s.flowTo || s.play))
-          play = '<button class="sl-play" data-play="' + s.n + '">▶ ' + ((s.play && s.play.label) || "이동 — " + s.flowTo) + "</button>";
-        const row = h("div", { class: "sl-row", id: "sl-def-" + s.n, tabindex: "0" }, `
-          <div class="sl-no">${s.n}</div>
-          <div class="sl-main">
-            <div class="sl-title"><span class="sl-t">${s.title}</span><span class="sl-tag">${type.label}</span></div>
-            <ul class="sl-items">${items}</ul>${play}
+          play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + ((s.play && s.play.label) || "이동 — " + s.flowTo) + "</button>";
+        const row = h("div", { class: "ss-row", id: "ss-def-" + s.n, tabindex: "0" }, `
+          <div class="ss-no">${s.n}</div>
+          <div class="ss-main">
+            <div class="ss-title"><span class="ss-t">${s.title}</span><span class="ss-tag">${type.label}</span></div>
+            <ul class="ss-items">${items}</ul>${play}
           </div>`);
         row.onclick = () => activate(s.n, "panel");
         row.onkeydown = (e) => { if (e.key === "Enter") activate(s.n, "panel"); };
@@ -309,7 +313,7 @@
       markerLayer.innerHTML = "";
       markerEls = {};
       (current.specs || []).forEach((s) => {
-        const el = h("button", { class: "sl-ui sl-marker", "aria-label": "기능 " + s.n + ": " + s.title });
+        const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + s.n + ": " + s.title });
         el.textContent = s.n;
         el.onclick = (e) => { e.stopPropagation(); activate(s.n, "marker"); };
         el.onmouseenter = () => showTip(s, el);
@@ -362,12 +366,12 @@
       sheetH = Math.max(400, Math.min(1600, Math.round(hgt)));
       sheet.style.width = sheetW + "px";
       sheet.style.height = sheetH + "px";
-      sheet.classList.toggle("sl-pc", sheetW >= 1100);
-      sheet.classList.toggle("sl-narrow", sheetW <= 520);
+      sheet.classList.toggle("ss-pc", sheetW >= 1100);
+      sheet.classList.toggle("ss-narrow", sheetW <= 520);
       wpx.textContent = sheetW + "×" + sheetH;
       requestAnimationFrame(layout);
     }
-    const seg = document.getElementById("sl-seg");
+    const seg = document.getElementById("ss-seg");
     seg.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
@@ -379,7 +383,7 @@
     function makeDrag(el, useW, useH) {
       el.addEventListener("pointerdown", (e) => {
         drag = { x: e.clientX, y: e.clientY, w: sheetW, h: sheetH, s: scale };
-        el.classList.add("sl-dragging");
+        el.classList.add("ss-dragging");
         el.setPointerCapture(e.pointerId);
         e.preventDefault();
       });
@@ -391,18 +395,18 @@
         );
       });
       ["pointerup", "pointercancel"].forEach((ev) =>
-        el.addEventListener(ev, () => { drag = null; el.classList.remove("sl-dragging"); }));
+        el.addEventListener(ev, () => { drag = null; el.classList.remove("ss-dragging"); }));
     }
     makeDrag(edgeR, true, false);
     makeDrag(edgeB, false, true);
     makeDrag(edgeC, true, true);
 
     /* ---- 모드 전환 ---- */
-    const mProto = document.getElementById("sl-mProto");
-    const mDoc = document.getElementById("sl-mDoc");
+    const mProto = document.getElementById("ss-mProto");
+    const mDoc = document.getElementById("ss-mDoc");
     function setMode(m) {
-      document.body.classList.remove("sl-mode-proto", "sl-mode-doc");
-      document.body.classList.add("sl-mode-" + m);
+      document.body.classList.remove("ss-mode-proto", "ss-mode-doc");
+      document.body.classList.add("ss-mode-" + m);
       mProto.setAttribute("aria-pressed", String(m === "proto"));
       mDoc.setAttribute("aria-pressed", String(m === "doc"));
       clearActive();
@@ -415,7 +419,7 @@
 
     /* ---- 축소 배치 ---- */
     function layout() {
-      if (document.body.classList.contains("sl-mode-doc")) {
+      if (document.body.classList.contains("ss-mode-doc")) {
         const avail = stage.clientWidth - 48;
         scale = Math.min(1, avail / sheetW);
         frame.style.transformOrigin = "top left";
@@ -452,9 +456,9 @@
     }
     function showTip(s, m) {
       tip.innerHTML =
-        '<div class="sl-tn">NO.' + s.n + " · " + annoOf(s).label + "</div>" +
-        '<div class="sl-tt">' + s.title + "</div>" +
-        '<div class="sl-td">' + ((s.defs && s.defs[0] && s.defs[0].t) || "") + "</div>";
+        '<div class="ss-tn">NO.' + s.n + " · " + annoOf(s).label + "</div>" +
+        '<div class="ss-tt">' + s.title + "</div>" +
+        '<div class="ss-td">' + ((s.defs && s.defs[0] && s.defs[0].t) || "") + "</div>";
       tip.style.display = "block";
       const r = m.getBoundingClientRect();
       const w = Math.min(280, innerWidth - 24);
@@ -499,24 +503,24 @@
     function clearActive() {
       if (activeN == null) return;
       const s = (current.specs || []).find((x) => x.n === activeN);
-      if (s) { const t = targetOf(s); if (t) t.classList.remove("sl-hl"); }
-      if (markerEls[activeN]) markerEls[activeN].classList.remove("sl-hot");
-      const row = document.getElementById("sl-def-" + activeN);
-      if (row) row.classList.remove("sl-active");
+      if (s) { const t = targetOf(s); if (t) t.classList.remove("ss-hl"); }
+      if (markerEls[activeN]) markerEls[activeN].classList.remove("ss-hot");
+      const row = document.getElementById("ss-def-" + activeN);
+      if (row) row.classList.remove("ss-active");
       activeN = null;
       drawArrow();
     }
     function activate(n, from) {
-      if (document.body.classList.contains("sl-mode-proto")) setMode("doc");
+      if (document.body.classList.contains("ss-mode-proto")) setMode("doc");
       clearActive();
       activeN = n;
       const s = (current.specs || []).find((x) => x.n === n);
       if (!s) return;
       const t = targetOf(s);
-      if (t) t.classList.add("sl-hl");
-      if (markerEls[n]) markerEls[n].classList.add("sl-hot");
-      const row = document.getElementById("sl-def-" + n);
-      if (row) row.classList.add("sl-active");
+      if (t) t.classList.add("ss-hl");
+      if (markerEls[n]) markerEls[n].classList.add("ss-hot");
+      const row = document.getElementById("ss-def-" + n);
+      if (row) row.classList.add("ss-active");
       if (from === "panel" && t) t.scrollIntoView({ block: "center", behavior: "smooth" });
       if (from === "marker" && row) row.scrollIntoView({ block: "center", behavior: "smooth" });
       drawArrow();
@@ -529,7 +533,8 @@
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(placeMarkers)).observe(sheet);
 
     /* ---- 공개 API ---- */
-    window.SpecLayer = { setScreen: setScreen, refresh: layout, current: () => current.id };
+    window.ScreenSpec = { setScreen: setScreen, refresh: layout, current: () => current.id };
+    window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     renderScreen();
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);

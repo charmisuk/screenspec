@@ -1,11 +1,11 @@
-# SpecLayer 적용 스킬 (AI 하네스)
+# ScreenSpec 적용 스킬 (AI 하네스)
 
-> 이 문서는 사람용 설명서가 아니라 **AI(Claude 등)가 프로토타입에 SpecLayer를 적용할 때 따르는 작업 지시서**다.
+> 이 문서는 사람용 설명서가 아니라 **AI(Claude 등)가 프로토타입에 ScreenSpec를 적용할 때 따르는 작업 지시서**다.
 > 사용자가 "스펙레이어 적용해줘", "화면정의서 붙여줘"라고 하면 이 순서대로 실행한다.
 
 ## 목표
 
-프로토타입 HTML에 SpecLayer를 심어, 같은 파일이 두 모드를 갖게 한다:
+프로토타입 HTML에 ScreenSpec를 심어, 같은 파일이 두 모드를 갖게 한다:
 - **프로토타입 모드**: 원본 그대로 (마커 숨김)
 - **화면정의서 모드**: 헤더(화면 ID·화면명·화면 경로) + 좌측 축소 미리보기 + 우측 기능정의.
   프로토타입은 이 모드에서도 살아 있다 — 버튼·내비게이션 동작, 화면이 바뀌면 헤더·기능정의 자동 전환.
@@ -29,12 +29,12 @@
 - 위→아래, 좌→우 순서로 `data-spec="1"`부터. 부여 대상은 영역의 **최상위 컨테이너**.
 - 다중 화면이면 화면(root) 안에서만 찾으므로 화면마다 1부터 다시 시작 가능.
 
-### 3. `window.SPECLAYER` 설정 작성
+### 3. `window.SCREENSPEC` 설정 작성
 
 **단일 화면:**
 ```html
 <script>
-window.SPECLAYER = {
+window.SCREENSPEC = {
   screen: { id:"SCR-XXX-001", name:"화면명", path:["홈","..."] },
   widths: { mobile:430, pc:1440 },
   specs: [
@@ -44,27 +44,27 @@ window.SPECLAYER = {
   ]
 };
 </script>
-<script src="./speclayer.js"></script>
+<script src="./screenspec.js"></script>
 ```
 
 **다중 화면 (SPA — 화면 20개도 이 구조):**
 ```html
 <script>
-window.SPECLAYER = {
+window.SCREENSPEC = {
   screens: [
     { id:"SCR-XXX-001", name:"목록", path:["홈","목록"],
-      root:'[data-sl-screen="SCR-XXX-001"]', specs:[ /* 이 화면의 정의 */ ] },
+      root:'[data-ss-screen="SCR-XXX-001"]', specs:[ /* 이 화면의 정의 */ ] },
     { id:"SCR-XXX-002", name:"상세", path:["홈","목록","상세"],
-      root:'[data-sl-screen="SCR-XXX-002"]', specs:[ ... ] }
+      root:'[data-ss-screen="SCR-XXX-002"]', specs:[ ... ] }
   ]
 };
 </script>
 ```
-- 각 화면의 컨테이너 요소에 `data-sl-screen="SCR-XXX-001"` 부여.
+- 각 화면의 컨테이너 요소에 `data-ss-screen="SCR-XXX-001"` 부여.
 - 화면 전환이 표시/숨김(display 등)으로 일어나면 **자동 감지**되어 헤더·기능정의가 따라 바뀐다.
-- 감지가 안 되는 구조(동일 DOM 재사용 등)면 프로토타입의 내비 코드에 `window.SpecLayer.setScreen("SCR-XXX-002")` 한 줄 추가.
+- 감지가 안 되는 구조(동일 DOM 재사용 등)면 프로토타입의 내비 코드에 `window.ScreenSpec.setScreen("SCR-XXX-002")` 한 줄 추가.
 
-**speclayer.js 로드**: 이 저장소의 `speclayer.js`를 프로토타입 파일 옆에 복사하고 `<script src="./speclayer.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
+**screenspec.js 로드**: 이 저장소의 `screenspec.js`를 프로토타입 파일 옆에 복사하고 `<script src="./screenspec.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
 
 ### 4. 기능정의 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 
@@ -91,17 +91,17 @@ window.SPECLAYER = {
 | `flow` | 이동 | 클릭하면 다른 화면으로 전환 | `flowTo:"SCR-XXX-002"` (+실제 내비 버튼 있으면 `play.selector`도) |
 
 - 판단 순서: 화면 이동? → flow / 레이어 열림? → popup / 그 외 동작? → action / 입력 필드? → input / 조건 분기? → state / 모션 정의? → motion / 작아서 안 보임? → arrow / 나머지 → box
-- 새 타입이 필요하면 speclayer.js의 `ANNO` 레지스트리에 한 줄 추가 (label + mech: box·arrow·play·flow 중 택1).
+- 새 타입이 필요하면 screenspec.js의 `ANNO` 레지스트리에 한 줄 추가 (label + mech: box·arrow·play·flow 중 택1).
 
 ### 6. 반응형 훅
 
-- 라이브러리가 시트 폭에 따라 `.sl-pc`(≥1100px) / `.sl-narrow`(≤520px) 클래스를 시트에 부여한다.
+- 라이브러리가 시트 폭에 따라 `.ss-pc`(≥1100px) / `.ss-narrow`(≤520px) 클래스를 시트에 부여한다.
 - 프로토타입 CSS의 반응형 분기는 **미디어쿼리 대신 이 훅으로** 작성한다
   (폭 시뮬레이터가 컨테이너 폭만 바꾸므로 미디어쿼리는 반응하지 않는다).
 
 ```css
-.sl-sheet.sl-pc .page-inner { display:grid; grid-template-columns:1fr 320px; }
-.sl-sheet.sl-narrow .some-grid { grid-template-columns:1fr; }
+.ss-sheet.ss-pc .page-inner { display:grid; grid-template-columns:1fr 320px; }
+.ss-sheet.ss-narrow .some-grid { grid-template-columns:1fr; }
 ```
 
 ### 7. 완료 전 자가 검증
