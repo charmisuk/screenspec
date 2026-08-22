@@ -232,7 +232,14 @@
   body.ss-ov-doc .ss-ov-markers,body.ss-ov-doc .ss-ov-anno{display:block}
   /* 정의서 모드: 앱을 덮지 않고 밀어낸다 — 헤더 높이만큼 아래로, 패널 폭만큼 왼쪽으로 */
   body.ss-ov-doc{padding-top:48px!important;padding-right:400px!important}
-  @media(max-width:900px){.ss-ov-panel{width:85vw} body.ss-ov-doc{padding-right:0!important}}
+  /* 좁은 화면: 우측 패널 대신 하단 시트 — 앱은 위에 그대로 보이고 아래로 밀림 */
+  @media(max-width:900px){
+    .ss-ov-panel{top:auto;left:0;right:0;bottom:0;width:100%;height:52vh;
+      border-left:0;border-top:1px solid var(--ss-line2);border-radius:14px 14px 0 0;
+      box-shadow:0 -10px 30px rgba(17,24,39,.18)}
+    body.ss-ov-doc{padding-right:0!important;padding-bottom:54vh!important}
+    body.ss-ov-doc .ss-pill{top:56px} /* 헤더 글자를 가리지 않게 아래로 */
+  }
   @media (prefers-reduced-motion: reduce){.ss-ui *{transition:none!important}}
   `;
 

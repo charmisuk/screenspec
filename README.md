@@ -24,12 +24,12 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 **방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.2/screenspec.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.6.3/screenspec.js"></script>
 ```
 
 주소 선택 — 용도에 따라:
 
-- 박제(산출물 보존): `@v0.6.2` — 그 시점 그대로 영원히
+- 박제(산출물 보존): `@v0.6.3` — 그 시점 그대로 영원히
 - **자동 최신(권장)**: `@0` — 정식 릴리스(태그)가 나올 때마다 자동 반영. CI 통과본만 흘러온다
 
 ```html
