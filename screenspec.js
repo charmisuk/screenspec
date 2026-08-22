@@ -925,7 +925,8 @@
     function detectScreen() {
       const routed = SCREENS.filter((s) => s.route);
       if (routed.length) {
-        const p = location.pathname;
+        /* 해시 라우터(#/members)면 # 뒤를 경로로 사용 — 일반 책갈피(#section)는 해당 없음 */
+        const p = location.hash.indexOf("#/") === 0 ? location.hash.slice(1).split("?")[0] : location.pathname;
         let hit = routed.find((s) => routeToRe(s.route).test(p));
         if (!hit) { /* basePath·정적 호스팅: 경계 일치 suffix */
           hit = routed.find((s) => s.route !== "/" && routeToSuffixRe(s.route).test(p));
@@ -962,6 +963,7 @@
       };
     });
     window.addEventListener("popstate", () => setTimeout(detectScreen, 50));
+    window.addEventListener("hashchange", () => setTimeout(detectScreen, 50));
 
     /* ---- 재배치 트리거: 스크롤(내부 컨테이너 포함)·리사이즈·DOM 변경 ---- */
     let raf = null;

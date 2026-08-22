@@ -156,6 +156,14 @@ function check(name, ok, detail) {
   await page.addScriptTag({ content: LIB });
   await page.waitForTimeout(300);
   check("이중 로드 가드", (await page.locator(".ss-pill").count()) === 1);
+  /* 해시 라우터: #/경로 가 화면 감지에 잡히는지 */
+  await page.evaluate(() => { location.hash = "#/home"; });
+  await page.waitForTimeout(400);
+  const hash1 = await page.evaluate(() => window.ScreenSpec.current());
+  await page.evaluate(() => { location.hash = "#/members"; });
+  await page.waitForTimeout(400);
+  const hash2 = await page.evaluate(() => window.ScreenSpec.current());
+  check("해시 라우터(#/) 감지", hash1 === "S-01" && hash2 === "S-09", hash1 + "→" + hash2);
   srv.close();
 
   check("JS 에러 0건", errors.length === 0, errors.slice(0, 3));
