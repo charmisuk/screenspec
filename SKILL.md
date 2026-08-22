@@ -64,6 +64,26 @@ window.SCREENSPEC = {
 - 화면 전환이 표시/숨김(display 등)으로 일어나면 **자동 감지**되어 헤더·기능정의가 따라 바뀐다.
 - 감지가 안 되는 구조(동일 DOM 재사용 등)면 프로토타입의 내비 코드에 `window.ScreenSpec.setScreen("SCR-XXX-002")` 한 줄 추가.
 
+### 3-B. 프레임워크 프로토타입(React·Next·Vue) = 오버레이 모드
+
+Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이 모드를 쓴다 (자동 감지되지만 명시가 안전):
+
+- `window.SCREENSPEC`에 `mode:"overlay"` 명시
+- 화면 구분은 `screens[].route`에 라우트 경로: `"/members"`, 동적 세그먼트는 `"/members/[id]"`
+- 라우트가 없는 패널·다이얼로그 화면은 `root` 셀렉터(컨테이너 표시 여부)로 구분 가능
+- Next.js(App Router) 적용: `app/layout.tsx`의 `<body>` 안에
+
+```tsx
+import Script from "next/script";
+// <body> 안:
+<Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.5.0/screenspec.js" strategy="afterInteractive" />
+```
+
+- `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
+- 오버레이 모드에는 기기 뷰포트 시뮬레이터가 없다 (앱 자체 반응형 사용) — 미디어쿼리 훅(§6)도 불필요
+- 주의: 앱이 자체 고정 헤더(top:0)를 쓰면 정의서 모드에서 ScreenSpec 헤더(48px)와 겹칠 수 있다 — 이 경우 사용자에게 보고
+
 **screenspec.js 로드**: 이 저장소의 `screenspec.js`를 프로토타입 파일 옆에 복사하고 `<script src="./screenspec.js"></script>`로 `</body>` 직전에 로드 (프로토타입 자체 스크립트보다 뒤). 저장소는 private이므로 CDN URL은 쓰지 않는다.
 
 ### 4. 기능정의 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)

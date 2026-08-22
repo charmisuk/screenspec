@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.4 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.5 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -41,6 +41,11 @@
  *
  * 크기 시뮬레이터 (DevTools 벤치마크): 시트 = 기기 뷰포트(폭×높이, 내부 스크롤).
  * 프리셋 모바일 360×800 · PC 1920×1080 + 우측/하단/코너 드래그. 프리셋 클릭 = 복귀.
+ *
+ * 모드 2종 (자동 판별, mode로 명시 가능):
+ *   wrap    단일 HTML 프로토타입 — 기기 뷰포트 포함 전 기능
+ *   overlay React·Next·Vue 등 프레임워크 — DOM 불변, 라우트(route) 기반 화면 추적.
+ *           screens[].route: "/members" 또는 "/members/[id]". GA 스니펫처럼 얹기만 한다.
  */
 (function () {
   "use strict";
@@ -175,6 +180,24 @@
   .ss-tip .ss-tn{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:var(--ss-accent)}
   .ss-tip .ss-tt{font-size:13px;font-weight:800;margin:2px 0 3px;color:var(--ss-ink)}
   .ss-tip .ss-td{font-size:12px;color:var(--ss-ink2)}
+  /* ---- 오버레이 모드 (React·Next·SPA — DOM을 감싸지 않음) ---- */
+  .ss-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9030;display:flex;gap:2px;
+    background:#fff;border:1px solid var(--ss-line2);border-radius:99px;padding:3px;box-shadow:0 4px 16px rgba(17,24,39,.18)}
+  .ss-pill button{padding:5px 14px;border-radius:99px;font-size:12.5px;font-weight:700;color:var(--ss-ink2)}
+  .ss-pill button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
+  .ss-ov-header{position:fixed;top:0;left:0;right:0;height:48px;z-index:9010;background:#fff;
+    border-bottom:1px solid var(--ss-line2);display:none;align-items:center;gap:28px;padding:0 16px}
+  .ss-ov-panel{position:fixed;top:48px;right:0;bottom:0;width:400px;z-index:9010;background:#fff;
+    border-left:1px solid var(--ss-line2);display:none;flex-direction:column;box-shadow:-8px 0 30px rgba(17,24,39,.12)}
+  .ss-ov-markers{position:absolute;top:0;left:0;width:100%;height:0;z-index:8040;pointer-events:none;display:none}
+  .ss-ov-markers .ss-marker{pointer-events:auto}
+  .ss-ov-anno{position:absolute;top:0;left:0;width:100%;height:0;z-index:8030;overflow:visible;pointer-events:none;display:none}
+  body.ss-ov-doc .ss-ov-header{display:flex}
+  body.ss-ov-doc .ss-ov-panel{display:flex}
+  body.ss-ov-doc .ss-ov-markers,body.ss-ov-doc .ss-ov-anno{display:block}
+  /* 정의서 모드: 앱을 덮지 않고 밀어낸다 — 헤더 높이만큼 아래로, 패널 폭만큼 왼쪽으로 */
+  body.ss-ov-doc{padding-top:48px!important;padding-right:400px!important}
+  @media(max-width:900px){.ss-ov-panel{width:85vw} body.ss-ov-doc{padding-right:0!important}}
   @media (prefers-reduced-motion: reduce){.ss-ui *{transition:none!important}}
   `;
 
@@ -185,7 +208,53 @@
     return el;
   }
 
+  /* 기능정의 행 HTML (wrap·overlay 공용) */
+  function defsRowsHTML(specs) {
+    let out = "";
+    (specs || []).forEach((s) => {
+      let items = "";
+      (s.defs || []).forEach((d) => {
+        items += "<li>" + d.t + "</li>";
+        (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + sub + "</li>"; });
+      });
+      const type = annoOf(s);
+      let play = "";
+      if (type.mech === "play" && s.play)
+        play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + (s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
+      else if (type.mech === "flow" && (s.flowTo || s.play))
+        play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + ((s.play && s.play.label) || "이동 — " + s.flowTo) + "</button>";
+      out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
+        <div class="ss-no">${s.n}</div>
+        <div class="ss-main">
+          <div class="ss-title"><span class="ss-t">${s.title}</span><span class="ss-tag">${type.label}</span></div>
+          <ul class="ss-items">${items}</ul>${play}
+        </div></div>`;
+    });
+    return out;
+  }
+  function headerFieldsHTML(screen) {
+    const pathHtml = (screen.path || []).map((p) => "<span>" + p + "</span>").join('<span class="ss-sep">›</span>');
+    return `
+      <div class="ss-dh"><span class="ss-k">화면 ID</span><span class="ss-v ss-monoV">${screen.id}</span></div>
+      <div class="ss-dh"><span class="ss-k">화면명</span><span class="ss-v">${screen.name}</span></div>
+      ${pathHtml ? `<div class="ss-dh"><span class="ss-k">화면 경로</span><span class="ss-v">${pathHtml}</span></div>` : ""}`;
+  }
+  /* 라우트 패턴 → 정규식: "/members/[id]" 식 동적 세그먼트 지원 */
+  function routeToRe(route) {
+    const tmp = route.replace(/\[[^\]]+\]/g, "\u0000");
+    const esc = tmp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp("^" + esc.replace(/\u0000/g, "[^/]+") + "/?$");
+  }
+
   function boot() {
+    /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
+    const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
+    const mode = RAW.mode || (isFramework ? "overlay" : "wrap");
+    if (mode === "overlay") bootOverlay();
+    else bootWrap();
+  }
+
+  function bootWrap() {
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
@@ -239,7 +308,7 @@
         <aside class="ss-defs" aria-label="기능정의">
           <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.4</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.5</div>
         </aside>
       </div>`);
 
@@ -275,40 +344,24 @@
       return (r.querySelector ? r : document).querySelector('[data-spec="' + s.target + '"]');
     }
 
-    /* ---- 화면별 렌더 ---- */
+    /* ---- 화면별 렌더 (공용 빌더 사용) ---- */
     function renderHeader() {
-      const pathHtml = (current.path || []).map((p) => "<span>" + p + "</span>").join('<span class="ss-sep">›</span>');
-      dhWrap.innerHTML = `
-        <div class="ss-dh"><span class="ss-k">화면 ID</span><span class="ss-v ss-monoV">${current.id}</span></div>
-        <div class="ss-dh"><span class="ss-k">화면명</span><span class="ss-v">${current.name}</span></div>
-        ${pathHtml ? `<div class="ss-dh"><span class="ss-k">화면 경로</span><span class="ss-v">${pathHtml}</span></div>` : ""}`;
+      dhWrap.innerHTML = headerFieldsHTML(current);
     }
     function renderDefs() {
       cntEl.textContent = (current.specs || []).length + "항목";
-      defsList.innerHTML = "";
-      (current.specs || []).forEach((s) => {
-        let items = "";
-        (s.defs || []).forEach((d) => {
-          items += "<li>" + d.t + "</li>";
-          (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + sub + "</li>"; });
-        });
-        const type = annoOf(s);
-        let play = "";
-        if (type.mech === "play" && s.play)
-          play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + (s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
-        else if (type.mech === "flow" && (s.flowTo || s.play))
-          play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + ((s.play && s.play.label) || "이동 — " + s.flowTo) + "</button>";
-        const row = h("div", { class: "ss-row", id: "ss-def-" + s.n, tabindex: "0" }, `
-          <div class="ss-no">${s.n}</div>
-          <div class="ss-main">
-            <div class="ss-title"><span class="ss-t">${s.title}</span><span class="ss-tag">${type.label}</span></div>
-            <ul class="ss-items">${items}</ul>${play}
-          </div>`);
-        row.onclick = () => activate(s.n, "panel");
-        row.onkeydown = (e) => { if (e.key === "Enter") activate(s.n, "panel"); };
-        defsList.appendChild(row);
-      });
+      defsList.innerHTML = defsRowsHTML(current.specs);
     }
+    /* 행 클릭 = 위임 (마크업은 defsRowsHTML 공용) */
+    defsList.addEventListener("click", (e) => {
+      if (e.target.closest("[data-play]")) return; /* play 버튼은 아래 별도 핸들러 */
+      const row = e.target.closest("[data-defrow]");
+      if (row) activate(Number(row.dataset.defrow), "panel");
+    });
+    defsList.addEventListener("keydown", (e) => {
+      const row = e.target.closest("[data-defrow]");
+      if (row && e.key === "Enter") activate(Number(row.dataset.defrow), "panel");
+    });
     function rebuildMarkers() {
       markerLayer.innerHTML = "";
       markerEls = {};
@@ -538,6 +591,243 @@
 
     renderScreen();
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
+  }
+
+  /* ============================================================
+     오버레이 모드 — React·Next·Vue 등 프레임워크 프로토타입용.
+     DOM을 절대 감싸지도 옮기지도 않는다 (GA 스니펫과 같은 원리).
+     마커·패널·헤더를 위에 얹기만 하고, 화면 감지는 라우트(route) 또는
+     컨테이너 표시 여부(root)로 한다. 기기 뷰포트 시뮬레이터는 없음.
+     ============================================================ */
+  function bootOverlay() {
+    const style = document.createElement("style");
+    style.textContent = CSS;
+    document.head.appendChild(style);
+
+    let current = SCREENS[0];
+    let activeN = null;
+    let markerEls = {};
+
+    /* ---- UI (전부 body에 append만 — 기존 DOM 불변) ---- */
+    const pill = h("div", { class: "ss-ui ss-pill" }, `
+      <button id="ss-ovProto" aria-pressed="true">프로토타입</button>
+      <button id="ss-ovDoc" aria-pressed="false">화면정의서</button>`);
+    const header = h("div", { class: "ss-ui ss-ov-header" });
+    const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능정의" }, `
+      <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
+      <div class="ss-defs-list" id="ss-ovList"></div>
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.5</div>`);
+    const markerLayer = h("div", { class: "ss-ov-markers" });
+    const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    annoSvg.setAttribute("class", "ss-ov-anno");
+    annoSvg.innerHTML =
+      '<defs><marker id="ss-ov-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
+      '<path d="M0,0 L8,4 L0,8 Z" fill="#2952E3"></path></marker></defs>' +
+      '<line id="ss-ov-line" x1="0" y1="0" x2="0" y2="0" stroke="#2952E3" stroke-width="2" marker-end="url(#ss-ov-arrowhead)" visibility="hidden"></line>';
+    const tip = h("div", { class: "ss-tip ss-ui", role: "tooltip" });
+    document.body.appendChild(annoSvg);
+    document.body.appendChild(markerLayer);
+    document.body.appendChild(header);
+    document.body.appendChild(panel);
+    document.body.appendChild(pill);
+    document.body.appendChild(tip);
+    const ovList = panel.querySelector("#ss-ovList");
+    const ovCnt = panel.querySelector("#ss-ovCnt");
+    const annoLine = annoSvg.querySelector("#ss-ov-line");
+
+    function rootEl() {
+      return current.root ? document.querySelector(current.root) || document : document;
+    }
+    function targetOf(s) {
+      const r = rootEl();
+      return (r.querySelector ? r : document).querySelector('[data-spec="' + s.target + '"]');
+    }
+
+    /* ---- 렌더 ---- */
+    function renderScreen() {
+      header.innerHTML = headerFieldsHTML(current);
+      ovCnt.textContent = (current.specs || []).length + "항목";
+      ovList.innerHTML = defsRowsHTML(current.specs);
+      markerLayer.innerHTML = "";
+      markerEls = {};
+      (current.specs || []).forEach((s) => {
+        const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + s.n + ": " + s.title });
+        el.textContent = s.n;
+        el.style.position = "absolute";
+        el.onclick = (e) => { e.stopPropagation(); activate(s.n, "marker"); };
+        el.onmouseenter = () => showTip(s, el);
+        el.onmouseleave = () => (tip.style.display = "none");
+        markerLayer.appendChild(el);
+        markerEls[s.n] = el;
+      });
+      requestAnimationFrame(place);
+    }
+    function setScreen(id) {
+      const next = SCREENS.find((s) => s.id === id);
+      if (!next || next === current) return;
+      clearActive();
+      current = next;
+      renderScreen();
+    }
+
+    /* ---- 화면 감지: 라우트 우선, 없으면 컨테이너 표시 여부 ---- */
+    function detectScreen() {
+      const routed = SCREENS.filter((s) => s.route);
+      if (routed.length) {
+        const p = location.pathname;
+        let hit = routed.find((s) => routeToRe(s.route).test(p));
+        if (!hit) { /* 미등록 하위 경로 → 가장 긴 prefix */
+          let bestLen = -1;
+          routed.forEach((s) => {
+            const base = s.route.replace(/\[[^\]]+\]/g, "");
+            if (p.indexOf(base) === 0 && base.length > bestLen) { bestLen = base.length; hit = s; }
+          });
+        }
+        if (hit && hit !== current) setScreen(hit.id);
+        return;
+      }
+      for (const sc of SCREENS) {
+        if (!sc.root) continue;
+        const el = document.querySelector(sc.root);
+        if (el && el.getClientRects().length > 0) {
+          if (sc !== current) setScreen(sc.id);
+          return;
+        }
+      }
+    }
+    /* SPA 라우팅 추적: pushState/replaceState 패치 + popstate */
+    ["pushState", "replaceState"].forEach((fn) => {
+      const orig = history[fn];
+      history[fn] = function () {
+        const r = orig.apply(this, arguments);
+        setTimeout(detectScreen, 50);
+        return r;
+      };
+    });
+    window.addEventListener("popstate", () => setTimeout(detectScreen, 50));
+
+    /* ---- 모드 전환 ---- */
+    const bProto = pill.querySelector("#ss-ovProto");
+    const bDoc = pill.querySelector("#ss-ovDoc");
+    function setMode(m) {
+      document.body.classList.toggle("ss-ov-doc", m === "doc");
+      bProto.setAttribute("aria-pressed", String(m === "proto"));
+      bDoc.setAttribute("aria-pressed", String(m === "doc"));
+      if (m === "proto") clearActive();
+      requestAnimationFrame(place);
+    }
+    bProto.onclick = () => setMode("proto");
+    bDoc.onclick = () => setMode("doc");
+
+    /* ---- 마커 배치 (문서 좌표계 = rect + 페이지 스크롤) ---- */
+    function place() {
+      if (!document.body.classList.contains("ss-ov-doc")) return;
+      (current.specs || []).forEach((s) => {
+        const t = targetOf(s), m = markerEls[s.n];
+        if (!m) return;
+        if (!t || t.getClientRects().length === 0) { m.style.display = "none"; return; }
+        m.style.display = "";
+        const r = t.getBoundingClientRect();
+        m.style.left = r.left + scrollX + "px";
+        m.style.top = r.top + scrollY + "px";
+        m.style.transform = "translate(-40%,-40%)";
+      });
+      drawArrow();
+    }
+    function showTip(s, m) {
+      tip.innerHTML =
+        '<div class="ss-tn">NO.' + s.n + " · " + annoOf(s).label + "</div>" +
+        '<div class="ss-tt">' + s.title + "</div>" +
+        '<div class="ss-td">' + ((s.defs && s.defs[0] && s.defs[0].t) || "") + "</div>";
+      tip.style.display = "block";
+      const r = m.getBoundingClientRect();
+      const w = Math.min(280, innerWidth - 24);
+      let left = r.left + 16;
+      if (left + w > innerWidth - 12) left = innerWidth - w - 12;
+      tip.style.left = left + "px";
+      tip.style.top = r.bottom + 8 + "px";
+    }
+    function drawArrow() {
+      const s = (current.specs || []).find((x) => x.n === activeN);
+      if (!s || annoOf(s).mech !== "arrow") { annoLine.setAttribute("visibility", "hidden"); return; }
+      const t = targetOf(s);
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      const cx = r.left + r.width / 2 + scrollX;
+      const cy = r.top + r.height / 2 + scrollY;
+      annoLine.setAttribute("x1", cx - 120); annoLine.setAttribute("y1", cy + 80);
+      annoLine.setAttribute("x2", cx - r.width / 2 - 8); annoLine.setAttribute("y2", cy + 8);
+      annoLine.setAttribute("visibility", "visible");
+    }
+
+    /* ---- 패널 상호작용 (위임) ---- */
+    ovList.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-play]");
+      if (btn) {
+        e.stopPropagation();
+        const s = (current.specs || []).find((x) => x.n === Number(btn.dataset.play));
+        if (!s) return;
+        activate(s.n, "panel");
+        if (s.play && s.play.selector) {
+          const el = document.querySelector(s.play.selector);
+          if (el) el.click(); /* flow는 실제 내비 클릭 → 라우트 감지가 정의서를 자동 전환 */
+        } else if (annoOf(s).mech === "flow" && s.flowTo) {
+          setScreen(s.flowTo);
+        }
+        return;
+      }
+      const row = e.target.closest("[data-defrow]");
+      if (row) activate(Number(row.dataset.defrow), "panel");
+    });
+    ovList.addEventListener("keydown", (e) => {
+      const row = e.target.closest("[data-defrow]");
+      if (row && e.key === "Enter") activate(Number(row.dataset.defrow), "panel");
+    });
+
+    /* ---- 양방향 연결 ---- */
+    function clearActive() {
+      if (activeN == null) return;
+      const s = (current.specs || []).find((x) => x.n === activeN);
+      if (s) { const t = targetOf(s); if (t) t.classList.remove("ss-hl"); }
+      if (markerEls[activeN]) markerEls[activeN].classList.remove("ss-hot");
+      const row = document.getElementById("ss-def-" + activeN);
+      if (row) row.classList.remove("ss-active");
+      activeN = null;
+      drawArrow();
+    }
+    function activate(n, from) {
+      if (!document.body.classList.contains("ss-ov-doc")) setMode("doc");
+      clearActive();
+      activeN = n;
+      const s = (current.specs || []).find((x) => x.n === n);
+      if (!s) return;
+      const t = targetOf(s);
+      if (t) t.classList.add("ss-hl");
+      if (markerEls[n]) markerEls[n].classList.add("ss-hot");
+      const row = document.getElementById("ss-def-" + n);
+      if (row) row.classList.add("ss-active");
+      if (from === "panel" && t) t.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (from === "marker" && row) row.scrollIntoView({ block: "center", behavior: "smooth" });
+      drawArrow();
+    }
+
+    /* ---- 재배치 트리거: 스크롤(내부 컨테이너 포함)·리사이즈·DOM 변경 ---- */
+    let raf = null;
+    const queuePlace = () => { if (!raf) raf = requestAnimationFrame(() => { raf = null; place(); }); };
+    window.addEventListener("scroll", queuePlace, { capture: true, passive: true });
+    window.addEventListener("resize", queuePlace);
+    let moTimer = null;
+    new MutationObserver(() => {
+      clearTimeout(moTimer);
+      moTimer = setTimeout(() => { detectScreen(); place(); }, 120);
+    }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
+
+    /* ---- 공개 API ---- */
+    window.ScreenSpec = { setScreen: setScreen, refresh: place, current: () => current.id, mode: "overlay" };
+    window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
+
+    detectScreen();
+    renderScreen();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

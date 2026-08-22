@@ -18,10 +18,10 @@ AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 �
 **방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.3.0/screenspec.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.5.0/screenspec.js"></script>
 ```
 
-버전 태그(@v0.3.0)로 고정 — @main은 CDN 캐시(~12h) 때문에 업데이트 반영이 늦다.
+버전 태그(@v0.5.0)로 고정 — @main은 CDN 캐시(~12h) 때문에 업데이트 반영이 늦다.
 
 **방법 B — 파일 복사 (오프라인·사내망):**
 
@@ -71,6 +71,15 @@ window.SCREENSPEC = {
   ]
 };
 ```
+
+## 두 가지 모드 (자동 판별)
+
+| 모드 | 대상 | 특징 |
+|---|---|---|
+| `wrap` | 단일 HTML 프로토타입 | 기기 뷰포트 시뮬레이터 포함 전 기능 |
+| `overlay` | React·Next·Vue 등 프레임워크 | DOM 불변 (GA 스니펫 원리) · 라우트 기반 화면 추적 |
+
+오버레이 예제: [`examples/overlay-spa.html`](examples/overlay-spa.html)
 
 ## anno 타입 (8종)
 

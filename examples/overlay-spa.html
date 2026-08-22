@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ScreenSpec 예제 — 오버레이 모드 (SPA 라우팅)</title>
+<style>
+  /* Next.js류 SPA를 흉내낸 미니 앱 — ScreenSpec은 이 DOM을 전혀 건드리지 않는다 */
+  body{margin:0;font-family:sans-serif;color:#191919;line-height:1.6;background:#fff}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  .gnb{display:flex;gap:4px;align-items:center;padding:10px 20px;border-bottom:1px solid #E9E9E7}
+  .gnb .brand{font-weight:800;margin-right:16px}
+  .gnb a{font-size:13.5px;font-weight:700;color:#50524E;padding:7px 12px;border-radius:8px;text-decoration:none}
+  .gnb a.on{background:#F1F1F0;color:#191919}
+  main{max-width:860px;margin:0 auto;padding:28px 20px}
+  h1{font-size:22px;font-weight:800;margin:0 0 16px}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+  .kpi{border:1px solid #E9E9E7;border-radius:12px;padding:16px}
+  .kpi .v{font-size:24px;font-weight:800}
+  .kpi .k{font-size:12px;color:#9B9A97}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-size:11.5px;color:#9B9A97;border-bottom:2px solid #191919;padding:8px 10px}
+  td{border-bottom:1px solid #E9E9E7;padding:10px}
+  tr[data-row]{cursor:pointer}
+  tr[data-row]:hover{background:#FAFAF9}
+  .invite{background:#191919;color:#fff;font-weight:700;font-size:13px;border-radius:9px;padding:9px 16px}
+  .head-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+</style>
+</head>
+<body>
+  <nav class="gnb" data-spec="1">
+    <span class="brand">입주사 어드민 (데모)</span>
+    <a href="/home" data-nav>홈</a>
+    <a href="/members" data-nav>이용자</a>
+  </nav>
+
+  <main id="view"></main>
+
+  <script>
+  /* ---- 미니 SPA 라우터 (Next.js 흉내: pushState 기반) ---- */
+  const VIEWS = {
+    "/home": `
+      <h1 data-spec="2">홈</h1>
+      <div class="kpis" data-spec="3">
+        <div class="kpi"><div class="v">128</div><div class="k">재직 이용자</div></div>
+        <div class="kpi"><div class="v">6</div><div class="k">오늘 방문 예정</div></div>
+        <div class="kpi"><div class="v">3</div><div class="k">승인 대기</div></div>
+      </div>`,
+    "/members": `
+      <div class="head-row">
+        <h1 data-spec="2">이용자 명단</h1>
+        <button class="invite" data-spec="3" onclick="alert('데모: 초대 패널이 열립니다')">+ 초대</button>
+      </div>
+      <table data-spec="4">
+        <thead><tr><th>이름</th><th>부서</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr data-row><td>김지수</td><td>운영</td><td>재직</td></tr>
+          <tr data-row><td>박민호</td><td>개발</td><td>재직</td></tr>
+          <tr data-row><td>이서연</td><td>디자인</td><td>초대됨</td></tr>
+        </tbody>
+      </table>`
+  };
+  function render() {
+    const path = VIEWS[location.pathname] ? location.pathname : "/home";
+    document.getElementById("view").innerHTML = VIEWS[path];
+    document.querySelectorAll("[data-nav]").forEach(a =>
+      a.classList.toggle("on", a.getAttribute("href") === path));
+  }
+  document.addEventListener("click", e => {
+    const a = e.target.closest("[data-nav]");
+    if (!a) return;
+    e.preventDefault();
+    history.pushState({}, "", a.getAttribute("href"));
+    render();
+  });
+  window.addEventListener("popstate", render);
+  render();
+  </script>
+
+  <!-- ---- ScreenSpec: 오버레이 모드 (GA 스니펫처럼 얹기만) ---- -->
+  <script>
+  window.SCREENSPEC = {
+    mode: "overlay",
+    screens: [
+      {
+        id: "S-01", name: "홈", path: ["홈"], route: "/home",
+        specs: [
+          { n:1, target:"1", anno:"box", title:"GNB", defs:[
+            { t:"브랜드 + 메뉴 2종(홈·이용자) 상시 노출" },
+            { t:"현재 화면 메뉴는 회색 배경으로 활성 표시" }]},
+          { n:2, target:"2", anno:"box", title:"화면 제목", defs:[
+            { t:"H1 '홈' 고정" }]},
+          { n:3, target:"3", anno:"state", title:"KPI 카드 3종", defs:[
+            { t:"재직 이용자 · 오늘 방문 예정 · 승인 대기 각 1건", subs:[
+              "데이터 0이면 숫자 대신 '—' 표시"]}]}
+        ]
+      },
+      {
+        id: "S-09", name: "이용자 명단", path: ["홈","이용자","명단"], route: "/members",
+        specs: [
+          { n:1, target:"1", anno:"box", title:"GNB", defs:[
+            { t:"이용자 메뉴 활성 상태" }]},
+          { n:2, target:"2", anno:"box", title:"화면 제목", defs:[
+            { t:"H1 '이용자 명단' 고정" }]},
+          { n:3, target:"3", anno:"action", title:"초대 버튼",
+            play:{ selector:".invite", label:"동작 재생 — 초대 패널" }, defs:[
+            { t:"클릭 시 이용자 초대 패널 열림" }]},
+          { n:4, target:"4", anno:"box", title:"명단 테이블", defs:[
+            { t:"이름·부서·상태 3열 · 행 클릭 시 상세 이동" },
+            { t:"상태 값: 재직 · 초대됨 · 퇴사" }]}
+        ]
+      }
+    ]
+  };
+  </script>
+  <script src="../screenspec.js"></script>
+</body>
+</html>
