@@ -91,11 +91,12 @@ function check(name, ok, detail) {
     const t = document.querySelector(".ss-toc");
     return t.classList.contains("ss-open") && t.textContent.includes("2/2 정의됨");
   }));
-  check("목차 섹션 라벨 + 브레드크럼", await page.evaluate(() => {
+  check("목차 트리: 그룹 행 + 뎁스 인덴트", await page.evaluate(() => {
     const t = document.querySelector(".ss-toc");
-    const sec = [...t.querySelectorAll(".ss-toc-sec")].some((x) => x.textContent === "홈");
-    const crumb = [...t.querySelectorAll(".ss-toc-crumb")].some((x) => x.textContent.includes("과일 상점"));
-    return sec && crumb;
+    const grp = [...t.querySelectorAll(".ss-toc-grp")].some((x) => x.textContent.includes("홈"));
+    const lst = t.querySelector('[data-toc="SCR-EX-LST-001"]'), dtl = t.querySelector('[data-toc="SCR-EX-DTL-002"]');
+    return grp && lst && dtl && Number(dtl.dataset.depth) === Number(lst.dataset.depth) + 1 &&
+      dtl.querySelectorAll(".ss-toc-ind i").length === Number(dtl.dataset.depth);
   }));
   check("flow 버튼에 대상 화면명 표기", await page.evaluate(() =>
     (document.querySelector('[data-play="1"]') || {}).textContent?.includes("상품 목록") === true));

@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.10 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.11 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -249,7 +249,8 @@
   .ss-toc-btn{cursor:pointer;display:inline-flex;align-items:center;gap:7px;border-radius:7px;padding:2px 7px 2px 8px;margin:-3px 0;
     border:1px solid var(--ss-line2);background:#fff;box-shadow:0 1px 0 rgba(17,24,39,.04);transition:border-color .12s,background .12s,color .12s}
   .ss-toc-btn:hover{border-color:var(--ss-accent);background:var(--ss-accent-soft);color:var(--ss-accent)}
-  .ss-toc-caret{font-style:normal;font-size:9px;color:var(--ss-ink3);border-left:1px solid var(--ss-line2);padding-left:6px;line-height:1}
+  .ss-toc-caret{display:inline-flex;align-items:center;color:var(--ss-ink2);border-left:1px solid var(--ss-line2);padding-left:6px;line-height:1}
+  .ss-toc-caret svg{display:block}
   .ss-toc-btn:hover .ss-toc-caret{color:var(--ss-accent);border-left-color:color-mix(in srgb,var(--ss-accent) 30%,transparent)}
   .ss-toc{position:fixed;z-index:2147483050;min-width:300px;max-width:380px;max-height:62vh;overflow-y:auto;
     background:#fff;border:1px solid var(--ss-line2);border-radius:12px;
@@ -270,14 +271,20 @@
   .ss-toc-name{font-weight:700;color:var(--ss-ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ss-toc-row.ss-undef .ss-toc-name{color:var(--ss-ink3);font-weight:500}
   .ss-toc-cnt{font-family:var(--ss-mono);font-size:10.5px;color:var(--ss-ink3);flex-shrink:0}
-  /* 커맨드 팔레트 스타일: 섹션 라벨(비클릭) + 행 내 브레드크럼 */
-  .ss-toc-sec{padding:12px 16px 4px;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ss-ink3)}
-  .ss-toc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-  .ss-toc-crumb{font-size:10.5px;color:var(--ss-ink3);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 트리(Figma 레이어·Notion 사이드바·VS Code 탐색기 패턴): 뎁스 = 인덴트 + 세로 가이드선.
+     화면이 아닌 중간 경로(그룹)는 회색 비클릭 행, 화면 행은 이름 + ID. */
+  .ss-toc-body{padding:6px 0 8px}
+  .ss-toc-row{padding:7px 14px 7px 0;border-bottom:0;align-items:center}
+  .ss-toc-row:hover{background:#FAFAF9}
+  .ss-toc-grp{display:flex;align-items:center;gap:9px;padding:8px 14px 4px 0;font-size:11.5px;font-weight:800;color:var(--ss-ink3);cursor:default}
+  .ss-toc-dash{width:7px;height:2px;border-radius:2px;background:var(--ss-line2);flex-shrink:0}
+  .ss-toc-ind{position:relative;display:flex;align-items:stretch;flex-shrink:0}
+  .ss-toc-ind i{display:block;width:14px;border-right:1px solid var(--ss-line2);margin-right:-1px}
+  .ss-toc-row .ss-toc-ind,.ss-toc-grp .ss-toc-ind{align-self:stretch;margin:-7px 10px -7px 16px}
+  .ss-toc-grp .ss-toc-ind{margin-top:-8px;margin-bottom:-4px}
   .ss-toc-idr{font-family:var(--ss-mono);font-size:10.5px;font-weight:700;color:var(--ss-ink3);flex-shrink:0;max-width:40%}
   .ss-toc-row.ss-cur .ss-toc-idr{color:var(--ss-accent)}
-  .ss-toc-row .ss-toc-dot{margin-top:5px;align-self:flex-start}
-  .ss-toc-row{align-items:flex-start}
+  .ss-toc-undef{font-size:10.5px;color:var(--ss-ink3);font-weight:500;flex-shrink:0}
   /* 화면 전환 알림 토스트 — 이동 인지용 */
   .ss-nav-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:2147483055;
     background:var(--ss-ink);color:#fff;font-size:12.5px;font-weight:700;padding:7px 16px;border-radius:99px;
@@ -291,7 +298,7 @@
     .ss-toc{left:0!important;top:0!important;right:0;bottom:0;width:100%;max-width:none;max-height:none;
       border-radius:0;border:0}
     .ss-toc-head{padding:14px 18px;font-size:14px}
-    .ss-toc-row{padding-top:12px;padding-bottom:12px}
+    .ss-toc-row{padding-top:11px;padding-bottom:11px}
   }
   /* ---- 오버레이 모드 (React·Next·SPA — DOM을 감싸지 않음) ---- */
   .ss-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483040;display:flex;gap:2px;
@@ -362,7 +369,7 @@
   function headerFieldsHTML(screen) {
     const pathHtml = (screen.path || []).map((p) => "<span>" + esc(p) + "</span>").join('<span class="ss-sep">›</span>');
     return `
-      <div class="ss-dh"><span class="ss-k">화면 ID</span><button class="ss-v ss-monoV ss-toc-btn" title="화면 목록 열기">${esc(screen.id)}<i class="ss-toc-caret">▾</i></button></div>
+      <div class="ss-dh"><span class="ss-k">화면 ID</span><button class="ss-v ss-monoV ss-toc-btn" title="화면 목록 열기">${esc(screen.id)}<i class="ss-toc-caret"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg></i></button></div>
       <div class="ss-dh"><span class="ss-k">화면명</span><span class="ss-v">${esc(screen.name)}</span></div>
       ${pathHtml ? `<div class="ss-dh"><span class="ss-k">화면 경로</span><span class="ss-v">${pathHtml}</span></div>` : ""}`;
   }
@@ -572,46 +579,53 @@
       if (row && e.key === "Enter") activate(Number(row.dataset.defrow), "panel");
     });
 
-    /* ---- 화면 목록 (목차) — 커맨드 팔레트 패턴 (Linear·Vercel ⌘K 벤치마크):
-       클릭 가능한 그룹 행 없이 플랫 리스트. 계층은 ① 1뎁스 = 섹션 라벨(비클릭)
-       ② 그 아래 뎁스 = 행 안의 브레드크럼("홈 › 과일 상점")으로 표현.
-       path가 아무리 깊어도 크럼이 흡수 — MAX_TOC_DEPTH는 크럼 표시 상한. ---- */
-    const MAX_TOC_DEPTH = 4; /* 추후 6까지 확장 시 이 값만 변경 */
+    /* ---- 화면 목록 (목차) — 트리 패턴 (Figma 레이어·Notion 사이드바·VS Code 탐색기 벤치마크):
+       path 배열이 곧 트리. 각 뎁스는 인덴트 + 세로 가이드선으로 내려가고,
+       화면이 아닌 중간 경로는 회색 그룹 행(비클릭), 화면은 클릭 행(이름 + ID).
+       MAX_TOC_DEPTH = 인덴트 상한 — 더 깊은 path는 마지막 인덴트에 머물되 순서는 유지. ---- */
+    const MAX_TOC_DEPTH = 6; /* 인덴트 상한 — 트리라 더 깊어도 순서는 유지 */
     const toc = h("div", { class: "ss-ui ss-toc" });
     document.body.appendChild(toc);
-    function renderToc() {
-      const defined = SCREENS.filter((s) => (s.specs || []).length > 0).length;
-      /* 1뎁스(섹션)별 그룹핑 — 순서는 첫 등장 순 */
-      const sections = [];
-      const bySection = {};
+    function buildTree() {
+      const root = { children: [], byKey: {} };
       SCREENS.forEach((s) => {
-        /* 부모 화면(예: "홈")도 자기 이름 섹션 안에 포함되도록 path[0] 기준 그룹핑 */
-        const sec = (s.path && s.path.length) ? s.path[0] : "";
-        if (!(sec in bySection)) { bySection[sec] = []; sections.push(sec); }
-        bySection[sec].push(s);
-      });
-      let html = "";
-      sections.forEach((sec) => {
-        if (sec) html += `<div class="ss-toc-sec">${esc(sec)}</div>`;
-        bySection[sec].forEach((s) => {
-          const n = (s.specs || []).length;
-          /* 크럼 = 섹션과 자신 사이의 중간 세그먼트만 (섹션명 중복 표기 방지) */
-          let parents = (s.path || []).slice(1, -1);
-          if (parents.length > MAX_TOC_DEPTH - 2) parents = parents.slice(0, MAX_TOC_DEPTH - 3).concat("…");
-          const crumb = parents.join(" › ");
-          /* ID는 뒷자리가 식별의 핵심 — 길면 앞을 자르고 뒤를 보존 */
-          const idShow = s.id.length > 14 ? "…" + s.id.slice(-13) : s.id;
-          const sub = crumb + (n ? "" : (crumb ? " · " : "") + "미정의");
-          html += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}">
-            <span class="ss-toc-dot"></span>
-            <span class="ss-toc-main">
-              <span class="ss-toc-name">${esc(s.name)}</span>
-              ${sub ? `<span class="ss-toc-crumb">${esc(sub)}</span>` : ""}
-            </span>
-            <span class="ss-toc-idr" title="${esc(s.id)}">${esc(idShow)}</span></div>`;
+        const p = (s.path && s.path.length) ? s.path : [s.name];
+        let node = root;
+        p.forEach((seg, i) => {
+          if (!node.byKey[seg]) { node.byKey[seg] = { label: seg, children: [], byKey: {}, screen: null }; node.children.push(node.byKey[seg]); }
+          node = node.byKey[seg];
+          if (i === p.length - 1) node.screen = node.screen || s;
         });
       });
-      toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div>` + html;
+      return root;
+    }
+    function guides(depth) {
+      const d = Math.min(depth, MAX_TOC_DEPTH - 1);
+      return `<span class="ss-toc-ind">${"<i></i>".repeat(d)}</span>`;
+    }
+    function renderNode(node, depth) {
+      let html = "";
+      const s = node.screen;
+      if (s) {
+        const n = (s.specs || []).length;
+        const idShow = s.id.length > 14 ? "…" + s.id.slice(-13) : s.id;
+        html += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}" data-depth="${depth}">
+          ${guides(depth)}<span class="ss-toc-dot"></span>
+          <span class="ss-toc-name">${esc(s.name)}</span>
+          ${n ? "" : '<span class="ss-toc-undef">미정의</span>'}
+          <span class="ss-toc-idr" title="${esc(s.id)}">${esc(idShow)}</span></div>`;
+      } else {
+        html += `<div class="ss-toc-grp" data-depth="${depth}">${guides(depth)}<span class="ss-toc-dash"></span>${esc(node.label)}</div>`;
+      }
+      node.children.forEach((c) => { html += renderNode(c, depth + 1); });
+      return html;
+    }
+    function renderToc() {
+      const defined = SCREENS.filter((s) => (s.specs || []).length > 0).length;
+      const tree = buildTree();
+      let html = "";
+      tree.children.forEach((c) => { html += renderNode(c, 0); });
+      toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div><div class="ss-toc-body">` + html + "</div>";
     }
     function openToc(anchor) {
       renderToc();
@@ -736,7 +750,7 @@
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.10</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.11</div>
         </aside>
       </div>`);
 
@@ -904,7 +918,7 @@
 
     core.setCurrent(SCREENS[0]);
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
-    console.info("[ScreenSpec v0.10] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.11] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -921,7 +935,7 @@
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.10</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.11</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -1036,7 +1050,7 @@
 
     core.setCurrent(SCREENS[0]);
     detectScreen();
-    console.info("[ScreenSpec v0.10] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.11] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
