@@ -30,8 +30,8 @@
 <body>
   <nav class="gnb" data-spec="1">
     <span class="brand">입주사 어드민 (데모)</span>
-    <a href="/home" data-nav>홈</a>
-    <a href="/members" data-nav>이용자</a>
+    <a href="./home" data-nav>홈</a>
+    <a href="./members" data-nav>이용자</a>
   </nav>
 
   <main id="view"></main>
@@ -60,11 +60,12 @@
         </tbody>
       </table>`
   };
+  function pathKey(){ return "/" + location.pathname.split("/").pop(); }
   function render() {
-    const path = VIEWS[location.pathname] ? location.pathname : "/home";
+    const path = VIEWS[pathKey()] ? pathKey() : "/home";
     document.getElementById("view").innerHTML = VIEWS[path];
     document.querySelectorAll("[data-nav]").forEach(a =>
-      a.classList.toggle("on", a.getAttribute("href") === path));
+      a.classList.toggle("on", a.getAttribute("href").endsWith(path)));
   }
   document.addEventListener("click", e => {
     const a = e.target.closest("[data-nav]");
@@ -74,6 +75,8 @@
     render();
   });
   window.addEventListener("popstate", render);
+  /* 정적 호스팅(.html 경로)에서도 초기 화면이 라우트에 매칭되게 */
+  try { if (!VIEWS[pathKey()]) history.replaceState({}, "", "./home"); } catch(e) {}
   render();
   </script>
 

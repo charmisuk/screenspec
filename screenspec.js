@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.5 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.5.4 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -251,6 +251,13 @@
     return new RegExp("^" + esc.replace(/\u0000/g, "[^/]+") + "/?$");
   }
 
+  /* suffix 버전 — Next basePath·정적 호스팅처럼 경로 앞에 접두가 붙는 환경 지원
+     ("/admin/members"도 route "/members"에 매칭. 루트 "/"는 제외) */
+  function routeToSuffixRe(route) {
+    const tmp = route.replace(/\[[^\]]+\]/g, "\u0000");
+    const esc = tmp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(esc.replace(/\u0000/g, "[^/]+") + "/?$");
+  }
   function boot() {
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
     const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
@@ -314,7 +321,7 @@
         <aside class="ss-defs" aria-label="기능정의">
           <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.5</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.5.4</div>
         </aside>
       </div>`);
 
@@ -622,7 +629,7 @@
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능정의" }, `
       <div class="ss-defs-head"><h2>기능정의</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.5</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.5.4</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -704,6 +711,9 @@
       if (routed.length) {
         const p = location.pathname;
         let hit = routed.find((s) => routeToRe(s.route).test(p));
+        if (!hit) { /* basePath·정적 호스팅: 경계 일치 suffix */
+          hit = routed.find((s) => s.route !== "/" && routeToSuffixRe(s.route).test(p));
+        }
         if (!hit) { /* 미등록 하위 경로 → 경계(/)가 일치하는 가장 긴 prefix */
           let bestLen = -1;
           routed.forEach((s) => {
