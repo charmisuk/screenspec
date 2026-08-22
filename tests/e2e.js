@@ -118,6 +118,38 @@ function check(name, ok, detail) {
   await page.click(".ss-toc-x");
   await page.setViewportSize({ width: 1440, height: 900 });
 
+  /* ============ wrap: shop.html (대표 데모 — MOA) ============ */
+  console.log("[wrap] shop.html");
+  await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
+  await page.waitForTimeout(1200);
+  await page.click("#ss-mDoc");
+  await page.waitForTimeout(500);
+  check("MOA 홈 기능 설명 9행", (await page.locator(".ss-defs-list .ss-row").count()) === 9);
+  await page.click('[data-play="6"]');
+  await page.waitForTimeout(400);
+  check("쿠폰 popup → 실제 바텀시트", await page.evaluate(() => document.getElementById("couponSheet").classList.contains("open")));
+  await page.click("#couponSheet .ok");
+  await page.waitForTimeout(300);
+  await page.click('[data-play="8"]');
+  await page.waitForTimeout(500);
+  check("추천 카드 flow → 상세 + 정의서 전환", await page.evaluate(() =>
+    window.ScreenSpec.current() === "SCR-MOA-PDP-002" &&
+    document.querySelector('[data-ss-screen="SCR-MOA-PDP-002"]').style.display !== "none"));
+  await page.click('[data-play="5"]');
+  await page.waitForTimeout(300);
+  check("구매 바 action → 토스트", await page.evaluate(() => document.getElementById("toast").classList.contains("show")));
+  await page.click('[data-play="1"]');
+  await page.waitForTimeout(400);
+  check("뒤로가기 flow → 홈 복귀", await page.evaluate(() => window.ScreenSpec.current() === "SCR-MOA-HOME-001"));
+  await page.click('#ss-seg button[data-w="pc"]');
+  await page.waitForTimeout(500);
+  check("PC 반응형 훅 (그리드 4열·탭바 숨김)", await page.evaluate(() => {
+    const grid = getComputedStyle(document.getElementById("recoGrid")).gridTemplateColumns.split(" ").length;
+    const tab = document.querySelector(".tabbar").getClientRects().length === 0;
+    return grid === 4 && tab;
+  }));
+  await page.click('#ss-seg button[data-w="mobile"]');
+
   /* ============ overlay: 하위경로(basePath) 환경 ============ */
   console.log("[overlay] SPA (하위경로 서빙)");
   const srv = http.createServer((req, res) => {

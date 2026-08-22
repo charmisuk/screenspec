@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MOA — ScreenSpec 대표 데모</title>
+<style>
+  /* ============ MOA 디자인 토큰 — slick 모노 + 세일 액센트 1색 ============ */
+  :root{
+    --ink:#141414; --sub:#6B6B67; --faint:#A6A5A0;
+    --line:#ECECEA; --band:#F6F6F4; --sheet:#FFFFFF;
+    --sale:#FF4D2E;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  body{color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;background:var(--sheet)}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
+  input{font:inherit}
+
+  /* ---- 상단 바 ---- */
+  .topbar{display:flex;align-items:center;gap:10px;padding:14px 16px 10px;flex-wrap:wrap}
+  .topbar .searchbar{order:3;width:100%;margin:8px 0 2px}
+  .top-icons{order:2}
+  .logo{display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .logo svg{display:block}
+  .logo .wm{font-size:17px;font-weight:900;letter-spacing:.04em}
+  .logo .wm i{font-style:normal;color:var(--sale)}
+  .top-icons{margin-left:auto;display:flex;gap:14px;align-items:center}
+  .icon-btn{position:relative;width:26px;height:26px;display:grid;place-items:center}
+  .icon-btn svg{display:block}
+  .cart-badge{position:absolute;top:-4px;right:-6px;min-width:15px;height:15px;border-radius:99px;
+    background:var(--sale);color:#fff;font-size:9.5px;font-weight:800;display:grid;place-items:center;padding:0 3px}
+  .searchbar{margin:2px 16px 12px;display:flex;align-items:center;gap:8px;
+    background:var(--band);border-radius:11px;padding:10px 13px}
+  .searchbar svg{flex-shrink:0}
+  .searchbar input{flex:1;border:0;background:none;outline:none;font-size:13.5px;color:var(--ink);min-width:0}
+  .searchbar input::placeholder{color:var(--faint)}
+
+  /* ---- 히어로 캐러셀 ---- */
+  .hero{position:relative;margin:0 16px;border-radius:16px;overflow:hidden;aspect-ratio:16/10}
+  .hero .slides{display:flex;height:100%;transition:transform .45s cubic-bezier(.22,.9,.3,1)}
+  .slide{min-width:100%;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:20px;color:#fff}
+  .slide .tag{font-size:10.5px;font-weight:800;letter-spacing:.12em;opacity:.85;margin-bottom:5px}
+  .slide h2{font-size:21px;font-weight:900;line-height:1.25;margin:0;text-wrap:balance}
+  .slide .s1{background:linear-gradient(135deg,#23261F,#4A5240)}
+  .hero .slide:nth-child(1){background:linear-gradient(140deg,#1E211B,#49523E)}
+  .hero .slide:nth-child(2){background:linear-gradient(140deg,#20242C,#4B5A74)}
+  .hero .slide:nth-child(3){background:linear-gradient(140deg,#2C2320,#7A5B48)}
+  .hero .dots{position:absolute;left:20px;bottom:12px;display:flex;gap:5px}
+  .hero .dots i{width:5px;height:5px;border-radius:99px;background:rgba(255,255,255,.4);transition:all .3s}
+  .hero .dots i.on{width:16px;background:#fff}
+
+  /* ---- 카테고리 ---- */
+  .cats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 6px;padding:18px 16px 6px}
+  .cat{display:flex;flex-direction:column;align-items:center;gap:7px}
+  .cat .ic{width:50px;height:50px;border-radius:17px;background:var(--band);display:grid;place-items:center;font-size:21px}
+  .cat span{font-size:11px;color:var(--sub);font-weight:600}
+
+  /* ---- 섹션 공통 ---- */
+  section.blk{padding:22px 16px 4px}
+  .sec-head{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+  .sec-head h3{font-size:16.5px;font-weight:800;margin:0;letter-spacing:-.01em}
+  .sec-head .more{margin-left:auto;font-size:11.5px;color:var(--faint);font-weight:600}
+
+  /* ---- 타임딜 ---- */
+  .timer{font-family:var(--mono);font-size:12.5px;font-weight:800;color:var(--sale);
+    background:#FFF0EC;border-radius:7px;padding:2px 8px}
+  .deal-scroll{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 14px;scrollbar-width:none}
+  .deal-scroll::-webkit-scrollbar{display:none}
+  .dealcard{min-width:128px;width:128px}
+  .thumb{position:relative;border-radius:13px;aspect-ratio:1;display:grid;place-items:center;overflow:hidden}
+  .thumb .nm{font-size:11px;font-weight:800;letter-spacing:.06em;color:rgba(255,255,255,.92)}
+  .off{position:absolute;top:8px;left:8px;background:var(--sale);color:#fff;font-size:10px;font-weight:800;
+    border-radius:6px;padding:2px 6px}
+  .heart{position:absolute;top:7px;right:7px;width:26px;height:26px;border-radius:99px;
+    background:rgba(255,255,255,.88);display:grid;place-items:center;transition:transform .2s}
+  .heart svg{display:block}
+  .heart.on{animation:pop .2s}
+  .heart.on svg path{fill:var(--sale);stroke:var(--sale)}
+  @keyframes pop{50%{transform:scale(1.25)}}
+  .p-name{font-size:12px;color:var(--ink);margin:8px 0 2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .p-price{font-size:13px;font-weight:800}
+  .p-price .pct{color:var(--sale);margin-right:4px}
+  .soldout .thumb::after{content:"품절";position:absolute;inset:0;background:rgba(20,20,20,.55);
+    color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center}
+
+  /* ---- 쿠폰 배너 ---- */
+  .coupon{margin:8px 16px 0;border-radius:14px;background:var(--ink);color:#fff;
+    display:flex;align-items:center;gap:12px;padding:15px 16px}
+  .coupon .txt b{font-size:14px;font-weight:800;display:block}
+  .coupon .txt span{font-size:11px;opacity:.65}
+  .coupon .get{margin-left:auto;background:#fff;color:var(--ink);font-size:12px;font-weight:800;
+    border-radius:9px;padding:8px 14px;flex-shrink:0}
+
+  /* ---- 랭킹 ---- */
+  .rank-list{display:flex;flex-direction:column;gap:12px;padding-bottom:8px}
+  .rankrow{display:flex;align-items:center;gap:12px;text-align:left;width:100%}
+  .rankrow .no{font-family:var(--mono);font-size:15px;font-weight:900;width:18px;color:var(--ink)}
+  .rankrow .rthumb{width:56px;height:56px;border-radius:12px;flex-shrink:0;display:grid;place-items:center}
+  .rankrow .rthumb span{font-size:9px;font-weight:800;letter-spacing:.05em;color:rgba(255,255,255,.9)}
+  .rankrow .info{flex:1;min-width:0}
+  .rankrow .info .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rankrow .info .pr{font-size:13px;font-weight:800;margin-top:1px}
+  .rankrow .delta{font-size:10.5px;font-weight:800;color:var(--sale)}
+
+  /* ---- 추천 그리드 ---- */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 10px;padding-bottom:20px}
+  .gcard{text-align:left}
+  .gcard .rating{font-size:10.5px;color:var(--faint);margin-top:1px}
+  .gcard .rating b{color:var(--ink);font-weight:700}
+
+  /* ---- 하단 탭바 ---- */
+  .tabbar{position:sticky;bottom:0;display:flex;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);
+    border-top:1px solid var(--line);padding:7px 0 10px;margin-top:6px}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--faint);font-weight:600}
+  .tab.on{color:var(--ink)}
+  .tab svg{display:block}
+
+  /* ---- 상품 상세 ---- */
+  .pdp-top{display:flex;align-items:center;gap:8px;padding:14px 16px}
+  .back{width:30px;height:30px;display:grid;place-items:center;margin-left:-6px}
+  .pdp-top .ttl{font-size:14px;font-weight:700}
+  .pdp-hero{margin:0 16px;border-radius:18px;aspect-ratio:1;display:grid;place-items:center;position:relative;overflow:hidden}
+  .pdp-hero .nm{font-size:15px;font-weight:900;letter-spacing:.1em;color:rgba(255,255,255,.92)}
+  .pdp-info{padding:16px}
+  .pdp-info .brand{font-size:11.5px;color:var(--faint);font-weight:700;letter-spacing:.04em}
+  .pdp-info h2{font-size:18px;font-weight:800;margin:3px 0 8px}
+  .price-row{display:flex;align-items:baseline;gap:7px}
+  .price-row .pct{color:var(--sale);font-size:19px;font-weight:900}
+  .price-row .now{font-size:19px;font-weight:900}
+  .price-row .was{font-size:12.5px;color:var(--faint);text-decoration:line-through}
+  .opts{margin:14px 16px;display:flex;flex-direction:column;gap:8px}
+  .opts label{font-size:12px;font-weight:700;color:var(--sub)}
+  .optrow{display:flex;gap:7px}
+  .opt{border:1.5px solid var(--line);border-radius:10px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--sub)}
+  .opt.on{border-color:var(--ink);color:var(--ink);font-weight:800}
+  .buy-bar{position:sticky;bottom:0;display:flex;gap:9px;padding:10px 16px 14px;
+    background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line)}
+  .buy-bar .wish{width:48px;height:48px;border:1.5px solid var(--line);border-radius:13px;display:grid;place-items:center}
+  .buy-bar .cta{flex:1;background:var(--ink);color:#fff;font-size:14.5px;font-weight:800;border-radius:13px}
+
+  /* ============ 반응형 — ScreenSpec 훅 (미디어쿼리 대신) ============ */
+  .pc-only{display:none}
+  .sl-pc-note{display:none}
+  .ss-pc .topbar{padding:18px 40px 14px;gap:28px;flex-wrap:nowrap}
+  .ss-pc .topbar .searchbar{order:1;width:auto;flex:1;max-width:520px;margin:0 auto}
+  .ss-pc .top-icons{order:2;margin-left:0}
+  .ss-pc .hero{margin:6px 40px;aspect-ratio:32/10}
+  .ss-pc .slide h2{font-size:30px}
+  .ss-pc .cats{grid-template-columns:repeat(8,1fr);padding:26px 40px 8px}
+  .ss-pc section.blk{padding:30px 40px 6px}
+  .ss-pc .deal-scroll{gap:16px}
+  .ss-pc .dealcard{flex:1;width:auto;min-width:0}
+  .ss-pc .grid{grid-template-columns:repeat(4,1fr);gap:24px 16px}
+  .ss-pc .rank-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 40px}
+  .ss-pc .tabbar{display:none}
+  .ss-pc .pc-only{display:flex}
+  .pc-footer{justify-content:center;gap:26px;padding:26px 0 34px;border-top:1px solid var(--line);
+    margin-top:26px;font-size:12px;color:var(--faint);font-weight:600}
+  .ss-pc .coupon{margin:14px 40px 0}
+  .ss-pc .pdp-wrap{display:grid;grid-template-columns:1fr 1fr;gap:36px;padding:10px 40px;align-items:start}
+  .ss-pc .pdp-hero{margin:0}
+  .ss-pc .buy-bar{position:static;border:0;padding:16px 0 0}
+  .ss-pc .pdp-top{padding:14px 40px}
+
+  /* ---- 전역 오버레이 (시트 밖, ScreenSpec z-스케일 9500+) ---- */
+  #couponSheet{position:fixed;inset:0;background:rgba(17,17,17,.44);display:none;align-items:flex-end;justify-content:center;z-index:9510}
+  #couponSheet.open{display:flex}
+  #couponSheet .panel{background:#fff;border-radius:18px 18px 0 0;padding:22px 20px 26px;width:100%;max-width:440px}
+  #couponSheet h3{font-size:16px;font-weight:800;margin:0 0 4px}
+  #couponSheet p{font-size:12.5px;color:var(--sub);margin:0 0 16px}
+  .coupon-card{border:1.5px dashed var(--sale);border-radius:13px;padding:14px 16px;display:flex;align-items:center;margin-bottom:14px}
+  .coupon-card b{font-size:19px;color:var(--sale)}
+  .coupon-card span{font-size:11.5px;color:var(--sub);margin-left:8px}
+  #couponSheet .ok{width:100%;background:var(--ink);color:#fff;font-weight:800;font-size:14px;border-radius:12px;padding:13px}
+  #toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(16px);opacity:0;z-index:9500;
+    background:var(--ink);color:#fff;font-size:12.5px;font-weight:700;padding:9px 18px;border-radius:99px;
+    transition:all .25s;pointer-events:none;white-space:nowrap}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ==================== 화면 1: 홈 ==================== -->
+<div data-ss-screen="SCR-MOA-HOME-001">
+
+  <div class="topbar" data-spec="1">
+    <div class="logo" aria-label="MOA">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect x="1" y="1" width="24" height="24" rx="8" fill="#141414"/>
+        <path d="M7 18V9.2L13 14l6-4.8V18" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="wm">MOA<i>.</i></span>
+    </div>
+    <div class="searchbar" data-spec="2">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#A6A5A0" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input placeholder="어떤 상품을 찾으세요?" maxlength="30">
+    </div>
+    <div class="top-icons">
+      <button class="icon-btn" aria-label="알림" onclick="toast('데모: 알림함으로 이동합니다')">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.9"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg>
+      </button>
+      <button class="icon-btn" aria-label="장바구니" onclick="toast('데모: 장바구니로 이동합니다')">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.9"><path d="M6 7h13l-1.5 9h-10L5.2 4H3"/><circle cx="9" cy="20" r="1.4" fill="#141414"/><circle cx="16" cy="20" r="1.4" fill="#141414"/></svg>
+        <span class="cart-badge">2</span>
+      </button>
+    </div>
+  </div>
+
+
+  <div class="hero" data-spec="3">
+    <div class="slides" id="slides">
+      <div class="slide"><div class="tag">NEW SEASON</div><h2>계절이 바뀌는 순간,<br>옷장도 함께</h2></div>
+      <div class="slide"><div class="tag">HOME &amp; LIVING</div><h2>매일 쓰는 것일수록<br>좋은 것으로</h2></div>
+      <div class="slide"><div class="tag">UP TO 40%</div><h2>이번 주말,<br>가장 큰 폭의 세일</h2></div>
+    </div>
+    <div class="dots" id="dots"><i class="on"></i><i></i><i></i></div>
+  </div>
+
+  <div class="cats" data-spec="4">
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">👕</span><span>의류</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">👟</span><span>신발</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">🏠</span><span>리빙</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">💄</span><span>뷰티</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">🎧</span><span>테크</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">🥂</span><span>푸드</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">🧸</span><span>키즈</span></button>
+    <button class="cat" onclick="toast('데모: 카테고리로 이동합니다')"><span class="ic">🎁</span><span>기프트</span></button>
+  </div>
+
+  <section class="blk" data-spec="5">
+    <div class="sec-head">
+      <h3>오늘의 딜</h3>
+      <span class="timer" id="timer">03:59:59</span>
+      <span class="more">전체보기</span>
+    </div>
+    <div class="deal-scroll" id="dealScroll"></div>
+  </section>
+
+  <div class="coupon" data-spec="6">
+    <div class="txt"><b>첫 구매 15% 쿠폰</b><span>오늘 자정까지 · 전 상품 적용</span></div>
+    <button class="get" id="couponGet">받기</button>
+  </div>
+
+  <section class="blk" data-spec="7">
+    <div class="sec-head"><h3>실시간 랭킹</h3><span class="more">전체보기</span></div>
+    <div class="rank-list" id="rankList"></div>
+  </section>
+
+  <section class="blk" data-spec="8">
+    <div class="sec-head"><h3>취향 추천</h3></div>
+    <div class="grid" id="recoGrid"></div>
+  </section>
+
+  <div class="pc-only pc-footer">이용약관 · 개인정보처리방침 · 고객센터 · 입점문의</div>
+
+  <div class="tabbar" data-spec="9">
+    <button class="tab on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>홈</button>
+    <button class="tab" onclick="toast('데모: 카테고리 탭')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>카테고리</button>
+    <button class="tab" onclick="toast('데모: 찜 탭')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.7-9 9-9 9Z"/></svg>찜</button>
+    <button class="tab" onclick="toast('데모: 마이 탭')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>마이</button>
+  </div>
+</div>
+
+<!-- ==================== 화면 2: 상품 상세 ==================== -->
+<div data-ss-screen="SCR-MOA-PDP-002" style="display:none">
+  <div class="pdp-top">
+    <button class="back" data-spec="1" onclick="goHome()" aria-label="뒤로가기">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.2"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <span class="ttl">상품 상세</span>
+  </div>
+  <div class="pdp-wrap">
+    <div class="pdp-hero" data-spec="2" id="pdpHero"><span class="nm" id="pdpHeroNm"></span>
+      <button class="heart" id="pdpHeart" aria-label="찜">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2"><path d="M12 20s-7-4.3-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.7-9 9-9 9Z"/></svg>
+      </button>
+    </div>
+    <div>
+      <div class="pdp-info" data-spec="3">
+        <div class="brand">MOA ORIGINAL</div>
+        <h2 id="pdpName">—</h2>
+        <div class="price-row"><span class="pct" id="pdpPct">—</span><span class="now" id="pdpPrice">—</span><span class="was" id="pdpWas">—</span></div>
+      </div>
+      <div class="opts" data-spec="4">
+        <label>옵션 선택 *</label>
+        <div class="optrow" id="optRow">
+          <button class="opt on">S</button><button class="opt">M</button><button class="opt">L</button>
+        </div>
+      </div>
+      <div class="buy-bar" data-spec="5">
+        <button class="wish" onclick="toast('찜 목록에 담았어요')" aria-label="찜">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2"><path d="M12 20s-7-4.3-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.7-9 9-9 9Z"/></svg>
+        </button>
+        <button class="cta" id="buyBtn">장바구니 담기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 전역 오버레이 (ScreenSpec 밖) -->
+<div id="couponSheet" data-ss-ignore onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="panel">
+    <h3>첫 구매 쿠폰</h3>
+    <p>오늘 자정까지 · 최소 주문 금액 없음</p>
+    <div class="coupon-card"><b>15%</b><span>전 상품 할인</span></div>
+    <button class="ok" onclick="document.getElementById('couponSheet').classList.remove('open');toast('쿠폰이 발급되었어요')">쿠폰 받기</button>
+  </div>
+</div>
+<div id="toast" data-ss-ignore></div>
+
+<script>
+/* ==================== MOA 데모 앱 ==================== */
+const PALETTE = [
+  ["#5B6653","#8A9478"], ["#54607A","#8593AC"], ["#7A5B48","#B08D74"],
+  ["#4E4A5C","#847E9B"], ["#6B4F51","#A48082"], ["#44554E","#7C948B"],
+  ["#5C5648","#968E78"], ["#3E4A54","#728694"]
+];
+const PRODUCTS = [
+  { id:0, name:"릴렉스드 코튼 셔츠",   pct:32, price:38800, was:56900, rating:4.8, reviews:1204, tag:"SHIRT" },
+  { id:1, name:"세라믹 머그 2P 세트",  pct:20, price:19800, was:24800, rating:4.9, reviews:867,  tag:"MUG" },
+  { id:2, name:"라이트 러너 스니커즈", pct:41, price:52900, was:89900, rating:4.7, reviews:2310, tag:"SHOES", soldout:true },
+  { id:3, name:"린넨 블렌드 팬츠",     pct:25, price:44200, was:58900, rating:4.6, reviews:540,  tag:"PANTS" },
+  { id:4, name:"미니 크로스백",        pct:15, price:33900, was:39900, rating:4.8, reviews:1522, tag:"BAG" },
+  { id:5, name:"논슬립 요가 매트",     pct:30, price:27300, was:39000, rating:4.9, reviews:3018, tag:"MAT" },
+  { id:6, name:"스테인리스 텀블러",    pct:18, price:22900, was:27900, rating:4.7, reviews:955,  tag:"BOTTLE" },
+  { id:7, name:"울 블렌드 가디건",     pct:35, price:61700, was:94900, rating:4.8, reviews:433,  tag:"KNIT" }
+];
+const fmt = (n) => n.toLocaleString("ko-KR") + "원";
+const grad = (i) => `linear-gradient(140deg,${PALETTE[i%PALETTE.length][0]},${PALETTE[i%PALETTE.length][1]})`;
+
+function heartSvg(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2"><path d="M12 20s-7-4.3-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.7-9 9-9 9Z"/></svg>'; }
+function card(p, cls){
+  return `<button class="${cls}${p.soldout ? " soldout" : ""}" data-pid="${p.id}">
+    <div class="thumb" style="background:${grad(p.id)}"><span class="nm">${p.tag}</span>
+      <span class="heart" data-heart>${heartSvg()}</span>
+      <span class="off">${p.pct}%</span>
+    </div>
+    <div class="p-name">${p.name}</div>
+    <div class="p-price"><span class="pct">${p.pct}%</span>${fmt(p.price)}</div>
+    ${cls === "gcard" ? `<div class="rating">★ <b>${p.rating}</b> · 리뷰 ${p.reviews.toLocaleString()}</div>` : ""}
+  </button>`;
+}
+document.getElementById("dealScroll").innerHTML = PRODUCTS.slice(0,4).map(p=>card(p,"dealcard")).join("");
+document.getElementById("recoGrid").innerHTML  = PRODUCTS.slice(4,8).map(p=>card(p,"gcard")).join("");
+document.getElementById("rankList").innerHTML = PRODUCTS.slice(0,4).map((p,i)=>`
+  <button class="rankrow" data-pid="${p.id}">
+    <span class="no">${i+1}</span>
+    <span class="rthumb" style="background:${grad(p.id)}"><span>${p.tag}</span></span>
+    <span class="info"><span class="nm">${p.name}</span><br><span class="pr">${fmt(p.price)}</span></span>
+    <span class="delta">▲ ${3-i>0?3-i:1}</span>
+  </button>`).join("");
+
+/* 캐러셀 — 3.5초 자동, 인디케이터 */
+let slide = 0;
+setInterval(() => {
+  slide = (slide + 1) % 3;
+  document.getElementById("slides").style.transform = `translateX(-${slide*100}%)`;
+  [...document.getElementById("dots").children].forEach((d,i)=>d.classList.toggle("on", i===slide));
+}, 3500);
+
+/* 타임딜 카운트다운 */
+let remain = 3*3600 + 59*60 + 59;
+setInterval(() => {
+  remain = Math.max(0, remain - 1);
+  const h = String(Math.floor(remain/3600)).padStart(2,"0");
+  const m = String(Math.floor(remain%3600/60)).padStart(2,"0");
+  const s = String(remain%60).padStart(2,"0");
+  document.getElementById("timer").textContent = remain ? `${h}:${m}:${s}` : "오늘 딜 종료";
+}, 1000);
+
+/* 토스트 */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"), 1700);
+}
+
+/* 쿠폰 바텀시트 */
+document.getElementById("couponGet").onclick = (e)=>{ e.stopPropagation(); document.getElementById("couponSheet").classList.add("open"); };
+
+/* 찜 토글 + 카드 → 상세 이동 (위임) */
+document.addEventListener("click", (e)=>{
+  const heart = e.target.closest("[data-heart]");
+  if (heart) { e.stopPropagation(); heart.classList.toggle("on"); return; }
+  const pcard = e.target.closest("[data-pid]");
+  if (pcard) goPdp(Number(pcard.dataset.pid));
+});
+
+/* 화면 전환 (표시/숨김 — ScreenSpec이 자동 감지) */
+function goPdp(id){
+  const p = PRODUCTS[id] || PRODUCTS[0];
+  document.getElementById("pdpName").textContent = p.name;
+  document.getElementById("pdpPct").textContent = p.pct + "%";
+  document.getElementById("pdpPrice").textContent = fmt(p.price);
+  document.getElementById("pdpWas").textContent = fmt(p.was);
+  document.getElementById("pdpHero").style.background = grad(p.id);
+  document.getElementById("pdpHeroNm").textContent = p.tag;
+  document.querySelector('[data-ss-screen="SCR-MOA-HOME-001"]').style.display = "none";
+  document.querySelector('[data-ss-screen="SCR-MOA-PDP-002"]').style.display = "";
+  scrollTo(0,0);
+}
+function goHome(){
+  document.querySelector('[data-ss-screen="SCR-MOA-PDP-002"]').style.display = "none";
+  document.querySelector('[data-ss-screen="SCR-MOA-HOME-001"]').style.display = "";
+}
+document.getElementById("pdpHeart").onclick = function(e){ e.stopPropagation(); this.classList.toggle("on"); };
+document.getElementById("optRow").addEventListener("click",(e)=>{
+  const o = e.target.closest(".opt"); if(!o) return;
+  document.querySelectorAll("#optRow .opt").forEach(x=>x.classList.remove("on"));
+  o.classList.add("on");
+});
+document.getElementById("buyBtn").onclick = ()=>toast("장바구니에 담았어요 · 2개");
+</script>
+
+<!-- ==================== ScreenSpec 적용 ==================== -->
+<script>
+window.SCREENSPEC = {
+  mode: "wrap",
+  screens: [
+    {
+      id: "SCR-MOA-HOME-001", name: "홈", path: ["홈"],
+      root: '[data-ss-screen="SCR-MOA-HOME-001"]',
+      specs: [
+        { n:1, target:"1", anno:"box", title:"상단 바", defs:[
+          { t:"로고 + 알림·장바구니 아이콘 상시 노출" },
+          { t:"장바구니 뱃지 = 담긴 수량, 최대 99+ 표기", subs:[
+            "수량 0이면 뱃지 미노출"]}]},
+        { n:2, target:"2", anno:"input", title:"검색창", defs:[
+          { t:"플레이스홀더 \"어떤 상품을 찾으세요?\" 고정" },
+          { t:"입력 최대 30자 · 자동완성은 2자부터 표시", subs:[
+            "빈 검색어 엔터 시 무반응 — 빈 결과 페이지 진입 방지"]}]},
+        { n:3, target:"3", anno:"motion", title:"히어로 배너", defs:[
+          { t:"3장 캐러셀 · 3.5초 자동 슬라이드, 0.45초 이징 전환" },
+          { t:"인디케이터 좌하단, 현재 장은 길게 확장" }]},
+        { n:4, target:"4", anno:"box", title:"카테고리", defs:[
+          { t:"8종 고정 노출 · 탭 시 해당 카테고리 목록 이동" }]},
+        { n:5, target:"5", anno:"state", title:"오늘의 딜", defs:[
+          { t:"카운트다운 HH:MM:SS · 1초 단위 갱신" },
+          { t:"상품 4개 가로 스크롤 · 할인율 뱃지 좌상단", subs:[
+            "마감(00:00:00) 시 타이머를 \"오늘 딜 종료\"로 교체",
+            "재고 소진 상품은 카드 흐림 + \"품절\" 오버레이"]}]},
+        { n:6, target:"6", anno:"popup", title:"쿠폰 배너",
+          play:{ selector:"#couponGet", label:"팝업 열기 — 쿠폰 바텀시트" }, defs:[
+          { t:"첫 구매 15% 쿠폰 · [받기] 클릭 시 바텀시트 표시" },
+          { t:"시트 바깥 탭으로 닫힘", subs:[
+            "이미 발급받은 사용자에겐 배너 미노출"]}]},
+        { n:7, target:"7", anno:"box", title:"실시간 랭킹", defs:[
+          { t:"판매량 기준 상위 4개 · 10분 주기 갱신" },
+          { t:"순위 변동(▲N) 전일 대비 표기" }]},
+        { n:8, target:"8", anno:"flow", title:"취향 추천 그리드", flowTo:"SCR-MOA-PDP-002",
+          play:{ selector:"#recoGrid [data-pid]", label:"이동 — 상품 상세" }, defs:[
+          { t:"개인화 추천 4개 · 2열 그리드 (PC 4열)" },
+          { t:"카드 탭 시 상품 상세로 이동" },
+          { t:"별점·리뷰 수 노출 — 리뷰 0건이면 미표기" }]},
+        { n:9, target:"9", anno:"box", title:"하단 탭바", defs:[
+          { t:"홈·카테고리·찜·마이 4탭 고정" },
+          { t:"현재 탭 진한 색 활성 표시 · PC에서는 미노출" }]}
+      ]
+    },
+    {
+      id: "SCR-MOA-PDP-002", name: "상품 상세", path: ["홈","상품 상세"],
+      root: '[data-ss-screen="SCR-MOA-PDP-002"]',
+      specs: [
+        { n:1, target:"1", anno:"flow", title:"뒤로가기", flowTo:"SCR-MOA-HOME-001",
+          play:{ selector:".back", label:"이동 — 홈" }, defs:[
+          { t:"탭 시 홈으로 복귀 · 스크롤 위치는 초기화" }]},
+        { n:2, target:"2", anno:"arrow", title:"상품 이미지 + 찜", defs:[
+          { t:"1:1 대표 이미지 · 우상단 찜 하트" },
+          { t:"찜 탭 즉시 토글 + 0.2초 팝 모션 — 서버 왕복 없음" }]},
+        { n:3, target:"3", anno:"box", title:"상품 정보", defs:[
+          { t:"브랜드 라벨 + 상품명 + 할인율·판매가·정가(취소선)" },
+          { t:"가격은 목록에서 탭한 상품 데이터로 채움" }]},
+        { n:4, target:"4", anno:"input", title:"옵션 선택", defs:[
+          { t:"사이즈 S·M·L 단일 선택 (필수)", subs:[
+            "미선택 상태로 구매 시도 시 옵션 영역으로 스크롤 + 강조"]}]},
+        { n:5, target:"5", anno:"action", title:"구매 바",
+          play:{ selector:"#buyBtn", label:"동작 재생 — 장바구니 담기" }, defs:[
+          { t:"하단 고정 · 찜 버튼 + [장바구니 담기]" },
+          { t:"담기 성공 시 토스트 + 상단 장바구니 뱃지 수량 증가" }]}
+      ]
+    }
+  ]
+};
+</script>
+<script src="../screenspec.js"></script>
+</body>
+</html>

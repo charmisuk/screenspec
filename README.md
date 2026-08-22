@@ -2,7 +2,7 @@
 
 **프로토타입 자체가 화면정의서가 되는 오버레이.**
 
-▶ **[라이브 데모 바로가기](https://charmisuk.github.io/screenspec/examples/demo.html)**
+▶ **[라이브 데모 바로가기](https://charmisuk.github.io/screenspec/examples/shop.html)** — 모바일·PC 모두 지원
 
 | 프로토타입 모드 | 화면정의서 모드 |
 |---|---|
@@ -121,7 +121,8 @@ window.SCREENSPEC = {
 
 대표 데모는 위 하나로 충분하다. 아래는 적용 코드를 볼 때 여는 참고용:
 
-- [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — wrap 단일 화면 (기능 전부, 10항목)
+- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — **대표 데모**: 이커머스 2화면 (홈·상세), anno 8타입 전부 시연, PC 반응형 훅
+- [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — wrap 단일 화면 (콘텐츠형 페이지, 10항목)
 - [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — wrap 다중 화면 + flow·popup
 - [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — overlay 모드 (React·Next 적용과 같은 구조)
 
