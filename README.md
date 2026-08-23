@@ -156,7 +156,9 @@ node tests/lint.js  # 문법·버전 정합·문서 드리프트 (의존성 없�
 node tests/e2e.js   # 브라우저 회귀 (playwright 필요)
 ```
 
-모든 push·PR·태그에서 GitHub Actions가 둘 다 돌린다. CI가 빨간 상태로는 릴리스하지 않는다.
+백로그(GitHub 이슈 ↔ Notion 보드) 싱크 검사는 `node scripts/backlog-sync.js` — 토큰이 필요해 로컬에서만 돈다.
+
+모든 push·PR·태그에서 GitHub Actions가 lint·e2e 둘 다 돌린다. CI가 빨간 상태로는 릴리스하지 않는다.
 문서도 검사 대상이다: 이 README의 빠른 시작 예제는 CI가 실제로 실행해보고, 설정 필드가 레퍼런스에서 빠지면 실패한다.
 
 버그·요청은 [이슈](https://github.com/charmisuk/screenspec/issues)로. 변경 이력은 [CHANGELOG.md](CHANGELOG.md).
