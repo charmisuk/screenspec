@@ -1,7 +1,10 @@
 # ScreenSpec 적용 스킬 (AI 하네스)
 
 > 이 문서는 사람용 설명서가 아니라 **AI(Claude 등)가 프로토타입에 ScreenSpec를 적용할 때 따르는 작업 지시서**다.
-> 사용자가 "스펙레이어 적용해줘", "화면정의서 붙여줘"라고 하면 이 순서대로 실행한다.
+> 사용자가 "스크린스펙 적용해줘", "화면정의서 붙여줘"라고 하면 이 순서대로 실행한다.
+>
+> - 설정 필드의 타입·기본값·필수 여부: [docs/config.md](docs/config.md) (전체 레퍼런스)
+> - 라이브러리 저장소 자체를 고치는 규칙: [AGENTS.md](AGENTS.md)
 
 ## 목표
 
@@ -82,7 +85,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.11.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.12.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -95,7 +98,7 @@ import Script from "next/script";
 **앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 
 **screenspec.js 로드** (`</body>` 직전, 프로토타입 자체 스크립트보다 뒤):
-- 기본 = CDN 한 줄. 자동 최신 `@0` (CI 통과 릴리스만 흘러옴) 또는 박제 `@v0.11.0`
+- 기본 = CDN 한 줄. 자동 최신 `@0` (CI 통과 릴리스만 흘러옴) 또는 박제 `@v0.12.0`
   `<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>`
 - 오프라인·CDN 차단 환경만 파일 복사: `screenspec.js`를 프로토타입 옆에 두고 `<script src="./screenspec.js"></script>`
 
@@ -161,6 +164,7 @@ import Script from "next/script";
 | 증상 | 원인·조치 |
 |---|---|
 | 아무것도 안 뜸 | 콘솔에 [ScreenSpec] 로드 메시지가 있는지 확인. 없으면 스크립트 로드 실패 — CDN 차단 환경이면 screenspec.js 파일 복사 후 상대경로 로드 |
+| "설정이 없습니다" 카드 | window.SCREENSPEC 설정이 없거나 screens·screen·specs가 모두 비어 있음. 이 상태에서는 페이지를 감싸지 않고 안내만 띄운다 |
 | 마커가 안 보임 | 콘솔 경고 확인: "data-spec 요소를 못 찾은 정의 N건" — 해당 화면 JSX/HTML에 data-spec 속성 누락. 마커는 화면정의서 모드에서만 보인다 |
 | 헤더가 "정의되지 않은 화면" | 현재 라우트가 screens에 없음 — 해당 route를 screens에 추가 (정상 동작이며 커버리지 갭 표시용) |
 | 화면 전환이 감지 안 됨 | 라우트 기반이 아니면 root 셀렉터 방식 사용, 그것도 안 되면 내비 코드에 window.ScreenSpec.setScreen(id) 한 줄 |

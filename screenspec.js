@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.11 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.12 — 프로토타입 자체가 화면정의서가 되는 오버레이
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
@@ -682,7 +682,32 @@
     return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render };
   }
 
+  /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
+     이때 남의 페이지를 시트로 감싸면 "망가졌다"로 읽히므로, DOM은 그대로 두고 안내 카드만 띄운다. */
+  const DOCS_URL = "https://github.com/charmisuk/screenspec#빠른-시작-2분";
+  function setupNotice() {
+    console.warn("[ScreenSpec] 설정(window.SCREENSPEC)이 없어 화면정의서를 만들 수 없습니다. 복붙용 최소 예제: " + DOCS_URL);
+    const card = h("div", { "data-ss-ignore": "" });
+    card.style.cssText = "position:fixed;left:16px;bottom:16px;z-index:2147483060;max-width:330px;" +
+      "background:#fff;color:#191919;border:1px solid #D3D1CB;border-radius:12px;padding:14px 34px 14px 16px;" +
+      "box-shadow:0 10px 30px rgba(17,24,39,.18);font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    card.innerHTML = '<b style="display:block;font-size:13.5px;margin-bottom:4px">ScreenSpec: 설정이 없습니다</b>' +
+      '<span style="color:#50524E">스크립트는 로드됐습니다. 화면 ID와 기능 설명을 담은 ' +
+      '<code style="font-size:12px">window.SCREENSPEC</code> 설정을 추가하세요.</span>' +
+      '<a href="' + DOCS_URL + '" target="_blank" rel="noopener" ' +
+      'style="display:inline-block;margin-top:9px;color:#191919;font-weight:700;text-decoration:underline">복붙용 최소 예제 열기 →</a>' +
+      '<button aria-label="닫기" style="position:absolute;top:6px;right:6px;border:0;background:none;' +
+      'color:#9B9A97;font-size:14px;cursor:pointer;line-height:1;padding:6px">✕</button>';
+    card.querySelector("button").onclick = () => card.remove();
+    document.body.appendChild(card);
+  }
+
   function boot() {
+    /* 설정 유무 판정 — screens·screen·specs 중 하나라도 있으면 "설정함"으로 본다 */
+    if (!(RAW.screens && RAW.screens.length) && !RAW.screen && !(RAW.specs && RAW.specs.length)) {
+      setupNotice();
+      return;
+    }
     /* 설정 자가 진단 — ID는 자유 형식(불투명 문자열)이지만, 깨진 참조는 조용히 오동작하므로 경고 */
     const seen = {};
     SCREENS.forEach((s) => {
@@ -754,7 +779,7 @@
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.11</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.12</div>
         </aside>
       </div>`);
 
@@ -922,7 +947,7 @@
 
     core.setCurrent(SCREENS[0]);
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
-    console.info("[ScreenSpec v0.11] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.12] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -939,7 +964,7 @@
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.11</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.12</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -1054,7 +1079,7 @@
 
     core.setCurrent(SCREENS[0]);
     detectScreen();
-    console.info("[ScreenSpec v0.11] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.12] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

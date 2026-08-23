@@ -1,0 +1,25 @@
+# ScreenSpec
+
+> HTML 프로토타입에 script 한 줄을 붙여 화면정의서(screen specification)로 바꾸는 단일 파일 바닐라 JS 라이브러리. 의존성·빌드 없음, MIT. 설명할 영역에 `data-spec` 번호를 붙이고 `window.SCREENSPEC` 설정에 화면 메타와 기능 설명을 적으면, 프로토타입이 "프로토타입 / 화면정의서" 두 모드를 갖는다. 정의서 모드에서도 프로토타입은 동작하며, 화면이 바뀌면 문서도 따라간다. wrap 모드(단일 HTML)와 overlay 모드(React·Next 등, DOM 불변·라우트 기반)를 지원한다.
+
+## 문서
+
+- [README](https://github.com/charmisuk/screenspec/blob/main/README.md): 개요·복붙 가능한 빠른 시작 예제·두 모드·자주 막히는 곳
+- [SKILL.md](https://github.com/charmisuk/screenspec/blob/main/SKILL.md): **AI가 사용자 프로토타입에 적용할 때의 작업 지시서.** 화면 ID 규칙, data-spec 부여, 설정 작성, 설명 텍스트 룰, anno 타입 선택, 자가 검증
+- [설정 레퍼런스](https://github.com/charmisuk/screenspec/blob/main/docs/config.md): 전체 필드의 타입·기본값·필수 여부, HTML 속성, JS API, CSS 훅, 콘솔 경고
+- [AGENTS.md](https://github.com/charmisuk/screenspec/blob/main/AGENTS.md): 라이브러리 저장소 자체를 수정할 때의 규칙
+- [CHANGELOG](https://github.com/charmisuk/screenspec/blob/main/CHANGELOG.md): 버전별 변경 이력
+
+## 코드·예제
+
+- [screenspec.js](https://github.com/charmisuk/screenspec/blob/main/screenspec.js): 라이브러리 전체 (단일 파일)
+- [examples/shop.html](https://github.com/charmisuk/screenspec/blob/main/examples/shop.html): 대표 예제. 이커머스 2화면, anno 8타입 전부
+- [examples/overlay-spa.html](https://github.com/charmisuk/screenspec/blob/main/examples/overlay-spa.html): overlay 모드 적용 예
+
+## 설치
+
+CDN 한 줄로 끝난다. 자동 최신은 `@0`, 버전 고정은 `@vX.Y.Z`.
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>
+```

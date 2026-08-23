@@ -1,160 +1,172 @@
 # ScreenSpec
 
-**프로토타입 자체가 화면정의서가 되는 오버레이.**
+**HTML 프로토타입에 `<script>` 한 줄을 붙여 화면정의서로 바꾸는 단일 파일 라이브러리.**
+캡처 떠서 노션·컨플루언스에 번호 붙이고 설명 다는 작업을 없앤다.
 
-▶ **[라이브 데모 바로가기](https://charmisuk.github.io/screenspec/examples/shop.html)** — 모바일·PC 모두 지원
+[![MIT](https://img.shields.io/badge/license-MIT-black)](LICENSE) [![CDN](https://img.shields.io/badge/CDN-jsDelivr-orange)](https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js) [![CI](https://github.com/charmisuk/screenspec/actions/workflows/ci.yml/badge.svg)](https://github.com/charmisuk/screenspec/actions/workflows/ci.yml)
+
+▶ **[라이브 데모 열기](https://charmisuk.github.io/screenspec/examples/shop.html)** · 상단 "화면정의서" 버튼을 눌러보면 된다
 
 | 프로토타입 모드 | 화면정의서 모드 |
 |---|---|
 | ![프로토타입 모드](docs/shot-proto.png) | ![화면정의서 모드](docs/shot-doc.png) |
 
-| 화면 목록 (헤더의 화면 ID 칩 클릭 → 트리) |
-|---|
-| ![화면 목록 트리](docs/shot-toc.png) |
+- **단일 파일 · 의존성 0** — `<script>` 한 줄. 빌드·설치·계정 없음
+- **프로토타입은 살아 있다** — 정의서 모드에서도 버튼이 눌리고 화면이 넘어간다
+- **화면이 바뀌면 문서도 따라간다** — 헤더·기능 설명·목차가 자동 전환
+- **React·Next도 지원** — DOM을 건드리지 않는 오버레이 모드 (GA 스니펫 원리)
+- **AI가 대신 붙인다** — [SKILL.md](SKILL.md)를 읽히면 번호·설명까지 알아서
+- **MIT** — 개인·상업 자유
 
-AI로 만든 프로토타입 HTML에 스크립트 하나를 얹으면, 같은 파일이 두 모드를 갖는다:
+## 이게 나한테 필요한가
 
-| 모드 | 내용 |
-|---|---|
-| **프로토타입** | 원본 그대로. 시연·데모용 |
-| **화면정의서** | 화면 ID·화면명·화면 경로 헤더 + 좌측 축소 미리보기(번호 마커) + 우측 기능 설명(노션풍 불렛) |
+**맞는 경우**
 
-캡처 떠서 노션·컨플루언스에 번호 붙이고 설명 다는 작업이 사라진다.
-마커 ↔ 기능 설명 양방향 연결, 클릭한 영역 바운더리 강조.
-**화면정의서 모드에서도 프로토타입은 살아 있다** — 버튼이 동작하고, 화면이 바뀌면 헤더·기능 설명가 자동으로 따라간다.
+- AI(Claude 등)로 프로토타입 HTML을 만들고, 그걸 개발자에게 넘길 화면정의서가 따로 필요한 기획자
+- 프로토타입을 고칠 때마다 문서 캡처를 다시 뜨는 게 반복 작업이라고 느끼는 사람
+- 문서와 실물이 어긋나는 게 싫은 사람 (여기선 문서가 곧 실물이다)
 
-## 시작하기
+**안 맞는 경우**
 
-**방법 A — CDN 한 줄 (public 레포, 회사 프로토타입에 붙일 때):**
+- 아직 프로토타입이 없다 → 이 도구는 **이미 있는 HTML에 얹는** 물건이다. 프로토타입부터 만들어야 한다
+- 피그마 시안에 주석을 달고 싶다 → 피그마 코멘트나 Zeplin이 맞다
+- 실서비스에 상시 켜둘 리뷰 도구가 필요하다 → BugHerd·Vercel Toolbar 같은 상용 도구가 맞다
+- 여러 명이 코멘트로 토론해야 한다 → 아직 없다 ([로드맵](#로드맵))
 
-```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.11.0/screenspec.js"></script>
-```
+## 빠른 시작 (2분)
 
-주소 선택 — 용도에 따라:
-
-- 박제(산출물 보존): `@v0.11.0` — 그 시점 그대로 영원히
-- **자동 최신(권장)**: `@0` — 정식 릴리스(태그)가 나올 때마다 자동 반영. CI 통과본만 흘러온다
+아래를 통째로 복사해 `test.html`로 저장하고 브라우저로 열면 끝이다. 설치할 것은 없다.
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>
+<!doctype html>
+<html lang="ko">
+<body>
+  <header data-spec="1">
+    <h1>주간 리포트</h1>
+    <p>8월 3주차</p>
+  </header>
+  <button id="save" data-spec="2" onclick="this.textContent='저장됨'">저장</button>
+
+  <script>
+  window.SCREENSPEC = {
+    screen: { id: "SCR-RPT-001", name: "주간 리포트", path: ["홈", "리포트"] },
+    specs: [
+      { n: 1, target: "1", anno: "box", title: "상단 헤더", defs: [
+        { t: "리포트 제목 + 조회 기간 표시" },
+        { t: "기간은 이번 주 월요일 기준 자동 계산" }
+      ]},
+      { n: 2, target: "2", anno: "action", title: "저장 버튼",
+        play: { selector: "#save", label: "동작 재생: 저장" }, defs: [
+        { t: "탭 시 저장 후 버튼 문구가 '저장됨'으로 변경", subs: ["미입력 항목이 있으면 저장 차단"] }
+      ]}
+    ]
+  };
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>
+</body>
+</html>
 ```
 
-**방법 B — 파일 복사 (오프라인·사내망):**
+이 코드가 하는 일:
 
-1. 이 저장소를 클론하거나 `screenspec.js` 파일을 받는다
-2. 프로토타입을 만든 AI(Claude 등)에게:
+1. 설명할 영역에 `data-spec="1"`, `data-spec="2"` 번호를 붙였다
+2. `window.SCREENSPEC`에 화면 정보(ID·화면명·경로)와 번호별 설명을 적었다
+3. 마지막 줄이 라이브러리다. 열면 상단에 **프로토타입 / 화면정의서** 토글이 생긴다
 
-```
-이 프로토타입에 ScreenSpec를 적용해줘.
-규칙: (클론 폴더)/SKILL.md 를 읽고 그대로 따라줘.
-screenspec.js는 프로토타입 파일 옆에 복사해서 상대경로로 로드해줘.
-```
+화면정의서 모드로 바꾸면 영역에 번호 마커가 붙고 오른쪽에 기능 설명이 나온다.
+2번 항목의 **▶ 동작 재생**을 누르면 실제로 저장 버튼이 눌린다.
 
-AI가 SKILL.md의 하네스(화면 ID 규칙, 기능 설명 작성 룰, anno 타입 선택)를 따라 알아서 심는다.
+**주소 선택**: `@0`은 정식 릴리스가 나올 때마다 자동 반영(권장), `@v0.12.0`처럼 태그를 박으면 그 시점 그대로 고정된다.
+사내망·오프라인이면 [`screenspec.js`](screenspec.js) 파일을 받아 `<script src="./screenspec.js">`로 로드하면 된다.
 
-## 수동 적용
+## 두 가지 모드
 
-```html
-<!-- 1. 주요 영역에 번호 부여 -->
-<div class="hero" data-spec="1">...</div>
-
-<!-- 2. body 끝에 설정 + 스크립트 -->
-<script>
-window.SCREENSPEC = {
-  screen: { id:"SCR-XXX-001", name:"화면명", path:["홈","메뉴","상세"] },
-  specs: [
-    { n:1, target:"1", anno:"box", title:"히어로 영역", defs:[
-      { t:"기능 설명 한 줄", subs:["하위 조건"] }
-    ]}
-  ]
-};
-</script>
-<script src="./screenspec.js"></script>
-```
-
-## 다중 화면 (SPA)
-
-화면이 여러 개면 `screens` 배열로. 각 화면 컨테이너에 `data-ss-screen="SCR-ID"`를 붙이면
-표시/숨김 전환을 자동 감지해 헤더·기능 설명가 따라 바뀐다. 수동 전환: `window.ScreenSpec.setScreen("SCR-ID")`.
-
-```js
-window.SCREENSPEC = {
-  screens: [
-    { id:"SCR-XXX-001", name:"목록", path:["홈","목록"],
-      root:'[data-ss-screen="SCR-XXX-001"]', specs:[...] },
-    { id:"SCR-XXX-002", name:"상세", path:["홈","목록","상세"],
-      root:'[data-ss-screen="SCR-XXX-002"]', specs:[...] }
-  ]
-};
-```
-
-## 액센트 컬러 (묶음 테마)
-
-```js
-window.SCREENSPEC = { accent: "orange", ... }  // blue(기본)·red·orange·green·purple 또는 "#7C3AED"
-```
-
-포인트 컬러 하나로 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 세트로 바뀐다.
-
-## 두 가지 모드 (자동 판별)
-
-| 모드 | 대상 | 특징 |
+| 모드 | 대상 | 붙이는 법 |
 |---|---|---|
-| `wrap` | 단일 HTML 프로토타입 | 기기 뷰포트 시뮬레이터 포함 전 기능 |
-| `overlay` | React·Next·Vue 등 프레임워크 | DOM 불변 (GA 스니펫 원리) · 라우트 기반 화면 추적 |
+| `wrap` (기본) | 단일 HTML 프로토타입 | 위 빠른 시작 그대로. 기기 뷰포트 시뮬레이터(모바일 360×800 · PC 1920×1080 + 드래그) 포함 |
+| `overlay` | React · Next · Vue 등 프레임워크 | DOM을 건드리지 않고 얹기만 한다. 화면 구분은 라우트로 |
 
-오버레이 예제: [`examples/overlay-spa.html`](examples/overlay-spa.html)
+프레임워크는 자동 감지되지만 명시가 안전하다. 화면마다 `route`를 적으면 라우트 이동을 따라 문서가 바뀐다.
 
-## anno 타입 (8종)
+```js
+window.SCREENSPEC = {
+  mode: "overlay",
+  screens: [
+    { id: "S-01", name: "대시보드", path: ["대시보드"], route: "/", specs: [] },
+    { id: "S-09", name: "이용자 명단", path: ["이용자", "명단"], route: "/members", specs: [] }
+  ]
+};
+```
 
-| 타입 | 라벨 | 용도 | 시각 동작 |
-|---|---|---|---|
-| `box` | 영역 | 기본. 영역 설명 | 바운더리 하이라이트 |
-| `arrow` | 화살표 | 작은 요소 지시 — 바깥에서 요소를 가리키는 지시선 자동 · `arrowTo`로 요소→요소 관계선 | 화살표 |
-| `input` | 입력 | 입력 필드 정책 | 하이라이트 |
-| `state` | 상태 | 조건부 표시·상태 분기 | 하이라이트 |
-| `motion` | 모션 | 애니메이션 정의 | 하이라이트 |
-| `action` | 동작 | 클릭 시 화면 내 동작 | ▶ 버튼 → 실제 동작 재생 |
-| `popup` | 팝업 | 모달·레이어 열림 | ▶ 버튼 → 실제 팝업 열림 |
-| `flow` | 이동 | 다른 화면으로 전환 | ▶ 버튼 → 실제 화면 이동 + 정의서 전환 |
+Next.js(App Router) 적용법은 [SKILL.md](SKILL.md)에 스니펫이 있다.
 
-새 타입은 `screenspec.js`의 `ANNO` 레지스트리에 한 줄 추가 (label + mech).
+## AI에게 맡기기
 
-## 기능
+이 저장소에는 AI용 작업 지시서 [SKILL.md](SKILL.md)가 들어 있다. 프로토타입을 만든 AI에게 이렇게 말하면 된다.
 
-- 모드 토글: 프로토타입 / 화면정의서
-- **화면 목록(목차)**: 정의서 헤더의 화면 ID 칩 클릭 → 트리(Figma 레이어·Notion 사이드바 패턴). 뎁스 = 들여쓰기 + 세로 가이드선, 화면이 아닌 중간 경로는 회색 그룹 행, 화면 행은 ● 이름 + ID(미정의는 ○ + "미정의"), 커버리지(N/M 정의됨), 행 클릭 이동, 최대 6뎁스 들여쓰기. 모바일은 전체 화면 시트. 화면 전환 시 "→ 화면명" 알림 토스트
-- 기기 뷰포트(wrap): 모바일 360×800 · PC 1920×1080 프리셋 + 우측/하단/코너 드래그, 프리셋 클릭 시 복귀
-- 화면정의서 모드에서 좌측 스테이지 자동 축소 배치, 마커·그립 크기는 유지
-- 반응형 훅: `.ss-pc`(≥1100px) / `.ss-narrow`(≤520px) — 미디어쿼리 대신 사용 (SKILL.md §6)
+```
+이 프로토타입에 ScreenSpec을 적용해줘.
+https://github.com/charmisuk/screenspec 의 SKILL.md를 읽고 그대로 따라줘.
+```
 
-## 예제 (개발자용 — 모드·기능별 참고 코드)
+AI가 화면 ID 규칙·번호 부여·설명 작성 룰·자가 검증까지 따른다. 에이전트용 진입점은 [AGENTS.md](AGENTS.md)·[llms.txt](llms.txt)에도 안내돼 있다.
 
-대표 데모는 위 하나로 충분하다. 아래는 적용 코드를 볼 때 여는 참고용:
+## anno 타입 8종
 
-- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — **대표 데모**: 이커머스 2화면 (홈·상세), anno 8타입 전부 시연, PC 반응형 훅
-- [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — wrap 단일 화면 (콘텐츠형 페이지, 10항목)
-- [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — wrap 다중 화면 + flow·popup
-- [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — overlay 모드 (React·Next 적용과 같은 구조)
-- [tree.html](https://charmisuk.github.io/screenspec/examples/tree.html) — 화면 목록 트리 (11화면·4뎁스·그룹·미정의 혼합)
+무엇을 표현할 수 있는지의 목록이다. 필드 상세는 [설정 레퍼런스](docs/config.md).
 
-## 테스트
+| 타입 | 언제 쓰나 |
+|---|---|
+| `box` | 기본값. 영역 설명 |
+| `arrow` | 아이콘·버튼처럼 작아서 박스가 안 보일 때 |
+| `input` | 입력 필드 정책 (글자수·형식·검증) |
+| `state` | 조건부 표시·상태 분기 (로그인 여부, 빈 상태) |
+| `motion` | 등장·전환 애니메이션 |
+| `action` | 클릭 시 화면 안에서 동작 → ▶ 실제 재생 |
+| `popup` | 클릭 시 모달·바텀시트 → ▶ 실제 열림 |
+| `flow` | 클릭 시 다른 화면으로 → ▶ 실제 이동 + 문서 동시 전환 |
 
-모든 push·PR·태그에서 GitHub Actions CI가 lint + e2e를 자동 실행한다 — CI가 빨간 상태에서는 릴리스하지 않는다.
+## 설정 레퍼런스
+
+전체 필드(타입·기본값·필수 여부)는 **[docs/config.md](docs/config.md)** 한 장에 있다.
+화면 목록 트리·액센트 컬러·CSS 훅·JS API·콘솔 경고 메시지도 여기 정리돼 있다.
+
+## 자주 막히는 곳
+
+| 증상 | 원인·조치 |
+|---|---|
+| 아무것도 안 뜬다 | 콘솔에 `[ScreenSpec]` 메시지가 있는지 확인. 없으면 스크립트 로드 실패 |
+| "설정이 없습니다" 카드가 뜬다 | 스크립트만 넣고 `window.SCREENSPEC`을 안 적은 상태. 위 빠른 시작 참고 |
+| 번호 마커가 안 보인다 | 화면정의서 모드에서만 보인다. 그래도 없으면 `data-spec` 속성 누락 (콘솔 경고 확인) |
+| 화면이 바뀌어도 문서가 그대로 | 자동 감지 실패. `root`(단일 HTML)나 `route`(프레임워크) 지정, 또는 `ScreenSpec.setScreen(id)` 호출 |
+| 프레임워크 화면이 깨진다 | wrap으로 붙은 것. `mode: "overlay"` 명시 |
+
+## 예제
+
+- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — 대표 데모. 이커머스 2화면, anno 8타입 전부, PC 반응형
+- [tree.html](https://charmisuk.github.io/screenspec/examples/tree.html) — 화면 목록 트리 (11화면·4뎁스·미정의 혼합)
+- [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — 단일 화면 (콘텐츠형)
+- [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — 다중 화면 + flow·popup
+- [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — 오버레이 모드 (React·Next와 같은 구조)
+
+## 개발
 
 ```bash
-# playwright가 설치된 폴더에서
-node tests/lint.js  # 문법·오염·버전 정합·예제 정합·문서 드리프트 (의존성 없음)
-node tests/e2e.js   # 브라우저 회귀 — 릴리스(태그) 전 전부 PASS 필수 (케이스 수는 실행 결과로 확인)
+node tests/lint.js  # 문법·버전 정합·문서 드리프트 (의존성 없음)
+node tests/e2e.js   # 브라우저 회귀 (playwright 필요)
 ```
+
+모든 push·PR·태그에서 GitHub Actions가 둘 다 돌린다. CI가 빨간 상태로는 릴리스하지 않는다.
+문서도 검사 대상이다: 이 README의 빠른 시작 예제는 CI가 실제로 실행해보고, 설정 필드가 레퍼런스에서 빠지면 실패한다.
+
+버그·요청은 [이슈](https://github.com/charmisuk/screenspec/issues)로. 변경 이력은 [CHANGELOG.md](CHANGELOG.md).
 
 ## 로드맵
 
 - [ ] 코멘트 레이어 (핀 + 스레드, 게스트 참여)
-- [ ] 공유 링크 호스팅 (클라우드)
-- [ ] PDF / Confluence 내보내기
+- [ ] 공유 링크 호스팅
+- [ ] PDF · Confluence 내보내기
 
 ## 라이선스
 
-MIT — 개인·상업 모두 자유롭게 사용할 수 있습니다.
+MIT

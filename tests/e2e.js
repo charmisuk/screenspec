@@ -233,6 +233,46 @@ function check(name, ok, detail) {
   check("해시 라우터(#/) 감지", hash1 === "S-01" && hash2 === "S-09", hash1 + "→" + hash2);
   srv.close();
 
+
+  /* ============ 문서 검증: README 빠른 시작이 진짜 동작하는가 ============
+     README의 복붙 예제를 그대로 실행한다. API가 바뀌었는데 문서를 안 고치면 여기서 FAIL. */
+  console.log("[docs] README 빠른 시작 예제");
+  {
+    const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+    const m = readme.match(/```html\n([\s\S]*?)```/);
+    const html = (m ? m[1] : "").replace(/<script src="https:\/\/cdn\.jsdelivr[^"]*"><\/script>/, "");
+    await page.goto("about:blank");
+    await page.setContent(html);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(800);
+    check("빠른 시작: 모드 토글 생성", (await page.locator("#ss-mDoc").count()) === 1);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+    check("빠른 시작: 화면 ID 헤더", await page.evaluate(() => document.body.innerText.includes("SCR-RPT-001")));
+    check("빠른 시작: 기능 설명 2행", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    check("빠른 시작: 마커 2개", (await page.locator(".ss-marker").count()) === 2);
+    await page.click('[data-play="2"]');
+    await page.waitForTimeout(400);
+    check("빠른 시작: 동작 재생이 실제로 동작", await page.evaluate(() => document.getElementById("save").textContent === "저장됨"));
+  }
+
+  /* ============ 설정 없이 스크립트만 넣은 경우 ============
+     남의 페이지를 감싸면 "망가졌다"로 읽힌다 — DOM은 그대로 두고 안내만. */
+  console.log("[docs] 설정 없음 상태");
+  {
+    const warns = [];
+    const onMsg = (msg) => { if (msg.type() === "warning") warns.push(msg.text()); };
+    page.on("console", onMsg);
+    await page.goto("about:blank");
+    await page.setContent("<h1 id='own'>내 프로토타입</h1>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(600);
+    check("설정 없음: DOM 불변 (감싸지 않음)", await page.evaluate(() =>
+      !document.querySelector(".ss-sheet") && document.getElementById("own").parentElement === document.body));
+    check("설정 없음: 안내 카드 노출", await page.evaluate(() => document.body.innerText.includes("설정이 없습니다")));
+    check("설정 없음: 콘솔 경고", warns.some((w) => w.includes("window.SCREENSPEC")), JSON.stringify(warns).slice(0, 120));
+    page.off("console", onMsg);
+  }
   check("JS 에러 0건", errors.length === 0, errors.slice(0, 3));
 
   await browser.close();

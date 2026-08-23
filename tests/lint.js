@@ -8,6 +8,9 @@
  *  3) 버전 문자열 드리프트 — 헤더 주석 ↔ 워터마크 배지 ↔ 문서 CDN 태그
  *  4) 예제의 specs target ↔ data-spec 속성 정합 (마커 누락 예방)
  *  5) LICENSE 존재
+ *  9) 코드가 읽는 설정 필드·anno·속성·API가 docs/config.md에 전부 있는지 (코드→문서 드리프트)
+ * 10) 에이전트 진입점(AGENTS.md·llms.txt) 존재 + README 링크
+ * 11) README 빠른 시작이 복붙 가능한 완성 HTML인지
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
@@ -109,5 +112,54 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   }
 }
 
+
+/* 9) 설정 필드 커버리지 — 코드가 읽는 설정이 레퍼런스에 없으면 FAIL
+   (2026-08-22: devices·widths가 어느 문서에도 없던 사고) */
+{
+  const lib = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+  const ref = fs.readFileSync(path.join(REPO, "docs/config.md"), "utf8");
+  const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+
+  const fields = [...new Set([...lib.matchAll(/\bRAW\.([a-zA-Z]+)/g)].map((m) => m[1]))];
+  const undoc = fields.filter((f) => !new RegExp("\\b" + f + "\\b").test(ref));
+  check("설정 필드 " + fields.length + "개 전부 docs/config.md에 문서화", undoc.length === 0, "누락: " + JSON.stringify(undoc));
+
+  const annos = [...new Set([...lib.matchAll(/^ {4}(\w+): +\{ label:/gm)].map((m) => m[1]))];
+  check("anno 레지스트리 8종 추출", annos.length === 8, JSON.stringify(annos));
+  [["README.md", readme], ["docs/config.md", ref]].forEach(([name, doc]) => {
+    const miss = annos.filter((a) => !doc.includes("`" + a + "`"));
+    check(name + " anno 표 정합", miss.length === 0, "누락: " + JSON.stringify(miss));
+  });
+
+  const attrs = [...new Set([...lib.matchAll(/data-ss-[a-z]+|data-spec/g)].map((m) => m[0]))];
+  const missAttr = attrs.filter((a) => !ref.includes(a));
+  check("HTML 속성 전부 문서화", missAttr.length === 0, "누락: " + JSON.stringify(missAttr));
+
+  const api = [...new Set([...lib.matchAll(/window\.ScreenSpec = \{([^}]+)\}/g)]
+    .flatMap((m) => [...m[1].matchAll(/(\w+):/g)].map((x) => x[1])))];
+  const missApi = api.filter((a) => !ref.includes(a));
+  check("공개 API 전부 문서화", missApi.length === 0, "누락: " + JSON.stringify(missApi));
+}
+
+/* 10) 에이전트 진입점 — 없으면 에이전트가 SKILL.md를 못 찾는다 */
+{
+  ["AGENTS.md", "llms.txt", "SKILL.md", "docs/config.md"].forEach((f) =>
+    check(f + " 존재", fs.existsSync(path.join(REPO, f))));
+  const llms = fs.readFileSync(path.join(REPO, "llms.txt"), "utf8");
+  check("llms.txt가 SKILL·레퍼런스를 가리킴", llms.includes("SKILL.md") && llms.includes("config.md"));
+  const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+  const missLink = ["SKILL.md", "docs/config.md", "AGENTS.md", "llms.txt"].filter((l) => !readme.includes(l));
+  check("README가 하위 문서 전부 링크", missLink.length === 0, "누락: " + JSON.stringify(missLink));
+}
+
+/* 11) README 빠른 시작 = 복붙 가능한 완성 HTML (조각이면 FAIL) */
+{
+  const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+  const m = readme.match(/```html\n([\s\S]*?)```/);
+  const block = m ? m[1] : "";
+  const ok = /<!doctype html>/i.test(block) && block.includes("window.SCREENSPEC") &&
+    block.includes("screenspec.js") && /data-spec="1"/.test(block);
+  check("README 빠른 시작 = 완성 HTML", ok, "doctype·설정·스크립트·data-spec 중 누락");
+}
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
 process.exit(fail ? 1 : 0);
