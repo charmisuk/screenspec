@@ -118,11 +118,12 @@ async function main() {
         parent: { database_id: DB_ID },
         properties: {
           "이름": { title: rt(i.title.replace(/^\[[^\]]+\]\s*/, "")) },
-          "상태": { select: { name: "백로그" } },
+          "상태": { select: { name: "대기" } },
           "유형": { select: { name: /버그|bug/i.test(i.title + label(i)) ? "버그" : "기능" } },
           "근거": { select: { name: "내부 발견" } },
+          "우선순위": { select: { name: "P2" } }, /* 들어온 직후는 P2. 전체 재비교에서 올린다 */
           "GitHub": { url: i.html_url },
-          "메모": { rich_text: rt("GitHub 이슈에서 자동 생성") },
+          "설명": { rich_text: rt((i.body || "").replace(/\r?\n+/g, " ").slice(0, 300) || "GitHub 이슈에서 자동 생성") },
         },
       });
       console.log("  + 카드 생성: #" + i.number);

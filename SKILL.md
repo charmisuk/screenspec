@@ -34,6 +34,8 @@
 - 화면에서 **기획 의도가 있는 영역** 8~12개 (전부 다는 것 금지 — 정의할 말이 있는 곳만).
 - 위→아래, 좌→우 순서로 `data-spec="1"`부터. 부여 대상은 영역의 **최상위 컨테이너**.
 - 다중 화면이면 화면(root) 안에서만 찾으므로 화면마다 1부터 다시 시작 가능.
+- **목록처럼 반복 렌더되는 요소**(할 일 행, 상품 카드 등)는 **첫 번째 항목 하나에만** 붙인다. 값은 화면 안에서 고유해야 한다. 재렌더 후에도 마커가 따라온다.
+- **화면 위에 뜨는 전역 요소**(토스트·모달·바텀시트, `position:fixed`)는 `<body>` 직계에 두고 `data-ss-ignore` 속성을 붙인다. 안 붙이면 시뮬레이터 시트 안에 갇혀 위치가 틀어진다.
 
 ### 3. `window.SCREENSPEC` 설정 작성
 
@@ -42,7 +44,7 @@
 <script>
 window.SCREENSPEC = {
   screen: { id:"SCR-XXX-001", name:"화면명", path:["홈","..."] },
-  widths: { mobile:430, pc:1440 },
+  devices: { mobile:{ w:360, h:800 }, pc:{ w:1920, h:1080 } },   // 생략 가능(이 값이 기본). 바꿀 것만 적는다
   specs: [
     { n:1, target:"1", anno:"box", title:"영역명", defs:[
       { t:"기능 설명 한 줄", subs:["하위 조건 한 줄"] }
@@ -69,6 +71,7 @@ window.SCREENSPEC = {
 - 각 화면의 컨테이너 요소에 `data-ss-screen="SCR-XXX-001"` 부여.
 - 화면 전환이 표시/숨김(display 등)으로 일어나면 **자동 감지**되어 헤더·기능 설명가 따라 바뀐다.
 - 감지가 안 되는 구조(동일 DOM 재사용 등)면 프로토타입의 내비 코드에 `window.ScreenSpec.setScreen("SCR-XXX-002")` 한 줄 추가.
+- 프로토타입이 스스로 레이아웃을 크게 바꾸는 순간(탭 전환·목록 재렌더 등)에 마커가 어긋나면 그 직후 `window.ScreenSpec.refresh()` 한 줄. 보통은 자동으로 따라오므로 어긋날 때만.
 
 ### 3-B. 프레임워크 프로토타입(React·Next·Vue) = 오버레이 모드
 
@@ -85,7 +88,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.13.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.13.1/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -97,27 +100,37 @@ import Script from "next/script";
 
 **앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 
-**screenspec.js 로드** (`</body>` 직전, 프로토타입 자체 스크립트보다 뒤):
-- 기본 = CDN 한 줄. 자동 최신 `@0` (CI 통과 릴리스만 흘러옴) 또는 박제 `@v0.13.0`
-  `<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>`
-- 오프라인·CDN 차단 환경만 파일 복사: `screenspec.js`를 프로토타입 옆에 두고 `<script src="./screenspec.js"></script>`
+**screenspec.js 로드** (`</body>` 직전, 프로토타입 자체 스크립트보다 뒤) — 2단계다:
 
-### 3-C. 미리보기 환경(클로드 아티팩트 등)에 올릴 결과물
+1. 작업 중에는 CDN 한 줄을 넣는다 (가볍고 즉시 확인 가능):
+   `<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>`
+2. **전달·공유할 결과물은 반드시 자체 완결 파일로 뽑는다** (§3-C). 화면정의서는 문서라서
+   어디서 열어도, 몇 달 뒤 열어도 그대로여야 한다 — CDN 한 줄은 인터넷이 막힌 환경(클로드 미리보기·사내망)에서
+   조용히 실패하고, 우리가 라이브러리를 고치면 이미 전달한 문서가 몰래 바뀐다.
 
-클로드 대화창 미리보기처럼 **바깥 주소로의 요청을 막는 환경**이 있다. 이런 곳에서는 CDN 한 줄이 조용히 실패한다
-(2026-08-23 실측: 아티팩트에서 CDN 차단 확인, 파일 안에 넣은 스크립트는 정상 실행).
+### 3-C. 결과물 뽑기 — 자체 완결 파일 (기본)
 
-**판단**: 결과물이 미리보기 화면 안에서 그대로 보여야 하는가? 그렇다면 라이브러리를 파일 안에 넣는다.
+**판단하지 않는다. 상황이 정한다.**
 
-**방법 (셸을 쓸 수 있을 때 — 직접 타이핑하지 말 것)**
+| 내가 지금 있는 곳 | 하는 일 |
+|---|---|
+| 파일을 만들고 명령을 실행할 수 있다 (클로드 코드 등) | **아래 명령 한 번.** 결과물은 어디서든(미리보기·사내망·오프라인·메일 첨부) 열린다 |
+| 글자만 쓸 수 있다 (대화창에서 바로 만들 때) | CDN 한 줄 + 아래 "안내문" 스니펫. 사용자에게 "파일로 저장해 열면 보인다"를 알린다 |
+
+**명령 (라이브러리를 파일 안에 넣는다 — 모델이 타이핑하는 게 아니라 프로그램이 복사한다)**
 
 ```bash
-node scripts/inline.js 프로토타입.html      # → 프로토타입.inline.html (자체 완결)
+node scripts/inline.js 프로토타입.html      # → 프로토타입.inline.html (자체 완결, 실행 후 자동 검증)
+# 프로토타입이 다른 폴더에 있으면 둘 다 경로로:
+node "<screenspec 저장소>/scripts/inline.js" "<프로토타입 폴더>/프로토타입.html"
 ```
 
-라이브러리 6만 자를 모델이 옮겨 적으면 반드시 망가진다. 파일을 이어붙이는 이 명령을 쓴다.
+- 원본 `프로토타입.html`은 CDN 한 줄 그대로 둔다 = 설계도. `.inline.html`이 전달본 = 인쇄물
+- 라이브러리를 최신으로 올리고 싶으면 **같은 명령을 한 번 더** 친다. 안 치면 그 시점 그대로다 (문서라서 그게 맞다)
+- 라이브러리 6만 자를 모델이 옮겨 적으면 반드시 망가진다. 이 명령 외의 방법으로 넣지 않는다
+- 근거: 2026-08-23 실측 — 클로드 아티팩트는 CDN 스크립트를 차단, 파일 안에 넣은 스크립트는 정상 실행
 
-**방법 (셸이 없을 때 — CDN을 쓰되 침묵하지 않게)**
+**안내문 스니펫 (글자만 쓸 수 있을 때 — CDN을 쓰되 침묵하지 않게)**
 
 CDN 태그 바로 뒤에 아래를 붙인다. 못 불러왔을 때 사용자에게 이유와 해결책을 보여준다.
 
@@ -155,8 +168,8 @@ addEventListener("load", function () {
 | `input` | 입력 | 입력 필드 정책 (글자수·형식·검증·placeholder) | — |
 | `state` | 상태 | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무, 빈 상태) | — |
 | `motion` | 모션 | 등장·전환 애니메이션 정의 | — |
-| `action` | 동작 | 클릭하면 화면 안에서 동작이 일어남 (토스트·복사 등) | `play:{selector:"#btn", label:"동작 재생 — 결과"}` |
-| `popup` | 팝업 | 클릭하면 모달·레이어·바텀시트 열림 | `play:{selector:"#btn", label:"팝업 열기"}` |
+| `action` | 동작 | 클릭하면 화면 안에서 동작이 일어남 (토스트·복사 등) | **필수** `play:{selector:"#btn", label:"동작 재생 — 결과"}` |
+| `popup` | 팝업 | 클릭하면 모달·레이어·바텀시트 열림 | **필수** `play:{selector:"#btn", label:"팝업 열기"}` |
 | `flow` | 이동 | 클릭하면 다른 화면으로 전환 | `flowTo:"SCR-XXX-002"` (+실제 내비 버튼 있으면 `play.selector`도) |
 
 - 판단 순서: 화면 이동? → flow / 레이어 열림? → popup / 그 외 동작? → action / 입력 필드? → input / 조건 분기? → state / 모션 정의? → motion / 요소→요소 관계 표현? → arrow + arrowTo / 작아서 안 보임? → arrow / 나머지 → box
@@ -184,8 +197,10 @@ addEventListener("load", function () {
 - [ ] 헤더의 화면 ID 칩 클릭 → 화면 목록 트리가 path 계층대로 열림 (그룹 행·뎁스 확인)
 - [ ] arrow 항목 클릭 시 지시선이 대상 요소를 실제로 가리킴 (큰 영역에 arrow를 쓰지 않았는지)
 - [ ] accent를 지정했다면 마커·하이라이트·버튼 색이 함께 바뀌었는지
+- [ ] 전달할 결과물이면 `.inline.html`을 뽑았는지 (명령이 "검증 통과"를 출력했는지)
 
-검증 후 사용자에게: 화면 ID 목록, 항목 수, 열어보는 법(모드 전환 위치)만 짧게 보고.
+검증 후 사용자에게: 화면 ID 목록, 항목 수, 열어보는 법, **전달용 파일 이름(`.inline.html`)**만 짧게 보고.
+열어보는 법은 이렇게 안내한다: "파일을 브라우저로 열고 **왼쪽 위 '화면정의서' 버튼**을 누르세요. 오른쪽 위에서 모바일/PC 폭을 바꿀 수 있습니다."
 
 ### 8. 없는 기능은 만들지 않는다 (일관성 룰)
 
