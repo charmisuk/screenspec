@@ -156,7 +156,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 /* 11) README 빠른 시작 = 복붙 가능한 완성 HTML (조각이면 FAIL) */
 {
   const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
-  const m = readme.match(/```html\n([\s\S]*?)```/);
+  const m = readme.match(/```html\r?\n([\s\S]*?)```/);
   const block = m ? m[1] : "";
   const ok = /<!doctype html>/i.test(block) && block.includes("window.SCREENSPEC") &&
     block.includes("screenspec.js") && /data-spec="1"/.test(block);

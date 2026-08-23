@@ -239,7 +239,7 @@ function check(name, ok, detail) {
   console.log("[docs] README 빠른 시작 예제");
   {
     const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
-    const m = readme.match(/```html\n([\s\S]*?)```/);
+    const m = readme.match(/```html\r?\n([\s\S]*?)```/);
     const html = (m ? m[1] : "").replace(/<script src="https:\/\/cdn\.jsdelivr[^"]*"><\/script>/, "");
     await page.goto("about:blank");
     await page.setContent(html);
