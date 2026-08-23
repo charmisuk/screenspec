@@ -12,6 +12,7 @@
  * 10) 에이전트 진입점(AGENTS.md·llms.txt) 존재 + README 링크
  * 11) README 빠른 시작이 복붙 가능한 완성 HTML인지
  * 12) 코드가 가리키는 README 앵커가 실존하는지
+ * 13) 라이브러리 헤더에 저작권·MIT 표기 (인라인 배포 시 LICENSE가 따라가지 않으므로)
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
@@ -173,5 +174,20 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   const dead = links.filter((a) => !anchors.includes(a));
   check("코드→README 앵커 유효", dead.length === 0, "없는 앵커: " + JSON.stringify(dead) + " / 있는 앵커: " + JSON.stringify(anchors));
 }
+
+/* 13) 라이브러리 파일 안의 라이선스 표기 — 인라인으로 배포되면 LICENSE 파일이 따라가지 않는다 */
+{
+  const head = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8").slice(0, 600);
+  const hasCopyright = /Copyright \(c\)/i.test(head);
+  const hasMit = /MIT/.test(head);
+  check("라이브러리 헤더에 저작권 표기", hasCopyright);
+  check("라이브러리 헤더에 MIT 표기", hasMit);
+
+  /* LICENSE 파일의 저작권자와 헤더의 저작권자가 같아야 한다 */
+  const lic = fs.readFileSync(path.join(REPO, "LICENSE"), "utf8");
+  const who = (s) => ((s.match(/Copyright \(c\)\s*\d{4}\s*([^\n·]+)/i) || [])[1] || "").trim();
+  check("저작권자 = LICENSE와 동일 (" + who(lic) + ")", who(head) === who(lic), who(head) + " vs " + who(lic));
+}
+
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
 process.exit(fail ? 1 : 0);

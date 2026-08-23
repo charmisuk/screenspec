@@ -1,5 +1,9 @@
 /*!
  * ScreenSpec v0.13 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * Copyright (c) 2026 charmisuk · MIT License · https://github.com/charmisuk/screenspec
+ *
+ * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
+ * 그렇게 넣을 때도 위 저작권·라이선스 줄은 함께 남긴다 — MIT가 요구하는 유일한 조건이다.
  *
  * 사용법 (단일 화면):
  *   1) 프로토타입 HTML의 주요 영역에 data-spec="1" 형태로 번호 부여
