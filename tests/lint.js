@@ -11,6 +11,7 @@
  *  9) 코드가 읽는 설정 필드·anno·속성·API가 docs/config.md에 전부 있는지 (코드→문서 드리프트)
  * 10) 에이전트 진입점(AGENTS.md·llms.txt) 존재 + README 링크
  * 11) README 빠른 시작이 복붙 가능한 완성 HTML인지
+ * 12) 코드가 가리키는 README 앵커가 실존하는지
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
@@ -160,6 +161,17 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   const ok = /<!doctype html>/i.test(block) && block.includes("window.SCREENSPEC") &&
     block.includes("screenspec.js") && /data-spec="1"/.test(block);
   check("README 빠른 시작 = 완성 HTML", ok, "doctype·설정·스크립트·data-spec 중 누락");
+}
+
+/* 12) 코드가 가리키는 README 앵커가 실제로 존재하는지 (안내 카드의 "복붙용 최소 예제" 링크) */
+{
+  const lib = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+  const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+  const slug = (h) => h.trim().toLowerCase().replace(/[^\p{L}\p{N} -]/gu, "").replace(/ +/g, "-");
+  const anchors = [...readme.matchAll(/^#{2,3} +(.+)$/gm)].map((m) => slug(m[1]));
+  const links = [...lib.matchAll(/screenspec#([^"\s]+)/g)].map((m) => decodeURIComponent(m[1]));
+  const dead = links.filter((a) => !anchors.includes(a));
+  check("코드→README 앵커 유효", dead.length === 0, "없는 앵커: " + JSON.stringify(dead) + " / 있는 앵커: " + JSON.stringify(anchors));
 }
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
 process.exit(fail ? 1 : 0);
