@@ -273,6 +273,33 @@ function check(name, ok, detail) {
     check("설정 없음: 콘솔 경고", warns.some((w) => w.includes("window.SCREENSPEC")), JSON.stringify(warns).slice(0, 120));
     page.off("console", onMsg);
   }
+
+  /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
+     클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */
+  console.log("[inline] 자체 완결 파일");
+  {
+    const { execFileSync } = require("child_process");
+    const os = require("os");
+    const out = path.join(os.tmpdir(), "ss-inline-test.html");
+    execFileSync(process.execPath,
+      [path.join(REPO, "scripts/inline.js"), path.join(REPO, "examples/shop.html"), "-o", out], { stdio: "pipe" });
+    const blocked = [];
+    await page.route("**", (route) => {
+      const u = route.request().url();
+      if (/^https?:/i.test(u)) { blocked.push(u); return route.abort(); }
+      return route.continue();
+    });
+    await page.goto("file:///" + out.replace(/\\/g, "/"));
+    await page.waitForTimeout(1000);
+    check("인라인: 바깥 요청이 막혀도 부팅", await page.evaluate(() => !!window.ScreenSpec));
+    check("인라인: screenspec.js 를 바깥에서 받지 않음",
+      !blocked.some((u) => /screenspec/i.test(u)), JSON.stringify(blocked.slice(0, 3)));
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+    check("인라인: 화면정의서 모드 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 9);
+    await page.unroute("**");
+    fs.unlinkSync(out);
+  }
   check("JS 에러 0건", errors.length === 0, errors.slice(0, 3));
 
   await browser.close();

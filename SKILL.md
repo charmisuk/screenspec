@@ -85,7 +85,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.12.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.13.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -98,9 +98,42 @@ import Script from "next/script";
 **앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 
 **screenspec.js 로드** (`</body>` 직전, 프로토타입 자체 스크립트보다 뒤):
-- 기본 = CDN 한 줄. 자동 최신 `@0` (CI 통과 릴리스만 흘러옴) 또는 박제 `@v0.12.0`
+- 기본 = CDN 한 줄. 자동 최신 `@0` (CI 통과 릴리스만 흘러옴) 또는 박제 `@v0.13.0`
   `<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>`
 - 오프라인·CDN 차단 환경만 파일 복사: `screenspec.js`를 프로토타입 옆에 두고 `<script src="./screenspec.js"></script>`
+
+### 3-C. 미리보기 환경(클로드 아티팩트 등)에 올릴 결과물
+
+클로드 대화창 미리보기처럼 **바깥 주소로의 요청을 막는 환경**이 있다. 이런 곳에서는 CDN 한 줄이 조용히 실패한다
+(2026-08-23 실측: 아티팩트에서 CDN 차단 확인, 파일 안에 넣은 스크립트는 정상 실행).
+
+**판단**: 결과물이 미리보기 화면 안에서 그대로 보여야 하는가? 그렇다면 라이브러리를 파일 안에 넣는다.
+
+**방법 (셸을 쓸 수 있을 때 — 직접 타이핑하지 말 것)**
+
+```bash
+node scripts/inline.js 프로토타입.html      # → 프로토타입.inline.html (자체 완결)
+```
+
+라이브러리 6만 자를 모델이 옮겨 적으면 반드시 망가진다. 파일을 이어붙이는 이 명령을 쓴다.
+
+**방법 (셸이 없을 때 — CDN을 쓰되 침묵하지 않게)**
+
+CDN 태그 바로 뒤에 아래를 붙인다. 못 불러왔을 때 사용자에게 이유와 해결책을 보여준다.
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@0/screenspec.js"></script>
+<script>
+addEventListener("load", function () {
+  if (window.ScreenSpec) return;
+  var d = document.createElement("div");
+  d.setAttribute("data-ss-ignore", "");
+  d.style.cssText = "position:fixed;left:16px;bottom:16px;z-index:2147483060;max-width:330px;background:#fff;color:#191919;border:1px solid #D3D1CB;border-radius:12px;padding:14px 16px;box-shadow:0 10px 30px rgba(17,24,39,.18);font:13px/1.6 system-ui,sans-serif";
+  d.innerHTML = "<b>ScreenSpec을 불러오지 못했습니다</b><br>이 미리보기는 바깥 주소를 막습니다. 이 코드를 .html 파일로 저장해 브라우저에서 열면 화면정의서가 보입니다.";
+  document.body.appendChild(d);
+});
+</script>
+```
 
 ### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 

@@ -13,6 +13,7 @@
 | `SKILL.md` | AI가 남의 프로토타입에 적용할 때의 작업 지시서 |
 | `docs/config.md` | 설정 필드 전체의 단일 출처 |
 | `examples/*.html` | 실행 가능한 예제 겸 e2e 대상 |
+| `scripts/inline.js` | 라이브러리를 프로토타입 파일 안에 넣어 자체 완결 HTML 생성 |
 | `tests/lint.js` | 의존성 없는 정적 검사 |
 | `tests/e2e.js` | Playwright 브라우저 회귀 |
 
