@@ -297,7 +297,7 @@
       "type": "feat",
       "release": "3차 도입 문턱",
       "title": "target 이 CSS 셀렉터·텍스트·fallback 배열도 받게",
-      "status": "blocked",
+      "status": "skipped",
       "plan": {
         "done": false,
         "cause": "",
@@ -319,7 +319,7 @@
         "done": false,
         "sha": ""
       },
-      "blocked_reason": "사용자 판단 대기 — target 셀렉터: sel+fallback 만 / text 포함 / 보류 중 선택 필요 (라이브러리 계약 변경)"
+      "blocked_reason": "skipped — 사용자 결정(2026-08-24): 설명 위치 라벨(data-spec)은 사람이 직접 단다. 라이브러리 계약 유지. 이슈에는 '검토 후 미채택' 코멘트 예정"
     },
     {
       "order": 9,
@@ -449,7 +449,7 @@
       "type": "feat",
       "release": "4차 기능",
       "title": "arrowFrom 화살표 시작 방향 수동 지정",
-      "status": "blocked",
+      "status": "skipped",
       "plan": {
         "done": false,
         "cause": "",
@@ -471,7 +471,7 @@
         "done": false,
         "sha": ""
       },
-      "blocked_reason": "사용자 판단 대기 — 운영자 스스로 '요청 오면' 우선순위. 보류 제안"
+      "blocked_reason": "skipped — 사용자 결정: 패스"
     },
     {
       "order": 13,
@@ -481,7 +481,7 @@
       "type": "feat",
       "release": "4차 기능",
       "title": "움직이는 요소 내부 마커 추적 옵션 (rAF)",
-      "status": "blocked",
+      "status": "skipped",
       "plan": {
         "done": false,
         "cause": "",
@@ -503,7 +503,44 @@
         "done": false,
         "sha": ""
       },
-      "blocked_reason": "사용자 판단 대기 — 매 프레임 재배치 비용 + SKILL 룰로 회피 중. 보류 제안"
+      "blocked_reason": "skipped — 사용자 결정: 패스"
+    },
+    {
+      "order": 14,
+      "issue": [],
+      "type": "fix",
+      "release": "추가(회고 발견)",
+      "title": "목차로 화면 이동 시 앱이 그려지기 전에 '못 찾은 정의' 경고가 잘못 뜸 (false-positive)",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "목차 클릭 → setCurrent(sc) → render() 가 즉시 targetOf 로 누락을 세는데, 이 시점엔 아직 history.pushState 전이라 앱이 새 라우트를 그리지 않았다. 경고는 화면당 1회(warned)라 그 뒤 정상 렌더돼도 이미 찍힌 뒤. main v0.13.1 에서도 동일",
+        "change": "render() 의 누락 집계를 동기 실행에서 분리: checkMissing(sc) 를 setTimeout 400ms 뒤 실행, 그때 current 가 여전히 sc 이고 여전히 못 찾는 정의만 경고. 마커 생성·숨김 로직은 그대로(placeMarkers 가 매번 재평가)",
+        "accept": [
+          "overlay-spa 에서 목차로 S-01→S-09 이동 시 S-09 누락 경고가 뜨지 않음",
+          "진짜 누락(#20 테스트 2건)은 여전히 경고",
+          "e2e 전부 통과 +1, smoke 경고 0"
+        ],
+        "qa": [
+          "overlay e2e 블록에 console 수집 → 목차 이동 후 '못 찾은 정의' 경고 없음 검사"
+        ],
+        "docs": [
+          "없음"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. 누락 집계를 checkMissing(sc) 로 분리해 400ms 뒤 판정, 그새 화면이 바뀌었으면 skip"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 69 / FAIL 0 (+1 목차 이동 오경고 없음, #20 진짜 누락 2건 여전히 경고). smoke 5/5 경고 0"
+      },
+      "commit": {
+        "done": true,
+        "sha": "541335f"
+      }
     }
   ],
   "cycle_qa": {

@@ -201,6 +201,9 @@ function check(name, ok, detail) {
       .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED", panel: "left",')); /* accent·panel 주입 (e2e 전용) */
   });
   await new Promise((r) => srv.listen(4179, r));
+  const ovWarns = [];
+  const onOvMsg = (msg) => { if (msg.type() === "warning") ovWarns.push(msg.text()); };
+  page.on("console", onOvMsg);
   const bgBefore = "rgb(255, 255, 255)";
   await page.goto("http://localhost:4179/screenspec/examples/overlay-spa.html");
   await page.waitForTimeout(800);
@@ -255,6 +258,8 @@ function check(name, ok, detail) {
   check("목차 → route 소프트 내비게이션", await page.evaluate(() =>
     window.ScreenSpec.current() === "S-09" && location.pathname === "/members" &&
     document.body.innerText.includes("이용자 명단")));
+  await page.waitForTimeout(500);
+  check("목차 이동 시 '못 찾은 정의' 오경고 없음 (앱이 그려진 뒤 판정)", !ovWarns.some((w) => w.includes("S-09") && w.includes("못 찾은 정의")), ovWarns.join(" | ").slice(0, 160));
   await page.addScriptTag({ content: LIB });
   await page.waitForTimeout(300);
   check("이중 로드 가드", (await page.locator(".ss-pill").count()) === 1);
@@ -320,6 +325,7 @@ function check(name, ok, detail) {
   await page.waitForTimeout(300);
   check("헤더 앱 폭 표시 (뷰포트 − 패널)", w1.t === "1040px" && w2.t === "1200px" && w3.t === "480px", JSON.stringify([w1, w2, w3]));
   check("overlay body 반응형 훅 .ss-pc/.ss-narrow", !w1.pc && !w1.nr && w2.pc && !w3.pc && w3.nr, JSON.stringify([w1, w2, w3]));
+  page.off("console", onOvMsg);
   srv.close();
 
 
