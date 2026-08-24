@@ -14,7 +14,7 @@
       ],
       "type": "feat",
       "title": "optional 플래그 · why 칸 + SKILL 규칙 5·6 교체 · 패널 오른쪽 고정(버튼·panel 제거) · 위치 힌트 자동",
-      "status": "in-progress",
+      "status": "done",
       "plan": {
         "done": true,
         "cause": "사용자 결정 묶음(소형)",
@@ -43,8 +43,8 @@
         "evidence": "lint 통과(panel 폐기 문구 추가 후). e2e PASS 85 / FAIL 0. smoke 5/5. frame 실측: 드래그로 360→960px, iframe innerWidth 960 동기, 패널 right=1440(액자 밖), 상세 패널이 액자 안에서 온전히 보임, 에러 0"
       },
       "commit": {
-        "done": false,
-        "sha": ""
+        "done": true,
+        "sha": "02a83f1"
       }
     },
     {
