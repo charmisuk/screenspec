@@ -305,6 +305,20 @@ function check(name, ok, detail) {
   check("setScreen 유지 (DOM 변경 1초)", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
   await page.click("#detailPanel .pclose");
   await page.waitForTimeout(300);
+  /* 앱 폭 표시 + overlay 반응형 훅 (#17 최소안). 현재 정의서 모드·패널 우측(400px) */
+  const vw = async () => page.evaluate(() => ({ t: document.getElementById("ss-ovVw").textContent, pc: document.body.classList.contains("ss-pc"), nr: document.body.classList.contains("ss-narrow") }));
+  await page.waitForTimeout(200);
+  const w1 = await vw();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.waitForTimeout(300);
+  const w2 = await vw();
+  await page.setViewportSize({ width: 480, height: 800 });
+  await page.waitForTimeout(300);
+  const w3 = await vw();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(300);
+  check("헤더 앱 폭 표시 (뷰포트 − 패널)", w1.t === "1040px" && w2.t === "1200px" && w3.t === "480px", JSON.stringify([w1, w2, w3]));
+  check("overlay body 반응형 훅 .ss-pc/.ss-narrow", !w1.pc && !w1.nr && w2.pc && !w3.pc && w3.nr, JSON.stringify([w1, w2, w3]));
   srv.close();
 
 

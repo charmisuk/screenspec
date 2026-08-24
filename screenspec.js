@@ -44,7 +44,7 @@
  * 액센트: accent 옵션 — 프리셋 blue(기본)·red·orange·green·purple, hex 또는 var(--토큰). 마커·하이라이트·버튼·그립·목차 활성이 묶음으로 바뀐다.
  * 화면 목록(목차): 헤더의 화면 ID 칩 클릭 → path 배열 기반 트리(들여쓰기 + 가이드선, 그룹 행, 최대 6뎁스 들여쓰기).
  *
- * 반응형 훅(wrap): 시트 폭에 따라 .ss-pc(≥1100px) / .ss-narrow(≤520px)가 시트에 붙는다.
+ * 반응형 훅: 폭에 따라 .ss-pc(≥1100px) / .ss-narrow(≤520px)가 붙는다 — wrap 은 시트에, overlay 는 body 에(앱 영역 폭 기준).
  * 프로토타입 CSS는 미디어쿼리 대신 이 훅으로 분기.
  *
  * z-index 원칙 — 모드별로 다르다:
@@ -329,7 +329,8 @@
   .ss-ov-header{position:fixed;top:0;left:0;right:0;height:48px;z-index:2147483010;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:none;align-items:center;gap:28px;padding:0 16px}
   .ss-ov-hfields{display:flex;gap:28px;align-items:center;min-width:0}
-  #ss-ovSide{margin-left:auto;flex:none;font-size:12px;font-weight:700;color:var(--ss-ink2);
+  #ss-ovVw{margin-left:auto;flex:none;font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3)}
+  #ss-ovSide{flex:none;flex:none;font-size:12px;font-weight:700;color:var(--ss-ink2);
     padding:4px 10px;border:1px solid var(--ss-line2);border-radius:6px;background:#fff}
   #ss-ovSide:hover{background:var(--ss-line)}
   .ss-ov-panel{position:fixed;top:48px;right:0;bottom:0;width:400px;z-index:2147483010;background:#fff;
@@ -1019,8 +1020,19 @@
     /* render()가 headerEl.innerHTML을 통째로 갈아끼우므로, 필드는 안쪽 div에 두고 버튼은 형제로 둔다 */
     const hFields = h("div", { class: "ss-ov-hfields" });
     const bSide = h("button", { class: "ss-ui", id: "ss-ovSide", title: "설명 패널 좌/우 전환" }, "패널 ⇄");
+    /* 앱 폭 표시 + 반응형 훅 — overlay 에는 폭 시뮬레이터가 없으므로(개발자 도구 기기 툴바 사용) 지금 몇 px 인지만 보여 준다 (#17) */
+    const vw = h("span", { class: "ss-ui", id: "ss-ovVw", title: "앱 영역 폭 (설명 패널 제외). 폭을 바꾸려면 브라우저 개발자 도구의 기기 툴바" });
     header.appendChild(hFields);
+    header.appendChild(vw);
     header.appendChild(bSide);
+    function updateWidth() {
+      const cs = getComputedStyle(document.body);
+      const w = Math.round(innerWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0));
+      vw.textContent = w + "px";
+      document.body.classList.toggle("ss-pc", w >= 1100);
+      document.body.classList.toggle("ss-narrow", w <= 520);
+    }
+    window.addEventListener("resize", updateWidth);
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
@@ -1046,12 +1058,14 @@
       bProto.setAttribute("aria-pressed", String(m === "proto"));
       bDoc.setAttribute("aria-pressed", String(m === "doc"));
       if (m === "proto") core.clearActive();
+      updateWidth();
       requestAnimationFrame(place);
     }
     bProto.onclick = () => setMode("proto");
     bDoc.onclick = () => setMode("doc");
     bSide.onclick = () => {
       document.body.classList.toggle("ss-ov-left");
+      updateWidth();
       requestAnimationFrame(place);
     };
 
@@ -1156,6 +1170,7 @@
 
     core.setCurrent(SCREENS[0]);
     detectScreen();
+    updateWidth();
     console.info("[ScreenSpec v0.13] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 

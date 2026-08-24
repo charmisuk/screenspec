@@ -139,8 +139,8 @@ window.ScreenSpec.mode                      // "wrap" | "overlay"
 
 | 훅 | 조건 | 용도 |
 |---|---|---|
-| `.ss-pc` | 시트 폭 ≥ 1100px | wrap에서 미디어쿼리 대신 사용 (폭 시뮬레이터는 컨테이너 폭만 바꾸므로 미디어쿼리가 반응하지 않는다) |
-| `.ss-narrow` | 시트 폭 ≤ 520px | 동일 |
+| `.ss-pc` | 폭 ≥ 1100px | wrap: 시트에 붙는다 — 미디어쿼리 대신 사용 (폭 시뮬레이터는 컨테이너 폭만 바꾸므로 미디어쿼리가 반응하지 않는다). overlay: `body`에 붙는다 (앱 영역 폭 = 뷰포트 − 설명 패널). 정의서 헤더에 현재 앱 폭(px)이 표시된다 |
+| `.ss-narrow` | 폭 ≤ 520px | 동일 |
 
 ```css
 .ss-sheet.ss-pc .page-inner { display: grid; grid-template-columns: 1fr 320px; }
