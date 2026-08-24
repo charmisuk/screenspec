@@ -248,6 +248,16 @@ function check(name, ok, detail) {
   await page.waitForTimeout(400);
   const hash2 = await page.evaluate(() => window.ScreenSpec.current());
   check("해시 라우터(#/) 감지", hash1 === "S-01" && hash2 === "S-09", hash1 + "→" + hash2);
+  /* 구체 경로 우선 (#15): /members/[id] 가 먼저 선언돼 있어도 /members/invite 는 초대 화면 */
+  await page.evaluate(() => { location.hash = ""; history.pushState({}, "", "/members/invite"); });
+  await page.waitForTimeout(400);
+  const spec1 = await page.evaluate(() => window.ScreenSpec.current());
+  await page.evaluate(() => history.pushState({}, "", "/members/123"));
+  await page.waitForTimeout(400);
+  const spec2 = await page.evaluate(() => window.ScreenSpec.current());
+  check("라우트 구체성 우선 (선언 순서 무관)", spec1 === "S-11" && spec2 === "S-10", spec1 + "/" + spec2);
+  await page.evaluate(() => history.pushState({}, "", "/members"));
+  await page.waitForTimeout(400);
   /* 라우트 없는 root 화면(패널) — 열리면 자동 전환, 닫히면 라우트 화면 복귀 (여기서 현재 화면은 S-09) */
   await page.click("tbody tr:first-child .rowbtn");
   await page.waitForTimeout(300);

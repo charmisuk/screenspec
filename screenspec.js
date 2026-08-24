@@ -1036,7 +1036,11 @@
            라우트 화면 위에 얹히는 표면이므로, 열려 있으면 라우트 결과를 이긴다(닫히면 라우트 화면으로 복귀).
            여러 개가 동시에 보이면 문서 순서상 마지막 = 가장 나중에 얹힌 표면을 택한다. ---- */
     function detectScreen() {
-      const routed = SCREENS.filter((s) => s.route);
+      /* 구체 경로 우선: 동적 세그먼트([id])가 적은 라우트를 먼저 본다 (동률이면 긴 경로).
+         선언 순서에 의존하면 /members/[id] 가 뒤에 적은 /members/invite 를 삼킨다 (#15) */
+      const dyn = (r) => (r.match(/\[[^\]]+\]/g) || []).length;
+      const routed = SCREENS.filter((s) => s.route)
+        .sort((a, b) => dyn(a.route) - dyn(b.route) || b.route.length - a.route.length);
       /* 해시 라우터(#/members)면 # 뒤를 경로로 사용 — 일반 책갈피(#section)는 해당 없음 */
       const p = location.hash.indexOf("#/") === 0 ? location.hash.slice(1).split("?")[0] : location.pathname;
       let hit = null;
