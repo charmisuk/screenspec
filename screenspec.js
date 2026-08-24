@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.14 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.15 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -200,6 +200,10 @@
     .ss-defs{width:100%;border-left:0;border-top:1px solid var(--ss-line2)}
   }
   .ss-row{display:flex;border-bottom:1px solid var(--ss-line);cursor:pointer;transition:background .12s}
+  /* 지금 화면에 없는 정의(조건부 상태 등) — 번호를 흐리게 + '현재 미표시' (#27) */
+  .ss-nowtag{display:none;font-size:10px;color:var(--ss-ink3);border:1px dashed var(--ss-line2);border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap}
+  .ss-row.ss-now-hidden .ss-no{opacity:.35}
+  .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
   .ss-row:hover{background:#FAFAF9}
   .ss-row.ss-active{background:var(--ss-accent-soft)}
   .ss-no{width:46px;flex-shrink:0;display:flex;justify-content:center;padding-top:15px;
@@ -406,7 +410,7 @@ ${HL_CSS}
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-tag">${esc(type.label)}</span></div>
+          <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
           <ul class="ss-items">${items}</ul>${play}
         </div></div>`;
     });
@@ -622,7 +626,10 @@ ${HL_CSS}
       specs().forEach((s) => {
         const t = targetOf(s), m = markerEls[s.n];
         if (!m) return;
-        if (!t || t.getClientRects().length === 0) { m.style.display = "none"; return; }
+        const row = ctx.listEl.querySelector('[data-defrow="' + s.n + '"]');
+        const hidden = !t || t.getClientRects().length === 0;
+        if (row) row.classList.toggle("ss-now-hidden", hidden); /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
+        if (hidden) { m.style.display = "none"; return; }
         m.style.display = "";
         const pos = ctx.posOf(t);
         m.style.left = pos.left + "px";
@@ -753,6 +760,13 @@ ${HL_CSS}
       const d = Math.min(depth, MAX_TOC_DEPTH - 1);
       return `<span class="ss-toc-ind">${"<i></i>".repeat(d)}</span>`;
     }
+    /* 화면 메타 viewports: ["pc"] — 이 화면이 존재하는 폭. 목차에 'PC 전용'·'모바일 전용' 배지 (#17) */
+    function vpBadge(s) {
+      const v = s.viewports;
+      if (!Array.isArray(v) || !v.length || v.length >= 2) return "";
+      const name = { pc: "PC", mobile: "모바일" }[v[0]] || v[0];
+      return '<span class="ss-toc-undef ss-toc-vp">' + esc(name) + ' 전용</span>';
+    }
     function renderNode(node, depth) {
       let html = "";
       const s = node.screen;
@@ -762,7 +776,7 @@ ${HL_CSS}
         html += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}" data-depth="${depth}">
           ${guides(depth)}<span class="ss-toc-dot"></span>
           <span class="ss-toc-name">${esc(s.name)}</span>
-          ${n ? "" : '<span class="ss-toc-undef">미정의</span>'}
+          ${n ? "" : '<span class="ss-toc-undef">미정의</span>'}${vpBadge(s)}
           <span class="ss-toc-idr" title="${esc(s.id)}">${esc(idShow)}</span></div>`;
       } else {
         html += `<div class="ss-toc-grp" data-depth="${depth}">${guides(depth)}<span class="ss-toc-dash"></span>${esc(node.label)}</div>`;
@@ -975,7 +989,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.14</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.15</div>
         </aside>
       </div>`);
 
@@ -1236,9 +1250,13 @@ ${HL_CSS}
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
-    applySize(DEVICES.mobile.w, DEVICES.mobile.h);
+    /* 시작 폭 = 이 문서가 서술하는 기준 폭. baseViewport: "mobile"(기본) | "pc" — 어드민은 PC, 앱은 모바일 (#17) */
+    const base = DEVICES[RAW.baseViewport] ? RAW.baseViewport : "mobile";
+    if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가 — mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
+    seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
+    applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.14] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.15] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -1272,7 +1290,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.14</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.15</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -1366,7 +1384,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.14] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.15] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

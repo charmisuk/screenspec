@@ -89,7 +89,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.14.1/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.15.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -179,6 +179,8 @@ addEventListener("load", function () {
 
 ### 6. 반응형 훅
 
+- **반응형 차이는 화면을 늘리지 말고 같은 화면의 다른 상태로 적는다** — 빈 상태·오류와 같은 층위. 기기별로 화면을 나누면 같은 사양이 2~3벌 복제돼 반드시 어긋난다. 예: `{ n:4, anno:"state", title:"좁은 화면", defs:[{ t:"연락처·권한 열 미표시" }] }`. 그 폭에서 아예 없는 화면만 `viewports:["pc"]` 메타로 표시. 기준 폭(어느 폭으로 서술·리뷰하나)은 프로젝트가 `baseViewport` 로 선언한다
+
 - 라이브러리가 시트 폭에 따라 `.ss-pc`(≥1100px) / `.ss-narrow`(≤520px) 클래스를 시트에 부여한다.
 - 프로토타입 CSS의 반응형 분기는 **미디어쿼리 대신 이 훅으로** 작성한다
   (폭 시뮬레이터가 컨테이너 폭만 바꾸므로 미디어쿼리는 반응하지 않는다).
@@ -196,6 +198,7 @@ addEventListener("load", function () {
 - [ ] PC 폭(1440)에서 화면정의서 모드 축소 배치 정상
 - [ ] 다중 화면이면: 화면 전환 시 헤더·기능 설명가 따라 바뀌는지 확인
 - [ ] `data-spec` 없는 specs 항목 없음 (마커가 숨겨지면 이것)
+- [ ] 각 화면에 빈 상태·로딩·오류를 적었는가 (해당 없으면 «없음» 을 명시했는가) — 보이는 것에만 마커를 달게 되므로 안 보이는 상태는 의식적으로 묻는다
 - [ ] 헤더의 화면 ID 칩 클릭 → 화면 목록 트리가 path 계층대로 열림 (그룹 행·뎁스 확인)
 - [ ] arrow 항목 클릭 시 지시선이 대상 요소를 실제로 가리킴 (큰 영역에 arrow를 쓰지 않았는지)
 - [ ] accent를 지정했다면 마커·하이라이트·버튼 색이 함께 바뀌었는지

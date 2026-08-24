@@ -451,6 +451,10 @@ function check(name, ok, detail) {
     await page.click("#ss-mDoc");
     await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
     const w = warns.filter((x) => x.includes("못 찾은 정의"));
+    check("지금 화면에 없는 정의는 패널에서 '현재 미표시' (#27)", await page.evaluate(() => {
+      const c = (n) => document.querySelector('[data-defrow="' + n + '"]').classList.contains("ss-now-hidden");
+      return !c(1) && c(2) && c(3) && c(4) && getComputedStyle(document.querySelector('[data-defrow="2"] .ss-nowtag')).display !== "none";
+    }));
     check("누락 경고 1회 + #n target 나열 + state 제외", w.length === 1 && w[0].includes("2건") &&
       w[0].includes('#2 target="2"') && w[0].includes('#4 target="4"') && !w[0].includes("#3") && w[0].includes("조건부(state) 1건"), w.join(" | ").slice(0, 200));
     page.off("console", onMsg);
@@ -515,7 +519,7 @@ function check(name, ok, detail) {
       [["S-01","홈",["홈"]],["S-02","목록",["홈","이용자","목록"]],["S-03","초대",["홈","이용자","초대"]],["S-04","상세",["홈","이용자","상세"]],
        ["S-05","계약",["홈","계약"]],["S-06","정산",["홈","정산"]],["S-07","설정",["홈","설정"]],["S-08","알림",["홈","설정","알림"]],
        ["S-09","프로필",["홈","설정","프로필"]],["S-10","로그",["홈","로그"]]]
-        .map(([id,name,path]) => JSON.stringify({ id, name, path, specs: [{ n: 1, target: "1", title: "t" }] })).join(",") + "]}</script>");
+        .map(([id,name,path]) => JSON.stringify({ id, name, path, specs: [{ n: 1, target: "1", title: "t" }], viewports: id === "S-10" ? ["pc"] : undefined })).join(",") + '],baseViewport:"pc"}</script>');
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
@@ -523,6 +527,8 @@ function check(name, ok, detail) {
     await page.click(".ss-toc-btn");
     await page.waitForTimeout(300);
     check("화면 10개: 목차 검색 입력 존재", (await page.locator(".ss-toc-search input").count()) === 1);
+    check("viewports:['pc'] → 목차 'PC 전용' 배지 (#17)", await page.evaluate(() => document.querySelector('[data-toc="S-10"] .ss-toc-vp')?.textContent === "PC 전용" && !document.querySelector('[data-toc="S-01"] .ss-toc-vp')));
+    check("baseViewport:'pc' → 시작 폭 PC (#17)", await page.evaluate(() => document.querySelector('#ss-seg button[data-w="pc"]').getAttribute("aria-pressed") === "true" && document.querySelector(".ss-sheet").style.width === "1920px" /* 정의서 모드는 화면에 맞춰 축소되므로 설정값으로 */));
     await page.fill(".ss-toc-search input", "초대");
     await page.waitForTimeout(200);
     const vis = () => page.evaluate(() => [...document.querySelectorAll(".ss-toc-body > *")].filter((r) => r.style.display !== "none").map((r) => r.dataset.toc || "grp:" + r.textContent.trim()));

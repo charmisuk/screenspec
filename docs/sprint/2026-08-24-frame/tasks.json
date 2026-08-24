@@ -14,7 +14,7 @@
       "type": "feat",
       "release": "v0.15.0",
       "title": "frame 모드 — 앱을 iframe(액자)에 넣고 뷰어(헤더·패널·마커·폭 시뮬레이터)는 밖에",
-      "status": "in-progress",
+      "status": "done",
       "plan": {
         "done": true,
         "cause": "overlay 는 앱과 뷰어가 한 창에 살아 (1) 설명 패널이 앱 우측 서랍을 덮고(#14) (2) 폭을 줄여도 미디어쿼리가 안 먹어 시뮬레이터를 둘 수 없다(#17). wrap 은 정적 HTML 을 시트(컨테이너)에 담아 둘 다 해결돼 있다 — 프레임워크 앱에도 같은 구조를 주되, DOM 을 옮길 수 없으니 iframe 으로 담는다",
@@ -50,8 +50,48 @@
         "evidence": "diff 범위: wrap/overlay 경로 불변(else 블록 그대로), createCore 는 appDoc/appWin 게터. lint 통과. e2e PASS 81 / FAIL 0 (기존 71 유지 + frame 10). smoke 5/5"
       },
       "commit": {
-        "done": false,
-        "sha": ""
+        "done": true,
+        "sha": "aa8d7ce"
+      }
+    },
+    {
+      "order": 2,
+      "issue": [
+        17,
+        27,
+        26
+      ],
+      "type": "feat",
+      "release": "v0.15.0",
+      "title": "반응형 문서 모델(baseViewport·viewports·SKILL 원칙) + 현재 미표시 표시 + §7 커버리지 질문",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "#17 코멘트: 쓰는 기준/보는 기준 분리 요청 — 값싼 1·2·3번. #27-1: state 정의가 지금 화면에 없음을 구분 불가. #26: §7 이 안 적은 것을 묻지 않음",
+        "change": "RAW.baseViewport 시작 폭, screen.viewports 목차 배지, SKILL §6 원칙 1줄·§7 커버리지 1줄, placeMarkers 에서 행에 ss-now-hidden 토글 + '현재 미표시' 태그",
+        "accept": [
+          "e2e 3건"
+        ],
+        "qa": [
+          "lint·e2e·smoke"
+        ],
+        "docs": [
+          "config.md 2행",
+          "SKILL 2줄"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접 ~40줄"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 84 / FAIL 0. smoke 5/5. baseViewport 검사식 1회 수정(정의서 모드 축소 고려)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "(release 커밋에 포함)"
       }
     }
   ],
@@ -60,12 +100,12 @@
     "optional:true 플래그 (#23 후반) — 사용자 결정 대기"
   ],
   "cycle_qa": {
-    "done": false,
-    "evidence": ""
+    "done": true,
+    "evidence": "lint·e2e 84·smoke 5 전부 통과"
   },
   "release": {
-    "done": false,
-    "version": "",
-    "sha": ""
+    "done": true,
+    "version": "0.15.0",
+    "sha": "(아래)"
   }
 }
