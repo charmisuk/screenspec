@@ -641,7 +641,8 @@ function check(name, ok, detail) {
     check("커버리지: 패널 ⚠ 줄이 미정의 축을 나열", await page.evaluate(() => {
       const el = document.querySelector(".ss-cov");
       const miss = el && el.querySelector(".ss-cov-miss");
-      return !!miss && miss.textContent === "⚠ 아직 적지 않은 상황 — 로딩 · 오류" && !el.innerText.includes("다룸");
+      return !!miss && miss.textContent === "⚠ 이 화면에 「로딩 · 오류」 설명이 없습니다" &&
+        el.innerText.includes("해당 없음") && el.title.includes("checklist"); /* 카드가 스스로 설명한다 */
     }));
     check("커버리지: 사유 없는 skip · checklist 밖 covers 경고", 
       cWarns.some((w) => w.includes('skip "오류" 에 사유가 없습니다')) &&

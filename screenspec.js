@@ -177,7 +177,7 @@
     const c = coverage(s);
     if (!c || !c.missing.length) return "";
     const t = c.missing.join(" · ") + " 미정의";
-    return '<span class="ss-toc-undef ss-toc-cov" title="' + esc("상태 커버리지 — " + t) + '">⚠ ' + esc(t) + "</span>";
+    return '<span class="ss-toc-undef ss-toc-cov" title="' + esc("이 화면에 「" + c.missing.join(" · ") + "」 설명이 없습니다 — 설정의 checklist 로 정한 점검 항목") + '">⚠ ' + esc(t) + "</span>";
   }
   /* 패널 하단 블록 — 다룸 / 비움(사유) / ⚠ 미정의. 비어 있는 묶음은 줄 자체를 내지 않는다 */
   function covBlockHTML(s) {
@@ -186,8 +186,12 @@
     /* 이건 정의서를 "쓰는 사람" 에게 필요한 정보다 — 다 채우면 사라진다(체크리스트의 정상 동작).
        읽는 사람의 패널에 «전부 다룸» 이 계속 떠 있으면 무엇을 하라는 것인지 애매해진다. */
     if (!c.missing.length) return "";
-    let out = '<div class="ss-cov" title="' + esc("설정의 checklist 로 이 프로젝트가 정한 점검 항목입니다 (" + CHECKLIST.join(" · ") + ")") + '">' +
-      '<div class="ss-cov-miss">⚠ 아직 적지 않은 상황 — ' + esc(c.missing.join(" · ")) + "</div>";
+    /* 카드는 스스로를 설명해야 한다 — 이 기능을 모르는 사람에게도 «왜 떴고 뭘 하면 사라지는지» 가 보여야 한다 */
+    const tip = "설정의 checklist 로 이 프로젝트가 정한 점검 항목입니다 (" + CHECKLIST.join(" · ") +
+      "). 이 화면의 covers 에 적거나, 해당 없으면 skip: { \"축\": \"사유\" } 로 비우면 사라집니다.";
+    let out = '<div class="ss-cov" title="' + esc(tip) + '">' +
+      '<div class="ss-cov-miss">⚠ 이 화면에 「' + esc(c.missing.join(" · ")) + '」 설명이 없습니다</div>' +
+      '<div class="ss-cov-l">이 프로젝트가 화면마다 챙기기로 한 항목입니다. 설명을 더하거나, 이 화면에 해당 없으면 사유와 함께 「해당 없음」으로 적으면 사라집니다.</div>';
     if (c.skipped.length) out += '<div class="ss-cov-l">해당 없음 — ' + esc(c.skipped.map((z) => z.axis + " (" + z.reason + ")").join(" · ")) + "</div>";
     return out + "</div>";
   }
@@ -1136,6 +1140,8 @@ ${HL_CSS}
           console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + (i ? partSuffix(i - 1) : "") + ": flowTo \"" + it.flowTo + "\" 화면이 screens에 없습니다 — 이동 버튼이 동작하지 않습니다");
       });
     }));
+    /* 상태 점검이 켜져 있으면 그 사실을 알린다 — 설정을 직접 넣지 않은 사람도 «저 ⚠ 가 뭔지» 를 알 수 있게 */
+    if (CHECKLIST) console.info("[ScreenSpec] 상태 점검 켜짐 — 화면마다 " + CHECKLIST.join(" · ") + " 를 적었는지 확인합니다. 화면의 covers 에 적거나 skip 에 사유를 적으면 ⚠ 가 사라집니다");
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
     const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
     const mode = RAW.mode || (isFramework ? "overlay" : "wrap");

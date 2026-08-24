@@ -92,7 +92,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.18.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.18.1/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -172,7 +172,9 @@ window.SCREENSPEC = {
 - `covers`에는 **실제로 그 축의 `anno:"state"` 정의를 쓴 축만** 적는다. 적지 않고 `covers`에만 넣는 것은 커버리지를 거짓말하게 만든다.
 - 그 화면에 해당 축이 없으면 비우지 말고 `skip`에 **사유와 함께** 적는다. 사유가 비면 라이브러리가 미정의로 되돌리고 경고한다.
 - 적은 상태를 프로토타입이 만들 수 있으면 `preview` + 리스너로 **실물까지 보여준다** (아래 3-F).
-- 목차 배지 `⚠ … 미정의`와 패널의 점선 카드가 **하나도 남지 않을 때까지** 채운다 — 다 채우면 저절로 사라진다. 사용자가 `checklist`를 주지 않았다면 이 필드들은 쓰지 않는다.
+- 목차 배지 `⚠ … 미정의`와 패널의 점선 카드가 **하나도 남지 않을 때까지** 채운다 — 다 채우면 저절로 사라진다.
+- **사용자가 `checklist`를 주지 않았다면 이 필드들을 쓰지 않는다.** 넣을 때는 «화면마다 빈 상태·로딩·오류를 적었는지 도구가 확인해 줍니다. 다 적으면 표시가 사라집니다» 를 **보고에 반드시 한 줄로 알린다** — 모르고 보면 ⚠ 가 무슨 뜻인지 알 수 없다.
+- 사용자가 «이 ⚠ 가 뭐냐» 또는 «이거 없애줘» 라고 하면: 그 화면에 해당 상태 정의(`anno:"state"`)를 추가하고 `covers` 에 넣거나, 그 화면에 없는 상황이면 `skip: { "로딩": "사유" }` 로 적는다. 사유 없이 지우려고 `covers` 에만 적지 않는다(커버리지가 거짓이 된다).
 
 ### 3-E. 정의서 끄기 — 프로토타입만 보여줄 자리
 
