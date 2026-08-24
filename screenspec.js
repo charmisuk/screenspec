@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.16 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.17 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -74,6 +74,17 @@
   window.__SCREENSPEC_BOOTED__ = true;
 
   const RAW = window.SCREENSPEC || window.SPECLAYER || {}; /* 구명칭 호환 */
+
+  /* 정의서 공개 스위치 — "붙이는 것" 과 "보여주는 것" 을 분리한다.
+     off:true 면 아무것도 만들지 않고 끝낸다(원본 프로토타입 그대로). 정의는 코드에 그대로 남는다.
+     주소에 ?screenspec=1 (또는 #screenspec) 을 붙이면 그때만 켜지므로, 같은 파일로
+     "프로토타입만 보여주기" 와 "정의서까지 보기" 를 동시에 쓸 수 있다. ?screenspec=0 은 반대(임시 끄기).
+     숨김이지 보안이 아니다 — 정의 텍스트는 페이지 소스에 남는다. */
+  const SWITCH = (function () {
+    const m = (location.search + location.hash).match(/[?&#]screenspec(?:=([^&#\s]*))?/);
+    if (m) return /^(0|off|false|no)$/i.test(decodeURIComponent(m[1] || "1")) ? "off" : "on";
+    return RAW.off === true ? "off" : "on";
+  })();
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
     : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
@@ -1024,6 +1035,15 @@ ${HL_CSS}
     try {
       if (window.frameElement && window.frameElement.dataset && window.frameElement.dataset.ssFrame) return;
     } catch (e) { /* cross-origin: 우리 액자가 아니다 */ }
+    /* off — 원본 프로토타입 그대로. CSS·UI·DOM 어디에도 손대지 않고 끝낸다.
+       프로토타입이 setScreen()·refresh() 를 부르고 있을 수 있으므로 빈 껍데기만 남긴다(안 그러면 프로토타입이 깨진다). */
+    if (SWITCH === "off") {
+      const noop = function () {};
+      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true };
+      window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
+      console.info("[ScreenSpec] off — 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
+      return;
+    }
     /* 설정 유무 판정 — screens·screen·specs 중 하나라도 있으면 "설정함"으로 본다 */
     if (!(RAW.screens && RAW.screens.length) && !RAW.screen && !(RAW.specs && RAW.specs.length)) {
       setupNotice();
@@ -1124,7 +1144,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.16</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.17</div>
         </aside>
       </div>`);
 
@@ -1396,7 +1416,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.16] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.17] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -1427,7 +1447,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.16</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.17</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -1517,7 +1537,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.16] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.17] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

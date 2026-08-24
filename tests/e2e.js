@@ -701,6 +701,56 @@ function check(name, ok, detail) {
     page.off("console", onMsg);
   }
 
+  /* ============ off 스위치: 붙여 두고 끄기 ============
+     정의서를 붙인 것과 공개한 것은 다른 결정이다. off 면 원본 프로토타입과 구별되지 않아야 한다. */
+  console.log("[docs] off 스위치");
+  {
+    const CFG = 'window.SCREENSPEC={off:true,screen:{id:"S-OFF",name:"o"},specs:[{n:1,target:"1",title:"헤더"}]}';
+    const BODY = '<h1 id="own" data-spec="1">내 프로토타입</h1>';
+    const infos = [];
+    const onMsg = (msg) => { if (msg.type() === "info") infos.push(msg.text()); };
+    page.on("console", onMsg);
+    await page.goto("about:blank");
+    await page.setContent(BODY + "<script>" + CFG + "</script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(600);
+    check("off: UI 0개 (토글·마커·시트·안내카드)", await page.evaluate(() =>
+      !document.querySelector(".ss-toolbar,.ss-pill,.ss-sheet,.ss-marker,.ss-ov-panel,.ss-ui")));
+    check("off: 주입 CSS 없음 + body 클래스 불변", await page.evaluate(() =>
+      ![...document.querySelectorAll("style")].some((s) => s.textContent.includes("--ss-accent")) && document.body.className === ""));
+    check("off: 원본 DOM 그대로 (감싸지 않음)", await page.evaluate(() =>
+      document.getElementById("own").parentElement === document.body && document.body.children.length === 2));
+    check("off: 프로토타입이 API 를 불러도 깨지지 않음 (no-op)", await page.evaluate(() => {
+      try { window.ScreenSpec.setScreen("X"); window.ScreenSpec.refresh(); } catch (e) { return false; }
+      return window.ScreenSpec.mode === "off" && window.ScreenSpec.current() === null && window.SpecLayer === window.ScreenSpec;
+    }));
+    check("off: 켜는 방법을 콘솔로 알린다", infos.some((t) => t.includes("off") && t.includes("?screenspec=1")), infos.join(" | ").slice(0, 140));
+    page.off("console", onMsg);
+
+    /* 주소 스위치 — 설정보다 강하다. file:/about:blank 은 쿼리를 못 붙이므로 로컬 서버로 */
+    const srv2 = http.createServer((req, res) => {
+      if (req.url.indexOf("/screenspec.js") === 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      const on = req.url.indexOf("cfgon") > -1;
+      res.setHeader("content-type", "text/html");
+      res.end("<!doctype html><body>" + BODY + "<script>" +
+        (on ? CFG.replace("off:true,", "") : CFG) + "</script><script src=\"/screenspec.js\"></script></body>");
+    });
+    await new Promise((r) => srv2.listen(4183, r));
+    await page.goto("http://localhost:4183/?screenspec=1");
+    await page.waitForTimeout(700);
+    check("?screenspec=1 → off:true 를 이기고 정상 부팅", await page.evaluate(() =>
+      !!document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "wrap"));
+    await page.goto("http://localhost:4183/cfgon?screenspec=0");
+    await page.waitForTimeout(700);
+    check("?screenspec=0 → 설정이 켜져 있어도 off", await page.evaluate(() =>
+      !document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "off"));
+    await page.goto("http://localhost:4183/#screenspec");
+    await page.waitForTimeout(700);
+    check("#screenspec (해시·값 생략) → 켜짐", await page.evaluate(() =>
+      !!document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "wrap"));
+    srv2.close();
+  }
+
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
      클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */
   console.log("[inline] 자체 완결 파일");

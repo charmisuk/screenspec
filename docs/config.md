@@ -15,6 +15,7 @@ window.SCREENSPEC = {
   baseViewport?: "mobile" | "pc",  // wrap·frame 시작 폭 = 이 문서가 서술하는 기준 폭. 기본 mobile
   devices?: { mobile?: Device, pc?: Device },  // wrap·frame. 기기 프리셋 덮어쓰기
   checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
+  off?:     boolean,              // true = 완전 정지. 원본 프로토타입 그대로 (주소에 ?screenspec=1 이면 켜진다)
 
   // 화면이 하나면 screen + specs
   screen?:  Screen,               // specs 없이 메타만
@@ -72,6 +73,7 @@ type Device = { w: number, h: number }
 | `baseViewport` | `"mobile"` \| `"pc"` | `"mobile"` | wrap·frame 의 시작 폭 = 이 문서가 서술하는 기준 폭. PC 앞에서 쓰는 어드민은 `"pc"`, 앱은 기본값. 반응형 차이는 화면을 늘리지 말고 같은 화면의 `anno:"state"` 항목으로 적는다 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap·frame 전용. 기기 프리셋 크기 덮어쓰기 |
 | `checklist` | string[] | — | 프로젝트가 정한 상태 축. 있으면 화면마다 `covers`/`skip` 로 커버리지를 표시한다. 없거나 문자열 배열이 아니면 기능이 꺼지고 콘솔 경고. 아래 [상태 커버리지](#상태-커버리지) 참조 |
+| `off` | boolean | `false` | `true`면 라이브러리가 **아무것도 하지 않는다** — CSS·UI·DOM 어디에도 손대지 않고 원본 프로토타입 그대로. 정의는 코드에 남아 있고, 주소에 `?screenspec=1`을 붙이면 그때만 켜진다. 아래 [정의서 끄기](#정의서-끄기-off) 참조 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
 | `specs` | `Spec[]` | `[]` | 화면이 하나일 때의 기능 설명 |
 | `screens` | `Screen[]` | — | 화면이 여럿일 때. 있으면 `screen`·`specs`는 무시된다 |
@@ -85,6 +87,30 @@ overlay 는 앱과 뷰어가 한 창에 살기 때문에 (1) 설명 패널이 �
 frame 은 앱을 액자 안에 가두므로 **설명 패널이 앱을 덮지 않고**, 툴바의 **모바일/PC 로 실제 미디어쿼리가 발화**한다(폭 시뮬레이터가 그대로 동작).
 화면 추적은 overlay 와 같은 규칙(`route`·`root`)이고, 액자 안 경로는 바깥 주소에 미러링돼 새로고침해도 보던 화면으로 돌아온다.
 조건: **앱이 주소(URL)로 열리고 same-origin** 일 것 (cross-origin 이면 액자 안을 조종할 수 없다). 명시해야만 켜진다.
+
+### 정의서 끄기 (off)
+
+정의서를 붙이는 것과 **공개하는 것**은 다른 결정이다. 프로토타입만 보여주고 싶은 자리(초기 리뷰·외부 데모)가 있는데,
+그때마다 정의를 뜯어냈다가 다시 붙이는 것은 낭비다. `off`로 스위치만 내린다.
+
+```js
+window.SCREENSPEC = {
+  off: true,          // 이 한 줄만 추가 — 나머지 설정은 그대로 둔다
+  screens: [ /* 정의는 그대로 남아 있다 */ ],
+};
+```
+
+| 상태 | 화면 | 켜는 법 |
+|---|---|---|
+| `off: true` | 원본 프로토타입 그대로. 모드 토글·마커·설명 패널·주입 CSS 전부 없음 | 주소 끝에 `?screenspec=1` (또는 `#screenspec`) |
+| `off` 없음(기본) | 지금까지처럼 정의서 모드 | — |
+| 임시로 끄기 | — | 주소 끝에 `?screenspec=0` — 설정을 고치지 않고 그 탭에서만 끈다 |
+
+- 주소 스위치가 설정보다 **강하다**. 그래서 `off: true`로 배포해 두고, 리뷰할 사람만 `?screenspec=1`로 열면 된다. 같은 파일 하나로 두 청중을 감당한다.
+- off 상태에서도 `window.ScreenSpec.setScreen()`·`refresh()`는 **빈 함수로 남는다** — 프로토타입이 그 호출을 갖고 있어도 깨지지 않는다. `window.ScreenSpec.mode`는 `"off"`.
+- `data-spec` 속성은 그대로 남지만 보이지도, 아무 영향도 주지 않는다 (그냥 속성이다).
+- **숨김이지 보안이 아니다.** 정의 텍스트는 페이지 소스(`window.SCREENSPEC`)에 그대로 있어, 소스를 열면 읽힌다.
+  정말 넘겨서는 안 되는 내용이면 정의를 지운 사본을 따로 만들어 전달한다.
 
 **accent 프리셋**: `blue` #2952E3 · `red` #E5484D · `orange` #F76B15 · `green` #18794E · `purple` #8E4EC6
 
@@ -209,7 +235,7 @@ window.SCREENSPEC = {
 window.ScreenSpec.setScreen("SCR-XXX-002")  // 화면 수동 전환 (자동 감지가 안 될 때)
 window.ScreenSpec.current()                 // 현재 화면 id
 window.ScreenSpec.refresh()                 // 레이아웃·마커 재계산
-window.ScreenSpec.mode                      // "wrap" | "overlay" | "frame"
+window.ScreenSpec.mode                      // "wrap" | "overlay" | "frame" | "off"
 ```
 
 `setScreen`은 wrap에서 root 표시/숨김 토글을 동반하고, overlay는 앱 DOM을 건드리지 않으므로 root가 보이는 동안만 유지된다.
@@ -241,6 +267,7 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | 화면 ID 중복 | 같은 `id`가 둘 이상 (뒤엣것은 목차·이동에서 무시) |
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
 | accent "X" 인식 불가 | 프리셋명·hex·`var(--x)` 어느 것도 아님 |
+| off — 프로토타입 원본 그대로입니다 | `off: true`(또는 `?screenspec=0`). `console.info`이며 화면에는 아무것도 뜨지 않는다. 켜는 방법을 같이 안내한다 |
 | baseViewport "X" 인식 불가 | `mobile`·`pc`(또는 `devices`에 추가한 이름)가 아님 |
 | panel 설정은 v0.15 에서 폐기 | v0.14 의 `panel:"left"`가 남아 있음. 지우고, 겹치면 `mode:"frame"` |
 | checklist 는 문자열 배열이어야 합니다 — 무시 | `checklist`가 빈 배열이거나 문자열이 아닌 값을 포함 |

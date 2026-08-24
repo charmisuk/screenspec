@@ -91,7 +91,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.16.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.17.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -171,6 +171,19 @@ window.SCREENSPEC = {
 - `covers`에는 **실제로 그 축의 `anno:"state"` 정의를 쓴 축만** 적는다. 적지 않고 `covers`에만 넣는 것은 커버리지를 거짓말하게 만든다.
 - 그 화면에 해당 축이 없으면 비우지 말고 `skip`에 **사유와 함께** 적는다. 사유가 비면 라이브러리가 미정의로 되돌리고 경고한다.
 - 목차 배지 `⚠ … 미정의`가 남아 있으면 아직 안 끝난 것이다. 사용자가 `checklist`를 주지 않았다면 이 필드들은 쓰지 않는다.
+
+### 3-E. 정의서 끄기 — 프로토타입만 보여줄 자리
+
+사용자가 "정의서는 잠깐 빼고 프로토타입만 보여주고 싶다"고 하면 **정의를 지우지 않는다.** `off: true` 한 줄만 넣는다.
+
+```js
+window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 */ ] };
+```
+
+- off 면 라이브러리가 아무것도 만들지 않는다 — 원본 프로토타입 그대로.
+- 사용자 본인은 주소 끝에 `?screenspec=1` 을 붙여 언제든 정의서를 볼 수 있다. 이 사용법을 **보고할 때 반드시 알린다** (모르면 켤 방법이 없다).
+- 반대로 설정은 그대로 두고 그 탭에서만 끄고 싶으면 `?screenspec=0`.
+- **정의를 지워 달라는 요청과 구분한다.** 소스를 열면 정의 텍스트는 읽히므로, "외부에 절대 나가면 안 된다"면 off 가 아니라 정의를 뺀 사본을 따로 만든다.
 
 ### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 
