@@ -654,7 +654,7 @@ ${HL_CSS}
     function render() {
       ctx.headerEl.innerHTML = headerFieldsHTML(current);
       if (current._unmapped) {
-        ctx.cntEl.textContent = "0항목";
+        ctx.cntEl.textContent = "항목 0개";
         ctx.listEl.innerHTML = '<div class="ss-empty">이 화면은 아직 정의되지 않았습니다.<br>' +
           '설정의 <b>screens</b>에 이 경로(<code>' + esc(current._path) + '</code>)를 추가하면 여기 나타납니다.</div>';
         ctx.markerLayer.innerHTML = "";
@@ -662,8 +662,9 @@ ${HL_CSS}
         return;
       }
       const subCnt = items().filter((it) => it.isPart).length;
-      /* parts 가 있으면 상위/하위를 갈라 적는다 — "8항목"은 정의 밀도를 실제보다 얇아 보이게 한다 (#25) */
-      ctx.cntEl.textContent = subCnt ? "상위 " + specs().length + " · 하위 " + subCnt : specs().length + "항목";
+      /* parts 가 있으면 세부를 갈라 적는다 — 「항목 8개」만 세면 정의 밀도가 실제보다 얇아 보인다 (#25).
+         「상위·하위」는 관계를 가리키는 말이라 무엇의 위인지 모르면 읽히지 않아 「항목 N개 · 세부 M개」로 (#30) */
+      ctx.cntEl.textContent = "항목 " + specs().length + "개" + (subCnt ? " · 세부 " + subCnt + "개" : "");
       if (specs().length === 0) {
         /* 등록은 했지만 아직 정의를 안 쓴 화면 — 처음 붙이는 사람이 가장 오래 머무는 자리. 백지 대신 다음 할 일 (#19) */
         const r = rootEl();

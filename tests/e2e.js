@@ -162,9 +162,9 @@ function check(name, ok, detail) {
   await page.click("#ss-mDoc");
   await page.waitForTimeout(500);
   check("MOA 홈 기능 설명 9행", (await page.locator(".ss-defs-list .ss-row").count()) === 9); /* parts 는 행을 늘리지 않는다 — 상위 행 안의 블록 (#25) */
-  check("상단 바 parts 2개 → 헤더 '상위 9 · 하위 2' + 마커 1a·1b (#25)", await page.evaluate(() => {
+  check("상단 바 parts 2개 → 헤더 '항목 9개 · 세부 2개' + 마커 1a·1b (#25·#30)", await page.evaluate(() => {
     const labels = [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent);
-    return document.getElementById("ss-cnt").textContent === "상위 9 · 하위 2" &&
+    return document.getElementById("ss-cnt").textContent === "항목 9개 · 세부 2개" &&
       labels.includes("1a") && labels.includes("1b") &&
       [...document.querySelectorAll(".ss-part")].map((e) => e.dataset.part).join(",") === "1a,1b";
   }));
@@ -282,7 +282,7 @@ function check(name, ok, detail) {
     const e = document.querySelector(".ss-ov-panel .ss-empty");
     const n = document.querySelectorAll("[data-spec]").length;
     return !!e && e.textContent.includes("기능 설명이 아직 없습니다") && e.textContent.includes("S-10") &&
-      e.textContent.includes("data-spec 이 붙은 요소: " + n + "개") && document.querySelector("#ss-ovCnt").textContent === "0항목";
+      e.textContent.includes("data-spec 이 붙은 요소: " + n + "개") && document.querySelector("#ss-ovCnt").textContent === "항목 0개";
   }));
   await page.evaluate(() => history.pushState({}, "", "/members"));
   await page.waitForTimeout(400);
@@ -531,7 +531,7 @@ function check(name, ok, detail) {
     await page.click('[data-play="1a"]');
     await page.waitForTimeout(300);
     check("parts: 하위 ▶ 가 실제 팝업을 연다", await page.evaluate(() => !document.getElementById("pop").hidden));
-    check("parts: 헤더 항목 수 '상위 1 · 하위 2'", await page.evaluate(() => document.getElementById("ss-cnt").textContent === "상위 1 · 하위 2"));
+    check("parts: 헤더 항목 수 '항목 1개 · 세부 2개' (#30)", await page.evaluate(() => document.getElementById("ss-cnt").textContent === "항목 1개 · 세부 2개"));
 
     const pWarns = [];
     const onPMsg = (msg) => { if (msg.type() === "warning") pWarns.push(msg.text()); };
