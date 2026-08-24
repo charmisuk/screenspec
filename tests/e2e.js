@@ -251,6 +251,7 @@ function check(name, ok, detail) {
   await page.waitForTimeout(300);
   await page.click('[data-toc="S-09"]');
   await page.waitForTimeout(400);
+  check("화면 5개: 목차 검색 없음", (await page.locator(".ss-toc-search").count()) === 0);
   check("목차 → route 소프트 내비게이션", await page.evaluate(() =>
     window.ScreenSpec.current() === "S-09" && location.pathname === "/members" &&
     document.body.innerText.includes("이용자 명단")));
@@ -392,6 +393,34 @@ function check(name, ok, detail) {
       const hot = getComputedStyle(document.querySelector(".ss-marker.ss-hot")).backgroundColor;
       return v === "#123456" /* computed 는 var() 치환값 */ && st === "rgb(18, 52, 86)" && hot === "rgb(18, 52, 86)";
     }));
+  }
+
+  /* ============ 목차 검색 (#9): 화면 8개 이상 ============ */
+  console.log("[docs] 목차 검색");
+  {
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screens:[' +
+      [["S-01","홈",["홈"]],["S-02","목록",["홈","이용자","목록"]],["S-03","초대",["홈","이용자","초대"]],["S-04","상세",["홈","이용자","상세"]],
+       ["S-05","계약",["홈","계약"]],["S-06","정산",["홈","정산"]],["S-07","설정",["홈","설정"]],["S-08","알림",["홈","설정","알림"]],
+       ["S-09","프로필",["홈","설정","프로필"]],["S-10","로그",["홈","로그"]]]
+        .map(([id,name,path]) => JSON.stringify({ id, name, path, specs: [{ n: 1, target: "1", title: "t" }] })).join(",") + "]}</script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    check("화면 10개: 목차 검색 입력 존재", (await page.locator(".ss-toc-search input").count()) === 1);
+    await page.fill(".ss-toc-search input", "초대");
+    await page.waitForTimeout(200);
+    const vis = () => page.evaluate(() => [...document.querySelectorAll(".ss-toc-body > *")].filter((r) => r.style.display !== "none").map((r) => r.dataset.toc || "grp:" + r.textContent.trim()));
+    const v1 = await vis();
+    check("검색 '초대' → 매칭 행 + 조상(홈 화면·이용자 그룹)만", v1.length === 3 && v1[0] === "S-01" && v1[1] === "grp:이용자" && v1[2] === "S-03", JSON.stringify(v1));
+    await page.fill(".ss-toc-search input", "");
+    await page.waitForTimeout(200);
+    const v2 = await vis();
+    check("검색 비우면 전부 복원", v2.filter((x) => !x.startsWith("grp:")).length === 10, String(v2.length));
+    await page.click(".ss-toc-x");
   }
 
   /* ============ 설정 없이 스크립트만 넣은 경우 ============

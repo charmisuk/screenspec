@@ -280,6 +280,9 @@
   .ss-toc-head{display:flex;align-items:baseline;gap:8px;padding:11px 16px;border-bottom:1px solid var(--ss-line);
     position:sticky;top:0;background:#fff;font-size:13px;color:var(--ss-ink)}
   .ss-toc-head b{font-weight:800}
+  .ss-toc-search{position:sticky;top:41px;background:#fff;padding:8px 12px;border-bottom:1px solid var(--ss-line);z-index:1}
+  .ss-toc-search input{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--ss-line2);border-radius:7px;outline:none;color:var(--ss-ink)}
+  .ss-toc-search input:focus{border-color:var(--ss-accent)}
   .ss-toc-row{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;font-size:12.5px;
     border-bottom:1px solid var(--ss-line);transition:background .12s}
   .ss-toc-row:last-child{border-bottom:0}
@@ -687,7 +690,31 @@
       const tree = buildTree();
       let html = "";
       tree.children.forEach((c) => { html += renderNode(c, 0); });
-      toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div><div class="ss-toc-body">` + html + "</div>";
+      /* 화면이 많으면(≥ TOC_SEARCH_MIN) 검색 — 이름·ID 부분 일치, 매칭 행 + 그 조상 그룹만 남긴다 (#9) */
+      const search = SCREENS.length >= TOC_SEARCH_MIN
+        ? '<div class="ss-toc-search"><input type="search" placeholder="화면 이름·ID 검색" aria-label="화면 검색"></div>' : "";
+      toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div>` +
+        search + '<div class="ss-toc-body">' + html + "</div>";
+      const inp = toc.querySelector(".ss-toc-search input");
+      if (inp) inp.addEventListener("input", () => filterToc(inp.value));
+    }
+    const TOC_SEARCH_MIN = 8;
+    function filterToc(q) {
+      q = q.trim().toLowerCase();
+      const rows = [...toc.querySelectorAll(".ss-toc-body > *")];
+      if (!q) { rows.forEach((r) => (r.style.display = "")); return; }
+      rows.forEach((r) => (r.style.display = "none"));
+      rows.forEach((r, i) => {
+        if (!r.dataset.toc) return;
+        const sc = SCREENS.find((s) => s.id === r.dataset.toc);
+        if (!sc || !((sc.name || "").toLowerCase().includes(q) || sc.id.toLowerCase().includes(q))) return;
+        r.style.display = "";
+        let d = Number(r.dataset.depth); /* 조상: 위로 거슬러 가며 더 얕은 행(그룹이든 화면이든)만 — 트리 맥락 유지 */
+        for (let j = i - 1; j >= 0 && d > 0; j--) {
+          const g = rows[j];
+          if (Number(g.dataset.depth) < d) { g.style.display = ""; d = Number(g.dataset.depth); }
+        }
+      });
     }
     function openToc(anchor) {
       renderToc();
@@ -699,6 +726,8 @@
         toc.style.top = r.bottom + 8 + "px";
       }
       toc.classList.add("ss-open");
+      const inp = toc.querySelector(".ss-toc-search input");
+      if (inp && !(window.matchMedia && matchMedia("(max-width: 900px)").matches)) inp.focus();
     }
     function closeToc() { toc.classList.remove("ss-open"); }
     ctx.headerEl.addEventListener("click", (e) => {
