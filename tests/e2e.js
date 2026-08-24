@@ -161,7 +161,13 @@ function check(name, ok, detail) {
   await page.waitForTimeout(1200);
   await page.click("#ss-mDoc");
   await page.waitForTimeout(500);
-  check("MOA 홈 기능 설명 9행", (await page.locator(".ss-defs-list .ss-row").count()) === 9);
+  check("MOA 홈 기능 설명 9행", (await page.locator(".ss-defs-list .ss-row").count()) === 9); /* parts 는 행을 늘리지 않는다 — 상위 행 안의 블록 (#25) */
+  check("상단 바 parts 2개 → 헤더 '상위 9 · 하위 2' + 마커 1a·1b (#25)", await page.evaluate(() => {
+    const labels = [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent);
+    return document.getElementById("ss-cnt").textContent === "상위 9 · 하위 2" &&
+      labels.includes("1a") && labels.includes("1b") &&
+      [...document.querySelectorAll(".ss-part")].map((e) => e.dataset.part).join(",") === "1a,1b";
+  }));
   check("앱형 시트 여백 0 (탭바 하단 밀착)", await page.evaluate(() => {
     const cs = getComputedStyle(document.querySelector(".ss-sheet"));
     return cs.paddingBottom === "0px" && cs.paddingTop === "0px";
@@ -487,6 +493,58 @@ function check(name, ok, detail) {
     const late = warns3.filter((x) => x.includes("못 찾은 정의"));
     check("다 그려진 뒤 판정: 진짜 누락 #9 만 경고, 늦게 온 #1·#2 는 제외", late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes("#1 "), late.join(" | ").slice(0, 160));
     page.off("console", onMsg3);
+  }
+
+  /* ============ parts: 영역 안의 이름 있는 하위 요소 + 자동 라벨 (#25) ============ */
+  console.log("[docs] parts");
+  {
+    const partsCfg = (extra) => '<div data-spec="1">상단<span data-spec="1a" onclick="document.getElementById(\'pop\').hidden=false">3</span></div>' +
+      '<div id="pop" hidden>팝업</div><script>window.SCREENSPEC={screen:{id:"S-P",name:"parts"},specs:[' +
+      '{n:1,target:"1",title:"상단 타이틀 영역",defs:[{t:"화면 상단에 고정"}],parts:[' +
+      '{title:"항목 수",target:"1a",anno:"popup",play:{selector:"[data-spec=\'1a\']",label:"팝업 열기"},defs:[{t:"항목 개수를 1~99까지 표시"}]},' +
+      '{title:"더보기 버튼",defs:[{t:"팝업을 버튼 아래에 표시"}]}' + extra + ']}]}<\/script>';
+    await page.goto("about:blank");
+    await page.setContent(partsCfg(""));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("parts: 상위 행 1개 안에 하위 블록 1a·1b 순서대로 (라벨은 라이브러리가 매김)", await page.evaluate(() => {
+      const rows = document.querySelectorAll(".ss-defs-list .ss-row").length;
+      const parts = [...document.querySelectorAll(".ss-part")];
+      return rows === 1 && parts.length === 2 &&
+        parts.map((e) => e.dataset.part).join(",") === "1a,1b" &&
+        parts.map((e) => e.querySelector(".ss-part-no").textContent).join(",") === "1a,1b" &&
+        parts[0].closest(".ss-row").dataset.defrow === "1" &&
+        parts[0].querySelector(".ss-t").textContent === "항목 수";
+    }));
+    check("parts: 마커는 1 · 1a 만 (target 없는 1b 는 패널 전용)", await page.evaluate(() => {
+      const ms = [...document.querySelectorAll(".ss-marker")];
+      const vis = ms.filter((m) => m.style.display !== "none").map((m) => m.textContent);
+      return vis.join(",") === "1,1a" && !ms.some((m) => m.textContent === "1b");
+    }));
+    await page.click(".ss-marker.ss-marker-sub");
+    await page.waitForTimeout(300);
+    check("parts: 하위 마커 클릭 → 대상 강조 + 하위 블록 활성", await page.evaluate(() =>
+      document.querySelector('[data-spec="1a"]').classList.contains("ss-hl") &&
+      document.querySelector('.ss-part[data-part="1a"]').classList.contains("ss-active")));
+    await page.click('[data-play="1a"]');
+    await page.waitForTimeout(300);
+    check("parts: 하위 ▶ 가 실제 팝업을 연다", await page.evaluate(() => !document.getElementById("pop").hidden));
+    check("parts: 헤더 항목 수 '상위 1 · 하위 2'", await page.evaluate(() => document.getElementById("ss-cnt").textContent === "상위 1 · 하위 2"));
+
+    const pWarns = [];
+    const onPMsg = (msg) => { if (msg.type() === "warning") pWarns.push(msg.text()); };
+    page.on("console", onPMsg);
+    await page.goto("about:blank");
+    await page.setContent(partsCfg(',{title:"없는 하위",target:"1c-none"}'));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
+    const pw = pWarns.filter((x) => x.includes("못 찾은 정의"));
+    check("parts: target 없는 하위 요소도 누락 경고에 #1c 로 나온다", pw.length === 1 && pw[0].includes('#1c target="1c-none"') && pw[0].includes("1건"), pw.join(" | ").slice(0, 200));
+    page.off("console", onPMsg);
   }
 
   /* ============ accent = CSS 변수 참조 (#18) ============ */

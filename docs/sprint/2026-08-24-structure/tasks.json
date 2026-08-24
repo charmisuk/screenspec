@@ -54,18 +54,19 @@
       ],
       "type": "feat",
       "title": "parts — 영역 안 하위 요소, 라벨 자동(1a·1b), 자기 마커·anno·play, 헤더 '상위 N · 하위 M'",
-      "status": "todo",
+      "status": "done",
       "plan": {
-        "done": false
+        "done": true,
+        "note": "프롬프트에 명세(라벨 자동·자기 마커·anno·play·카운트·누락 경고)"
       },
       "dev": {
-        "done": false,
+        "done": true,
         "model": "opus",
-        "summary": ""
+        "summary": "opus 130k. flatItems 로 spec/part 통합 키. 이탈: partLabel 형식 미포함(범위), flowTo 검증은 메인이 보완"
       },
       "qa": {
-        "done": false,
-        "evidence": ""
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 92 / FAIL 0 (+7). smoke 5/5 (shop 마커 11)"
       },
       "commit": {
         "done": false,

@@ -37,9 +37,20 @@ type Spec = {
   anno?:    "box"|"arrow"|"input"|"state"|"motion"|"action"|"popup"|"flow",  // 기본 box
   title?:   string,     // 영역명
   defs?:    Def[],      // 기능 설명 줄
+  parts?:   Part[],     // 이 영역 안의 이름 있는 하위 요소. 라벨(1a·1b)은 라이브러리가 매긴다
   play?:    { selector: string, label: string },  // anno action·popup·flow: 재생 버튼
   flowTo?:  string,     // anno flow: 이동할 화면 id
   arrowTo?: string,     // anno arrow: 관계선을 그을 상대 요소 CSS 셀렉터
+}
+
+type Part = {           // 라벨은 적지 않는다 — parts[0] → "1a", parts[1] → "1b"
+  title:    string,     // 하위 요소명
+  target?:  string,     // 있으면 자기 마커를 갖는다. 없으면 패널에만
+  anno?:    (Spec 과 동일 8종),
+  defs?:    Def[],
+  play?:    { selector: string, label: string },
+  flowTo?:  string,
+  arrowTo?: string,
 }
 
 type Def    = { t: string, subs?: string[] }
@@ -100,6 +111,7 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `title` | string | | 영역명. 패널에서는 제목 옆에 마커 실제 위치에서 계산한 위치 힌트(상단·하단 / 좌측·우측·전체폭)가 자동으로 붙는다 — 화면 없이 읽어도 어디인지 알 수 있게 |
 | `optional` | boolean | | 조건부 요소(예: 특정 상태에서만 서는 버튼). `anno`와 무관하게 「못 찾은 정의」 경고에서 제외 |
 | `defs` | Def[] | | 기능 설명. 항목당 1~4줄 권장 |
+| `parts` | Part[] | | 영역 안의 이름 있는 하위 요소. 라벨 `1a`·`1b`는 라이브러리가 자동으로 매긴다(설정에 적지 않는다). 항목: `title`·`target`(선택)·`anno`·`defs`·`play`·`flowTo`·`arrowTo`. 아래 [Part](#part) 참조 |
 | `play` | `{selector, label}` | anno에 따라 | `action`·`popup`은 필수, `flow`는 선택. `selector`는 실제로 클릭할 요소, `label`은 버튼 문구 |
 | `flowTo` | string | `flow`면 ✔ | 이동할 화면 `id`. 없는 id면 콘솔 경고 |
 | `arrowTo` | string | | `arrow`에서만. 지정하면 대상 요소에서 이 요소로 관계선을 긋는다 |
@@ -116,6 +128,31 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `action` | 동작 | 클릭 시 화면 안에서 동작 (토스트·복사 등) | ▶ 버튼 → 실제 동작 재생 |
 | `popup` | 팝업 | 클릭 시 모달·레이어·바텀시트 | ▶ 버튼 → 실제 팝업 열림 |
 | `flow` | 이동 | 클릭 시 다른 화면으로 | ▶ 버튼 → 실제 화면 이동 + 정의서 동시 전환 |
+
+### Part
+
+영역 안의 **이름 있는 하위 요소** (항목 수·더보기 버튼·팝업 등). 「그 줄의 조건·분기」인 `Def.subs`와 성격이 다르다.
+라벨은 라이브러리가 매긴다 — `parts[0]` → `1a`, `parts[1]` → `1b` … `1z` 다음은 `1aa`. 설정에 번호를 적지 않는다.
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `title` | string | ✔ | 하위 요소명. 패널에서 라벨(`1a`) 옆에 굵게 |
+| `target` | string | | 대상 요소의 `data-spec` 속성값. 있으면 자기 마커(`1a`)를 갖고, 없으면 패널에만 렌더된다 |
+| `anno` | 8종 중 하나 | | Spec 과 동일. 생략하면 `box` |
+| `defs` | Def[] | | Spec 과 동일 (`subs`·`why` 포함) |
+| `play` | `{selector, label}` | anno에 따라 | Spec 과 동일. ▶ 버튼이 하위 블록 안에 붙는다 |
+| `flowTo` | string | `flow`면 ✔ | Spec 과 동일 |
+| `arrowTo` | string | | Spec 과 동일 |
+
+```js
+{ n:1, target:"1", title:"상단 타이틀 영역", defs:[{ t:"화면 상단에 고정" }],
+  parts:[
+    { title:"항목 수", target:"1a", defs:[{ t:"항목 개수를 1~99까지 표시" }] },
+    { title:"더보기 버튼", target:"1b", anno:"popup", play:{ selector:'[data-spec="1b"]', label:"팝업 열기" } },
+  ]}
+```
+
+`parts`가 하나라도 있으면 패널 헤더의 항목 수가 `상위 N · 하위 M`으로 갈라진다. 목차의 커버리지(`N/M 정의됨`)는 화면 단위 그대로다.
 
 ### Def
 
@@ -166,7 +203,7 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | 메시지 | 원인 |
 |---|---|
 | 설정이 없어 화면정의서를 만들 수 없습니다 | `window.SCREENSPEC` 미설정 |
-| data-spec 요소를 못 찾은 정의 N건 — #n target="…" | `target`에 해당하는 `data-spec` 속성 누락. 어느 정의인지 `#n target`으로 나열. `anno:"state"`(조건부 표시)는 없는 게 정상일 수 있어 건수에서 제외하고 "조건부(state) M건은 제외"로 따로 표기 |
+| data-spec 요소를 못 찾은 정의 N건 — #n target="…" | `target`에 해당하는 `data-spec` 속성 누락. 어느 정의인지 `#n target`으로 나열(하위 요소는 `#1a`). `anno:"state"`(조건부 표시)는 없는 게 정상일 수 있어 건수에서 제외하고 "조건부(state) M건은 제외"로 따로 표기 |
 | 화면 ID 중복 | 같은 `id`가 둘 이상 (뒤엣것은 목차·이동에서 무시) |
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
 | accent "X" 인식 불가 | 프리셋명·hex·`var(--x)` 어느 것도 아님 |

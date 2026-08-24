@@ -198,12 +198,12 @@
       <input placeholder="어떤 상품을 찾으세요?" maxlength="30">
     </div>
     <div class="top-icons">
-      <button class="icon-btn" aria-label="알림" onclick="toast('데모: 알림함으로 이동합니다')">
+      <button class="icon-btn" data-spec="1b" aria-label="알림" onclick="toast('데모: 알림함으로 이동합니다')">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.9"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg>
       </button>
       <button class="icon-btn" aria-label="장바구니" onclick="toast('데모: 장바구니로 이동합니다')">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.9"><path d="M6 7h13l-1.5 9h-10L5.2 4H3"/><circle cx="9" cy="20" r="1.4" fill="#141414"/><circle cx="16" cy="20" r="1.4" fill="#141414"/></svg>
-        <span class="cart-badge">2</span>
+        <span class="cart-badge" data-spec="1a">2</span>
       </button>
     </div>
   </div>
@@ -426,9 +426,15 @@ window.SCREENSPEC = {
       root: '[data-ss-screen="SCR-MOA-HOME-001"]',
       specs: [
         { n:1, target:"1", anno:"box", title:"상단 바", defs:[
-          { t:"로고 + 알림·장바구니 아이콘 상시 노출" },
-          { t:"장바구니 뱃지 = 담긴 수량, 최대 99+ 표기", subs:[
-            "수량 0이면 뱃지 미노출"]}]},
+          { t:"로고 + 알림·장바구니 아이콘 상시 노출" }],
+          parts:[
+            { title:"장바구니 뱃지", target:"1a", anno:"state", defs:[
+              { t:"담긴 수량 표시 · 99 초과 시 99+ 표기", subs:[
+                "수량 0이면 뱃지 미노출"]}]},
+            { title:"알림 버튼", target:"1b", anno:"action",
+              play:{ selector:'[data-spec="1b"]', label:"동작 재생 — 알림함 이동" }, defs:[
+              { t:"탭 시 알림함으로 이동" },
+              { t:"읽지 않은 알림이 있으면 점 표시" }]}]},
         { n:2, target:"2", anno:"input", title:"검색창", defs:[
           { t:"플레이스홀더 \"어떤 상품을 찾으세요?\" 고정" },
           { t:"입력 최대 30자 · 자동완성은 2자부터 표시", subs:[

@@ -221,6 +221,14 @@
     box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent);transition:background .12s}
   .ss-play:hover{background:color-mix(in srgb,var(--ss-accent) 82%,#000)}
   .ss-play:active{transform:translateY(1px)}
+  /* 하위 요소(parts) — 상위 행 안쪽에 한 단 들여쓴 블록. 라벨(1a·1b)은 라이브러리가 매긴다 (#25) */
+  .ss-part{margin:10px 0 0 18px;padding:2px 0 5px 12px;border-left:2px solid var(--ss-line2);transition:background .12s}
+  .ss-part.ss-active{background:var(--ss-accent-soft);border-left-color:var(--ss-accent);border-radius:0 6px 6px 0}
+  .ss-part .ss-title{margin-bottom:4px}
+  .ss-part .ss-t{font-size:12.5px}
+  .ss-part-no{font-family:var(--ss-mono);font-size:11.5px;font-weight:800;color:var(--ss-ink3)}
+  .ss-part.ss-active .ss-part-no{color:var(--ss-accent)}
+  .ss-part .ss-play{margin:7px 0 0 16px}
   .ss-frame{position:relative}
   .ss-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
@@ -266,6 +274,7 @@
     font-size:12px;font-weight:800;font-family:var(--ss-mono);
     display:grid;place-items:center;box-shadow:0 2px 8px rgba(17,24,39,.28);cursor:pointer}
   .ss-marker.ss-hot{background:var(--ss-accent);color:#fff;border-color:var(--ss-accent)}
+  .ss-marker.ss-marker-sub{font-size:10.5px;letter-spacing:-.03em} /* 1a·1b — 크기는 그대로, 글자만 줄여 맞춘다 */
   .ss-markers,.ss-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
   .ss-anno{z-index:8030;overflow:visible}
   body.ss-mode-proto .ss-marker,body.ss-mode-proto .ss-anno{display:none}
@@ -376,28 +385,64 @@ ${HL_CSS}
     document.head.appendChild(style);
   }
 
-  /* 기능정의 행 HTML (wrap·overlay 공용) */
+  /* parts[i] → a·b … z·aa. 라벨은 라이브러리가 매긴다 — 사람이 번호를 쥐면 항목 하나 끼울 때마다 뒤가 전부 밀린다 (#25) */
+  const PART_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+  function partSuffix(i) {
+    let out = "";
+    for (let v = i; v >= 0; v = Math.floor(v / 26) - 1) out = PART_LETTERS[v % 26] + out;
+    return out;
+  }
+  /* 렌더 단위 평탄화 — 상위(spec)와 하위(part)를 같은 모양의 항목으로 편다 (#25).
+     key = 상위 "1" · 하위 "1a" (문자열). 마커·활성화·배치·화살표·재생이 전부 이 key 로 돈다. */
+  function flatItems(specs) {
+    const out = [];
+    (specs || []).forEach((s) => {
+      out.push({ key: String(s.n), label: String(s.n), isPart: false, parent: null, spec: s });
+      (s.parts || []).forEach((p, i) => {
+        const key = String(s.n) + partSuffix(i);
+        out.push({ key: key, label: key, isPart: true, parent: s, spec: p });
+      });
+    });
+    return out;
+  }
+  /* 정의 불렛(공통) — 근거는 사양과 분리한다. 구현자는 사양만, 검토자는 이유까지 (#24) */
+  function defItemsHTML(defs) {
+    let items = "";
+    (defs || []).forEach((d) => {
+      items += "<li>" + esc(d.t) + (d.why ? '<span class="ss-why" title="이유">' + esc(d.why) + "</span>" : "") + "</li>";
+      (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + esc(sub) + "</li>"; });
+    });
+    return items;
+  }
+  /* ▶ 버튼(공통) — key 는 상위 "1" · 하위 "1a" */
+  function playBtnHTML(sp, key) {
+    const type = annoOf(sp);
+    if (type.mech === "play" && sp.play)
+      return '<button class="ss-play" data-play="' + key + '">▶ ' + esc(sp.play.label || (sp.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
+    if (type.mech === "flow" && (sp.flowTo || sp.play)) {
+      const dest = SCREENS.find((x) => x.id === sp.flowTo);
+      return '<button class="ss-play" data-play="' + key + '">▶ ' + esc((sp.play && sp.play.label) || "이동 — " + (dest ? dest.name : sp.flowTo)) + "</button>";
+    }
+    return "";
+  }
+  /* 기능정의 행 HTML (wrap·overlay 공용) — 행은 상위 하나. parts 는 그 안에 한 단 들여쓴 블록으로 (#25) */
   function defsRowsHTML(specs) {
     let out = "";
     (specs || []).forEach((s) => {
-      let items = "";
-      (s.defs || []).forEach((d) => {
-        items += "<li>" + esc(d.t) + (d.why ? '<span class="ss-why" title="이유">' + esc(d.why) + "</span>" : "") + "</li>"; /* 근거는 사양과 분리 — 구현자는 사양만, 검토자는 이유까지 (#24) */
-        (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + esc(sub) + "</li>"; });
-      });
       const type = annoOf(s);
-      let play = "";
-      if (type.mech === "play" && s.play)
-        play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + esc(s.play.label || (s.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
-      else if (type.mech === "flow" && (s.flowTo || s.play)) {
-        const dest = SCREENS.find((x) => x.id === s.flowTo);
-        play = '<button class="ss-play" data-play="' + s.n + '">▶ ' + esc((s.play && s.play.label) || "이동 — " + (dest ? dest.name : s.flowTo)) + "</button>";
-      }
+      let parts = "";
+      (s.parts || []).forEach((p, i) => {
+        const key = String(s.n) + partSuffix(i);
+        parts += `<div class="ss-part" data-part="${key}">
+          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t">${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
+          <ul class="ss-items">${defItemsHTML(p.defs)}</ul>${playBtnHTML(p, key)}
+        </div>`;
+      });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
           <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
-          <ul class="ss-items">${items}</ul>${play}
+          <ul class="ss-items">${defItemsHTML(s.defs)}</ul>${playBtnHTML(s, s.n)}${parts}
         </div></div>`;
     });
     return out;
@@ -488,8 +533,8 @@ ${HL_CSS}
     const appDoc = () => ctx.doc || document;
     const appWin = () => ctx.win || window;
     let current = null;
-    let activeN = null;
-    let markerEls = {};
+    let activeKey = null;      /* 활성 항목 key — 상위 "1" · 하위 "1a" (문자열) */
+    let markerEls = {};        /* key → 마커 요소 */
     const warned = {};
 
     function rootEl() {
@@ -501,6 +546,14 @@ ${HL_CSS}
       return (r.querySelector ? r : appDoc()).querySelector('[data-spec="' + s.target + '"]');
     }
     function specs() { return (current && current.specs) || []; }
+    /* 상위·하위를 편 목록. 하위(part)는 parent 를 갖고, target 이 없으면 패널에만 산다 (#25) */
+    function items() { return flatItems(specs()); }
+    function itemOf(key) { return items().find((it) => it.key === key); }
+    /* 패널에서 그 항목의 블록 — 상위는 행 자체, 하위는 행 안의 .ss-part */
+    function blockOf(it) {
+      return it.isPart ? ctx.listEl.querySelector('[data-part="' + it.key + '"]')
+                       : document.getElementById("ss-def-" + it.key);
+    }
 
     function render() {
       ctx.headerEl.innerHTML = headerFieldsHTML(current);
@@ -512,7 +565,9 @@ ${HL_CSS}
         markerEls = {};
         return;
       }
-      ctx.cntEl.textContent = specs().length + "항목";
+      const subCnt = items().filter((it) => it.isPart).length;
+      /* parts 가 있으면 상위/하위를 갈라 적는다 — "8항목"은 정의 밀도를 실제보다 얇아 보이게 한다 (#25) */
+      ctx.cntEl.textContent = subCnt ? "상위 " + specs().length + " · 하위 " + subCnt : specs().length + "항목";
       if (specs().length === 0) {
         /* 등록은 했지만 아직 정의를 안 쓴 화면 — 처음 붙이는 사람이 가장 오래 머무는 자리. 백지 대신 다음 할 일 (#19) */
         const r = rootEl();
@@ -529,14 +584,16 @@ ${HL_CSS}
       ctx.listEl.innerHTML = defsRowsHTML(specs());
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
-      specs().forEach((s) => {
-        const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + s.n + ": " + s.title });
-        el.textContent = s.n;
-        el.onclick = (e) => { e.stopPropagation(); activate(s.n, "marker"); };
-        el.onmouseenter = () => showTip(s, el);
+      items().forEach((it) => {
+        if (it.isPart && !it.spec.target) return; /* target 없는 하위 요소는 패널에만 (#25) */
+        const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + it.label + ": " + (it.spec.title || "") });
+        if (it.label.length > 1) el.classList.add("ss-marker-sub");
+        el.textContent = it.label;
+        el.onclick = (e) => { e.stopPropagation(); activate(it.key, "marker"); };
+        el.onmouseenter = () => showTip(it, el);
         el.onmouseleave = () => (ctx.tip.style.display = "none");
         ctx.markerLayer.appendChild(el);
-        markerEls[s.n] = el;
+        markerEls[it.key] = el;
       });
       watchMissing(current);
       ctx.afterRender();
@@ -555,11 +612,15 @@ ${HL_CSS}
       const attempt = () => {
         if (sc !== current || warned[sc.id]) return stop();
         const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
-        specs().forEach((s) => { if (!targetOf(s)) (s.anno === "state" || s.optional ? cond : missing).push(s); }); /* optional:true — anno 와 무관하게 조건부 (#23) */
+        items().forEach((it) => { /* 하위 요소도 target 이 있으면 센다 — 보고는 #1a (#25) */
+          const sp = it.spec;
+          if (it.isPart && !sp.target) return;
+          if (!targetOf(sp)) (sp.anno === "state" || sp.optional ? cond : missing).push(it); /* optional:true — anno 와 무관하게 조건부 (#23) */
+        });
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
         warned[sc.id] = true;
         console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
-          missing.map((s) => "#" + s.n + " target=\"" + s.target + "\"").join(", ") +
+          missing.map((it) => "#" + it.label + " target=\"" + it.spec.target + "\"").join(", ") +
           " (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)" +
           (cond.length ? " · 조건부(state·optional) " + cond.length + "건은 제외" : ""));
         stop();
@@ -620,15 +681,19 @@ ${HL_CSS}
       return vert === "중앙" && horz === "중앙" ? "중앙" : vert + " · " + horz;
     }
     function placeMarkers() {
-      specs().forEach((s) => {
-        const t = targetOf(s), m = markerEls[s.n];
-        if (!m) return;
-        const row = ctx.listEl.querySelector('[data-defrow="' + s.n + '"]');
+      items().forEach((it) => {
+        if (it.isPart && !it.spec.target) return;
+        const t = targetOf(it.spec), m = markerEls[it.key];
         const hidden = !t || t.getClientRects().length === 0;
-        if (row) row.classList.toggle("ss-now-hidden", hidden); /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
+        const blk = blockOf(it);
+        if (blk && !it.isPart) blk.classList.toggle("ss-now-hidden", hidden); /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
+        if (blk && !hidden) { /* 위치 힌트는 상위·하위 각자의 블록에 (#25) */
+          const ph = blk.querySelector(it.isPart ? ".ss-pos" : ".ss-main > .ss-title > .ss-pos");
+          if (ph) ph.textContent = posHint(t);
+        }
+        if (!m) return;
         if (hidden) { m.style.display = "none"; return; }
         m.style.display = "";
-        if (row) { const ph = row.querySelector(".ss-pos"); if (ph) ph.textContent = posHint(t); }
         const pos = ctx.posOf(t);
         m.style.left = pos.left + "px";
         m.style.top = pos.top + "px";
@@ -643,7 +708,8 @@ ${HL_CSS}
     const ARROW_STANDOFF = 56;
     function clampPt(x, y, B) { return { x: Math.min(Math.max(x, B.l), B.r), y: Math.min(Math.max(y, B.t), B.b) }; }
     function drawArrow() {
-      const s = specs().find((x) => x.n === activeN);
+      const act = activeKey == null ? null : itemOf(activeKey);
+      const s = act && act.spec;
       if (!s || annoOf(s).mech !== "arrow") { ctx.annoLine.setAttribute("visibility", "hidden"); return; }
       const t = targetOf(s);
       if (!t) return;
@@ -670,10 +736,11 @@ ${HL_CSS}
       ctx.annoLine.setAttribute("x2", to.x); ctx.annoLine.setAttribute("y2", to.y);
       ctx.annoLine.setAttribute("visibility", "visible");
     }
-    function showTip(s, m) {
+    function showTip(it, m) {
+      const s = it.spec;
       ctx.tip.innerHTML =
-        '<div class="ss-tn">NO.' + s.n + " · " + esc(annoOf(s).label) + "</div>" +
-        '<div class="ss-tt">' + esc(s.title) + "</div>" +
+        '<div class="ss-tn">' + (it.isPart ? esc(it.label) : "NO." + it.label) + " · " + esc(annoOf(s).label) + "</div>" +
+        '<div class="ss-tt">' + esc(s.title || "") + "</div>" +
         '<div class="ss-td">' + esc((s.defs && s.defs[0] && s.defs[0].t) || "") + "</div>";
       ctx.tip.style.display = "block";
       const r = m.getBoundingClientRect();
@@ -685,28 +752,33 @@ ${HL_CSS}
     }
 
     function clearActive() {
-      if (activeN == null) return;
-      const s = specs().find((x) => x.n === activeN);
-      if (s) { const t = targetOf(s); if (t) t.classList.remove("ss-hl"); }
-      if (markerEls[activeN]) markerEls[activeN].classList.remove("ss-hot");
-      const row = document.getElementById("ss-def-" + activeN);
-      if (row) row.classList.remove("ss-active");
-      activeN = null;
+      if (activeKey == null) return;
+      const it = itemOf(activeKey);
+      if (it) {
+        const t = targetOf(it.spec); if (t) t.classList.remove("ss-hl");
+        const blk = blockOf(it); if (blk) blk.classList.remove("ss-active");
+      }
+      if (markerEls[activeKey]) markerEls[activeKey].classList.remove("ss-hot");
+      activeKey = null;
       drawArrow();
     }
-    function activate(n, from) {
+    /* key = 상위 "1" · 하위 "1a". 하위를 켜면 그 블록만 강조하고 패널은 부모 행으로 스크롤한다 (#25) */
+    function activate(key, from) {
       ctx.ensureDoc();
       clearActive();
-      activeN = n;
-      const s = specs().find((x) => x.n === n);
-      if (!s) return;
-      const t = targetOf(s);
+      activeKey = key;
+      const it = itemOf(key);
+      if (!it) return;
+      const t = targetOf(it.spec);
       if (t) t.classList.add("ss-hl");
-      if (markerEls[n]) markerEls[n].classList.add("ss-hot");
-      const row = document.getElementById("ss-def-" + n);
-      if (row) row.classList.add("ss-active");
+      if (markerEls[key]) markerEls[key].classList.add("ss-hot");
+      const blk = blockOf(it);
+      if (blk) blk.classList.add("ss-active");
       if (from === "panel" && t) t.scrollIntoView({ block: "center", behavior: SB });
-      if (from === "marker" && row) row.scrollIntoView({ block: "center", behavior: SB });
+      if (from === "marker") {
+        const row = it.isPart ? document.getElementById("ss-def-" + it.parent.n) : blk;
+        if (row) row.scrollIntoView({ block: "center", behavior: SB });
+      }
       drawArrow();
     }
 
@@ -715,9 +787,10 @@ ${HL_CSS}
       const btn = e.target.closest("[data-play]");
       if (btn) {
         e.stopPropagation();
-        const s = specs().find((x) => x.n === Number(btn.dataset.play));
-        if (!s) return;
-        activate(s.n, "panel");
+        const it = itemOf(String(btn.dataset.play));
+        if (!it) return;
+        const s = it.spec;
+        activate(it.key, "panel");
         if (s.play && s.play.selector) {
           const el = appDoc().querySelector(s.play.selector);
           if (el) el.click(); /* flow는 실제 내비 클릭 → 화면 감지가 정의서를 자동 전환 */
@@ -727,11 +800,11 @@ ${HL_CSS}
         return;
       }
       const row = e.target.closest("[data-defrow]");
-      if (row) activate(Number(row.dataset.defrow), "panel");
+      if (row) activate(String(row.dataset.defrow), "panel");
     });
     ctx.listEl.addEventListener("keydown", (e) => {
       const row = e.target.closest("[data-defrow]");
-      if (row && e.key === "Enter") activate(Number(row.dataset.defrow), "panel");
+      if (row && e.key === "Enter") activate(String(row.dataset.defrow), "panel");
     });
 
     /* ---- 화면 목록 (목차) — 트리 패턴 (Figma 레이어·Notion 사이드바·VS Code 탐색기 벤치마크):
@@ -901,8 +974,10 @@ ${HL_CSS}
       seen[s.id] = 1;
     });
     SCREENS.forEach((sc) => (sc.specs || []).forEach((sp) => {
-      if (sp.flowTo && !SCREENS.some((x) => x.id === sp.flowTo))
-        console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + ": flowTo \"" + sp.flowTo + "\" 화면이 screens에 없습니다 — 이동 버튼이 동작하지 않습니다");
+      [sp].concat(sp.parts || []).forEach((it, i) => { /* 하위 요소(parts)의 flowTo 도 검사 */
+        if (it.flowTo && !SCREENS.some((x) => x.id === it.flowTo))
+          console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + (i ? partSuffix(i - 1) : "") + ": flowTo \"" + it.flowTo + "\" 화면이 screens에 없습니다 — 이동 버튼이 동작하지 않습니다");
+      });
     }));
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
     const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
