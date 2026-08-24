@@ -29,7 +29,7 @@ type Screen = {
   name:    string,      // 필수. 화면명
   path?:   string[],    // 기획 IA 경로. 이 배열이 그대로 화면 목록 트리가 된다
   specs?:  Spec[],      // 이 화면의 기능 설명
-  root?:   string,      // 이 화면의 컨테이너 CSS 셀렉터 (두 모드 공통 · 표시 여부로 감지)
+  root?:   string,      // 이 화면의 컨테이너 CSS 셀렉터 (모든 모드 공통 · 표시 여부로 감지 · data-spec 조회 범위)
   route?:  string,      // overlay·frame: 라우트 경로. "/members", "/members/[id]"
   viewports?: string[], // 이 화면이 존재하는 폭. ["pc"] 면 목차에 「PC 전용」
   covers?: string[],    // checklist 중 이 화면이 실제로 적은 축
