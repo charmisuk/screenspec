@@ -97,7 +97,7 @@ import Script from "next/script";
 - z-index: 오버레이 모드의 ScreenSpec UI는 항상 최상위(브라우저 최대 z) — 앱 z 대역은 신경 쓸 필요 없다. 앱의 우측 드로어·사이드시트가 설명 패널에 가려지면 헤더의 「패널 ⇄」 버튼으로 왼쪽에 두거나 설정에 `panel:"left"`
 - 주의: 앱이 자체 고정 헤더(top:0)를 쓰면 정의서 모드에서 ScreenSpec 헤더(48px)와 겹칠 수 있다 — 이 경우 사용자에게 보고
 
-**액센트 컬러**: `accent` 옵션으로 포인트 컬러 묶음(마커·하이라이트·버튼·드래그 그립·목차 활성 전체)을 교체할 수 있다 — 프리셋 `blue`(기본)·`red`·`orange`·`green`·`purple` 또는 hex(`"#7C3AED"`).
+**액센트 컬러**: `accent` 옵션으로 포인트 컬러 묶음(마커·하이라이트·버튼·드래그 그립·목차 활성 전체)을 교체할 수 있다 — 프리셋 `blue`(기본)·`red`·`orange`·`green`·`purple`, hex(`"#7C3AED"`) 또는 CSS 변수(`"var(--color-accent)"` — 제품 디자인 토큰을 그대로 가리키므로 색 하드코딩 lint 에 걸리지 않는다).
 
 **앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 

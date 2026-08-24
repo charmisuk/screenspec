@@ -361,6 +361,25 @@ function check(name, ok, detail) {
     page.off("console", onMsg2);
   }
 
+  /* ============ accent = CSS 변수 참조 (#18) ============ */
+  console.log("[docs] accent var(--x)");
+  {
+    await page.goto("about:blank");
+    await page.setContent('<style>:root{--brand:#123456}</style><div data-spec="1">A</div><script>window.SCREENSPEC={accent:"var(--brand)",screen:{id:"S-V",name:"v"},specs:[{n:1,target:"1",title:"a",anno:"arrow"}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-marker");
+    await page.waitForTimeout(300);
+    check("accent var(--brand) → 토큰 대입 + 화살표 stroke 실제 색", await page.evaluate(() => {
+      const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim();
+      const st = getComputedStyle(document.getElementById("ss-line")).stroke;
+      const hot = getComputedStyle(document.querySelector(".ss-marker.ss-hot")).backgroundColor;
+      return v === "#123456" /* computed 는 var() 치환값 */ && st === "rgb(18, 52, 86)" && hot === "rgb(18, 52, 86)";
+    }));
+  }
+
   /* ============ 설정 없이 스크립트만 넣은 경우 ============
      남의 페이지를 감싸면 "망가졌다"로 읽힌다 — DOM은 그대로 두고 안내만. */
   console.log("[docs] 설정 없음 상태");

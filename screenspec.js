@@ -41,7 +41,7 @@
  *           screens[].route: "/members" 또는 "/members/[id]".
  *           basePath·정적 호스팅(경로 접두)도 suffix 매칭으로 지원.
  *
- * 액센트: accent 옵션 — 프리셋 blue(기본)·red·orange·green·purple 또는 hex. 마커·하이라이트·버튼·그립·목차 활성이 묶음으로 바뀐다.
+ * 액센트: accent 옵션 — 프리셋 blue(기본)·red·orange·green·purple, hex 또는 var(--토큰). 마커·하이라이트·버튼·그립·목차 활성이 묶음으로 바뀐다.
  * 화면 목록(목차): 헤더의 화면 ID 칩 클릭 → path 배열 기반 트리(들여쓰기 + 가이드선, 그룹 행, 최대 6뎁스 들여쓰기).
  *
  * 반응형 훅(wrap): 시트 폭에 따라 .ss-pc(≥1100px) / .ss-narrow(≤520px)가 시트에 붙는다.
@@ -111,7 +111,9 @@
     if (!a) return ACCENT_PRESETS.blue;
     if (ACCENT_PRESETS[a]) return ACCENT_PRESETS[a];
     if (/^#[0-9a-fA-F]{3,8}$/.test(a)) return a;
-    console.warn("[ScreenSpec] accent \"" + a + "\" 인식 불가 — 기본(blue) 사용. 프리셋: " + Object.keys(ACCENT_PRESETS).join(", ") + " 또는 hex");
+    /* CSS 변수 참조 — 값을 복사하지 않고 제품 토큰을 가리킨다 (색 하드코딩 lint 회피·테마 추종) (#18) */
+    if (/^var\(--[\w-]+(\s*,[^)]*)?\)$/.test(a)) return a;
+    console.warn("[ScreenSpec] accent \"" + a + "\" 인식 불가 — 기본(blue) 사용. 프리셋: " + Object.keys(ACCENT_PRESETS).join(", ") + ", hex 또는 var(--토큰)");
     return ACCENT_PRESETS.blue;
   })();
 
@@ -796,7 +798,7 @@
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-anno");
     annoSvg.innerHTML =
-      `<defs><marker id="ss-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${ACCENT}"></path></marker></defs><line id="ss-line" x1="0" y1="0" x2="0" y2="0" stroke="${ACCENT}" stroke-width="2" marker-end="url(#ss-arrowhead)" visibility="hidden"></line>`;
+      `<defs><marker id="ss-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" style="fill:${ACCENT}"></path></marker></defs><line id="ss-line" x1="0" y1="0" x2="0" y2="0" style="stroke:${ACCENT}" stroke-width="2" marker-end="url(#ss-arrowhead)" visibility="hidden"></line>`;
     const markerLayer = h("div", { class: "ss-markers" });
     sheet.appendChild(annoSvg);
     sheet.appendChild(markerLayer);
@@ -1027,7 +1029,7 @@
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
     annoSvg.innerHTML =
-      `<defs><marker id="ss-ov-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${ACCENT}"></path></marker></defs><line id="ss-ov-line" x1="0" y1="0" x2="0" y2="0" stroke="${ACCENT}" stroke-width="2" marker-end="url(#ss-ov-arrowhead)" visibility="hidden"></line>`;
+      `<defs><marker id="ss-ov-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" style="fill:${ACCENT}"></path></marker></defs><line id="ss-ov-line" x1="0" y1="0" x2="0" y2="0" style="stroke:${ACCENT}" stroke-width="2" marker-end="url(#ss-ov-arrowhead)" visibility="hidden"></line>`;
     const tip = h("div", { class: "ss-tip ss-ui", role: "tooltip" });
     document.body.appendChild(annoSvg);
     document.body.appendChild(markerLayer);
