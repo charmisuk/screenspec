@@ -198,7 +198,7 @@ function check(name, ok, detail) {
     res.setHeader("content-type", "text/html");
     res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8")
       .replace("../screenspec.js", "/screenspec.js")
-      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED", panel: "left",')); /* accent·panel 주입 (e2e 전용) */
+      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED",')); /* accent·panel 주입 (e2e 전용) */
   });
   await new Promise((r) => srv.listen(4179, r));
   const ovWarns = [];
@@ -222,17 +222,9 @@ function check(name, ok, detail) {
   }));
   await page.click("#ss-ovDoc");
   await page.waitForTimeout(400);
-  check("panel:left 설정 → 패널 좌측", await page.evaluate(() => {
+  check("설명 패널 오른쪽 고정 (좌/우 전환 버튼 없음)", await page.evaluate(() => {
     const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
-    const cs = getComputedStyle(document.body);
-    return r.left === 0 && cs.paddingLeft === "400px" && cs.paddingRight === "0px";
-  }));
-  await page.click("#ss-ovSide");
-  await page.waitForTimeout(300);
-  check("패널 ⇄ → 우측", await page.evaluate(() => {
-    const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
-    const cs = getComputedStyle(document.body);
-    return r.right === innerWidth && cs.paddingRight === "400px" && cs.paddingLeft === "0px";
+    return r.right === innerWidth && getComputedStyle(document.body).paddingRight === "400px" && !document.querySelector("#ss-ovSide");
   }));
   check("뷰포트 끝(x:0) 대상의 마커가 잘리지 않음", await page.evaluate(() => {
     const t = document.querySelector('[data-spec="1"]').getBoundingClientRect();
@@ -431,6 +423,7 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     check("빠른 시작: 화면 ID 헤더", await page.evaluate(() => document.body.innerText.includes("SCR-RPT-001")));
     check("빠른 시작: 기능 설명 2행", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    check("위치 힌트 자동 (헤더 → '상단' 포함)", await page.evaluate(() => (document.querySelector('[data-defrow="1"] .ss-pos') || {}).textContent?.startsWith("상단") === true));
     check("빠른 시작: 마커 2개", (await page.locator(".ss-marker").count()) === 2);
     await page.click('[data-play="2"]');
     await page.waitForTimeout(400);
@@ -445,7 +438,7 @@ function check(name, ok, detail) {
     page.on("console", onMsg);
     await page.goto("about:blank");
     await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-X",name:"x"},specs:[' +
-      '{n:1,target:"1",title:"있음"},{n:2,target:"2",title:"없음"},{n:3,target:"3",title:"조건부",anno:"state"},{n:4,target:"4",title:"없음2"}]}</script>');
+      '{n:1,target:"1",title:"있음",defs:[{t:"사양 한 줄",why:"근거 한 줄"}]},{n:2,target:"2",title:"없음"},{n:3,target:"3",title:"조건부",anno:"state"},{n:4,target:"4",title:"없음2"},{n:5,target:"5",title:"조건부 버튼",anno:"action",optional:true}]}</script>');
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
@@ -456,7 +449,11 @@ function check(name, ok, detail) {
       return !c(1) && c(2) && c(3) && c(4) && getComputedStyle(document.querySelector('[data-defrow="2"] .ss-nowtag')).display !== "none";
     }));
     check("누락 경고 1회 + #n target 나열 + state 제외", w.length === 1 && w[0].includes("2건") &&
-      w[0].includes('#2 target="2"') && w[0].includes('#4 target="4"') && !w[0].includes("#3") && w[0].includes("조건부(state) 1건"), w.join(" | ").slice(0, 200));
+      w[0].includes('#2 target="2"') && w[0].includes('#4 target="4"') && !w[0].includes("#3") && !w[0].includes("#5") && w[0].includes("조건부(state·optional) 2건"), w.join(" | ").slice(0, 200));
+    check("def.why → '↳ 이유:' 로 분리 렌더 (#24)", await page.evaluate(() => {
+      const el = document.querySelector('[data-defrow="1"] .ss-why');
+      return !!el && el.textContent === "근거 한 줄" && getComputedStyle(el, "::before").content.includes("이유");
+    }));
     page.off("console", onMsg);
     const warns2 = [];
     const onMsg2 = (msg) => { if (msg.type() === "warning") warns2.push(msg.text()); };

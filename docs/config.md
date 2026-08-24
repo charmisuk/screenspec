@@ -52,7 +52,6 @@ type Device = { w: number, h: number }
 |---|---|---|---|
 | `mode` | `"wrap"` \| `"overlay"` \| `"frame"` | 자동 판별 | 단일 HTML은 wrap, React·Next 등 프레임워크는 overlay. 자동 판별이 틀릴 때만 명시. `"frame"`은 자동 판별되지 않는다 — 아래 참조 |
 | `accent` | 프리셋명 \| hex \| `var(--x)` | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. `"var(--color-accent)"`처럼 CSS 변수를 가리키면 제품 토큰을 복사하지 않고 따라간다(색 하드코딩 lint·다크 모드 대응). 인식 불가 값이면 콘솔 경고 후 기본값 |
-| `panel` | `"right"` \| `"left"` | `"right"` | overlay 전용. 기능 설명 패널 위치. 앱의 우측 드로어·사이드시트와 겹치면 `"left"`. 정의서 헤더의 「패널 ⇄」 버튼으로도 전환 |
 | `baseViewport` | `"mobile"` \| `"pc"` | `"mobile"` | wrap·frame 의 시작 폭 = 이 문서가 서술하는 기준 폭. PC 앞에서 쓰는 어드민은 `"pc"`, 앱은 기본값. 반응형 차이는 화면을 늘리지 말고 같은 화면의 `anno:"state"` 항목으로 적는다 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap·frame 전용. 기기 프리셋 크기 덮어쓰기 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
@@ -60,6 +59,8 @@ type Device = { w: number, h: number }
 | `screens` | `Screen[]` | — | 화면이 여럿일 때. 있으면 `screen`·`specs`는 무시된다 |
 
 `screens`·`screen`·`specs`가 모두 없으면 라이브러리는 페이지를 건드리지 않고 안내 카드만 띄운다.
+
+> **폐기된 필드**: `panel`(v0.14 의 설명 패널 좌/우) — v0.15 부터 무시되고 콘솔 경고. 설명 패널은 오른쪽 고정이며, 앱의 우측 서랍과 겹치면 `mode:"frame"`.
 
 **`mode: "frame"` (액자)** — 프레임워크 앱을 iframe(액자)에 넣고 뷰어(툴바·설명 패널·마커·목차)는 그 밖에 두는 모드.
 overlay 는 앱과 뷰어가 한 창에 살기 때문에 (1) 설명 패널이 앱의 우측 드로어를 덮고 (2) 폭을 줄여도 앱의 미디어쿼리가 발화하지 않는다.
@@ -96,7 +97,8 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `n` | number | ✔ | 마커에 찍히는 번호. 화면 안에서 1부터 |
 | `target` | string | ✔ | 대상 요소의 `data-spec` 속성값. 요소를 못 찾으면 마커가 숨겨지고 콘솔 경고 |
 | `anno` | 8종 중 하나 | | 아래 표 참조. 생략하면 `box` |
-| `title` | string | | 영역명 |
+| `title` | string | | 영역명. 패널에서는 제목 옆에 마커 실제 위치에서 계산한 위치 힌트(상단·하단 / 좌측·우측·전체폭)가 자동으로 붙는다 — 화면 없이 읽어도 어디인지 알 수 있게 |
+| `optional` | boolean | | 조건부 요소(예: 특정 상태에서만 서는 버튼). `anno`와 무관하게 「못 찾은 정의」 경고에서 제외 |
 | `defs` | Def[] | | 기능 설명. 항목당 1~4줄 권장 |
 | `play` | `{selector, label}` | anno에 따라 | `action`·`popup`은 필수, `flow`는 선택. `selector`는 실제로 클릭할 요소, `label`은 버튼 문구 |
 | `flowTo` | string | `flow`면 ✔ | 이동할 화면 `id`. 없는 id면 콘솔 경고 |
@@ -121,6 +123,7 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 |---|---|---|
 | `t` | string | 설명 한 줄. 명사형 종결 권장 |
 | `subs` | string[] | 조건·분기를 하위 불렛으로. 항목당 0~3줄 |
+| `why` | string | 그 줄의 근거. 본문에 대시로 이어 붙이지 말고 여기에 — 패널에서 「↳ 이유:」로 작게 따라붙는다. 구현자는 `t`만 읽고 검토자는 `why`까지 읽는다 |
 
 ## HTML 속성
 

@@ -54,7 +54,7 @@
  *   overlay 모드(남의 앱 위에 얹음): ScreenSpec UI는 브라우저 최대 대역(2147482990~)에서 항상 맨 위.
  *     앱의 z-index와 경쟁하지 않는다 (Vercel 툴바·Hotjar 방식). 앱 모달이 패널 아래 깔릴 수 있으나
  *     본문은 밀어내기로 가리지 않고, '프로토타입' 필 한 번으로 전체 확인 가능.
- *     앱의 우측 드로어·사이드시트가 설명 패널에 가려지면 헤더의 「패널 ⇄」 버튼 또는 panel:"left"로 패널을 왼쪽에 둔다.
+ *     앱의 우측 드로어·사이드시트가 설명 패널에 가려지면 mode:"frame"(액자 모드) — 뷰어가 앱 바깥에 놓여 겹치지 않는다.
  *   wrap 모드(단일 HTML, AI 하네스가 전체 통제): 대역 규칙 사용 —
  *      0 ~ 7999  프로토타입 (시트 내부)
  *   8000 ~ 8099  시트 오버레이 — anno 8030 · markers 8040 · resize 8050
@@ -120,15 +120,8 @@
     return ACCENT_PRESETS.blue;
   })();
 
-  /* 기능 설명 패널 위치 — panel: "right"(기본) | "left"
-     앱의 우측 드로어·사이드시트가 패널에 가려질 때 "left" (헤더의 「패널 ⇄」 버튼으로도 전환) */
-  const PANEL_SIDE = (function () {
-    const p = RAW.panel;
-    if (!p) return "right";
-    if (p === "right" || p === "left") return p;
-    console.warn("[ScreenSpec] panel \"" + p + "\" 인식 불가 — right 사용 (right | left)");
-    return "right";
-  })();
+  /* v0.14 의 panel:"left" 는 폐기 — 겹침의 정식 해법은 mode:"frame" */
+  if (RAW.panel) console.warn("[ScreenSpec] panel 설정은 v0.15 에서 폐기 — 설명 패널은 오른쪽 고정. 앱의 우측 서랍과 겹치면 mode:\"frame\" 을 쓰세요");
 
   /* 사용자 텍스트는 전부 이걸 거쳐 innerHTML에 들어간다 */
   function esc(x) {
@@ -212,11 +205,15 @@
   .ss-main{flex:1;padding:13px 16px 14px 0;min-width:0}
   .ss-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}
   .ss-title .ss-t{font-size:13.5px;font-weight:800;color:var(--ss-ink)}
+  .ss-title .ss-pos{font-size:10.5px;color:var(--ss-ink3);white-space:nowrap}
+  .ss-title .ss-pos:empty{display:none}
   .ss-title .ss-tag{font-size:10px;font-weight:700;color:var(--ss-ink3);border:1px solid var(--ss-line2);border-radius:5px;padding:1px 6px;margin-left:auto;flex-shrink:0}
   .ss-row.ss-active .ss-tag{color:var(--ss-accent);border-color:var(--ss-accent)}
   .ss-items{margin:0;padding:0;list-style:none}
   .ss-items li{font-size:12.5px;color:#37352F;position:relative;padding-left:16px;margin:4px 0;line-height:1.6}
   .ss-items li::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--ss-ink)}
+  .ss-items li .ss-why{display:block;font-size:11.5px;color:var(--ss-ink3);line-height:1.5;margin-top:1px}
+  .ss-items li .ss-why::before{content:"↳ 이유: "}
   .ss-items li.ss-sub{margin-left:18px}
   .ss-items li.ss-sub::before{background:#fff;border:1.3px solid var(--ss-ink2);left:2px}
   .ss-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
@@ -345,10 +342,7 @@ ${HL_CSS}
   .ss-ov-header{position:fixed;top:0;left:0;right:0;height:48px;z-index:2147483010;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:none;align-items:center;gap:28px;padding:0 16px}
   .ss-ov-hfields{display:flex;gap:28px;align-items:center;min-width:0}
-  #ss-ovVw{margin-left:auto;flex:none;font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3)}
-  #ss-ovSide{flex:none;flex:none;font-size:12px;font-weight:700;color:var(--ss-ink2);
-    padding:4px 10px;border:1px solid var(--ss-line2);border-radius:6px;background:#fff}
-  #ss-ovSide:hover{background:var(--ss-line)}
+  #ss-ovVw{margin-left:auto;margin-right:0;flex:none;font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3)}
   .ss-ov-panel{position:fixed;top:48px;right:0;bottom:0;width:400px;z-index:2147483010;background:#fff;
     border-left:1px solid var(--ss-line2);display:none;flex-direction:column;box-shadow:-8px 0 30px rgba(17,24,39,.12)}
   .ss-ov-markers{position:absolute;top:0;left:0;width:100%;height:0;z-index:2147483000;pointer-events:none;display:none}
@@ -359,20 +353,12 @@ ${HL_CSS}
   body.ss-ov-doc .ss-ov-markers,body.ss-ov-doc .ss-ov-anno{display:block}
   /* 정의서 모드: 앱을 덮지 않고 밀어낸다 — 헤더 높이만큼 아래로, 패널 폭만큼 왼쪽으로 */
   body.ss-ov-doc{padding-top:48px!important;padding-right:400px!important}
-  /* panel:"left" — 앱의 우측 드로어·사이드시트를 가리지 않게 패널을 왼쪽으로 (#14) */
-  body.ss-ov-left .ss-ov-panel{left:0;right:auto;border-left:0;border-right:1px solid var(--ss-line2);
-    box-shadow:8px 0 30px rgba(17,24,39,.12)}
-  body.ss-ov-doc.ss-ov-left{padding-right:0!important;padding-left:400px!important}
   /* 좁은 화면: 우측 패널 대신 하단 시트 — 앱은 위에 그대로 보이고 아래로 밀림 */
   @media(max-width:900px){
     .ss-ov-panel{top:auto;left:0;right:0;bottom:0;width:100%;height:52vh;
       border-left:0;border-top:1px solid var(--ss-line2);border-radius:14px 14px 0 0;
       box-shadow:0 -10px 30px rgba(17,24,39,.18)}
     body.ss-ov-doc{padding-right:0!important;padding-bottom:54vh!important}
-    /* 하단 시트에서는 좌/우 개념이 없다 — ss-ov-left를 무력화하고 전환 버튼도 숨긴다 */
-    body.ss-ov-left .ss-ov-panel{left:0;right:0;border-right:0;box-shadow:0 -10px 30px rgba(17,24,39,.18)}
-    body.ss-ov-doc.ss-ov-left{padding-left:0!important}
-    #ss-ovSide{display:none}
     body.ss-ov-doc .ss-pill{top:56px} /* 헤더 글자를 가리지 않게 아래로 */
   }
   @media (prefers-reduced-motion: reduce){.ss-ui *{transition:none!important}}
@@ -396,7 +382,7 @@ ${HL_CSS}
     (specs || []).forEach((s) => {
       let items = "";
       (s.defs || []).forEach((d) => {
-        items += "<li>" + esc(d.t) + "</li>";
+        items += "<li>" + esc(d.t) + (d.why ? '<span class="ss-why" title="이유">' + esc(d.why) + "</span>" : "") + "</li>"; /* 근거는 사양과 분리 — 구현자는 사양만, 검토자는 이유까지 (#24) */
         (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + esc(sub) + "</li>"; });
       });
       const type = annoOf(s);
@@ -410,7 +396,7 @@ ${HL_CSS}
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
+          <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
           <ul class="ss-items">${items}</ul>${play}
         </div></div>`;
     });
@@ -569,13 +555,13 @@ ${HL_CSS}
       const attempt = () => {
         if (sc !== current || warned[sc.id]) return stop();
         const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
-        specs().forEach((s) => { if (!targetOf(s)) (s.anno === "state" ? cond : missing).push(s); });
+        specs().forEach((s) => { if (!targetOf(s)) (s.anno === "state" || s.optional ? cond : missing).push(s); }); /* optional:true — anno 와 무관하게 조건부 (#23) */
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
         warned[sc.id] = true;
         console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
           missing.map((s) => "#" + s.n + " target=\"" + s.target + "\"").join(", ") +
           " (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)" +
-          (cond.length ? " · 조건부(state) " + cond.length + "건은 제외" : ""));
+          (cond.length ? " · 조건부(state·optional) " + cond.length + "건은 제외" : ""));
         stop();
       };
       const stop = () => { if (missMo) missMo.disconnect(); missMo = null; clearTimeout(missTimer); clearTimeout(missCap); };
@@ -622,6 +608,17 @@ ${HL_CSS}
       setCurrent(next);
     }
 
+    /* 위치 힌트 — 실무 정의서의 "상단 타이틀 영역·하단 버튼 영역" 을 사람이 적게 하지 않고, 마커가 찍힌 실제 좌표에서 계산한다.
+       화면(뷰포트) 기준: 세로 상단/중앙/하단(⅓ 경계) · 가로 전체폭(≥70%)/좌측/우측/중앙. 화면 없이 패널만 읽을 때 어디인지 알게 */
+    function posHint(t) {
+      if (!ctx.viewRect) return "";
+      const v = ctx.viewRect(), r = ctx.rectOf(t);
+      if (!v.w || !v.h) return "";
+      const cy = ((r.t + r.b) / 2 - v.y) / v.h, cx = ((r.l + r.r) / 2 - v.x) / v.w, wr = (r.r - r.l) / v.w;
+      const vert = cy < 1 / 3 ? "상단" : cy > 2 / 3 ? "하단" : "중앙";
+      const horz = wr >= 0.7 ? "전체폭" : cx < 1 / 3 ? "좌측" : cx > 2 / 3 ? "우측" : "중앙";
+      return vert === "중앙" && horz === "중앙" ? "중앙" : vert + " · " + horz;
+    }
     function placeMarkers() {
       specs().forEach((s) => {
         const t = targetOf(s), m = markerEls[s.n];
@@ -631,6 +628,7 @@ ${HL_CSS}
         if (row) row.classList.toggle("ss-now-hidden", hidden); /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
         if (hidden) { m.style.display = "none"; return; }
         m.style.display = "";
+        if (row) { const ph = row.querySelector(".ss-pos"); if (ph) ph.textContent = posHint(t); }
         const pos = ctx.posOf(t);
         m.style.left = pos.left + "px";
         m.style.top = pos.top + "px";
@@ -1137,6 +1135,7 @@ ${HL_CSS}
         };
       },
       viewCenter: () => ({ x: sheet.scrollLeft + sheet.clientWidth / 2, y: sheet.scrollTop + sheet.clientHeight / 2 }),
+      viewRect: () => ({ x: sheet.scrollLeft, y: sheet.scrollTop, w: sheet.clientWidth, h: sheet.clientHeight }),
       rectOf: (t) => {
         const sr = sheet.getBoundingClientRect();
         const r = t.getBoundingClientRect();
@@ -1174,6 +1173,10 @@ ${HL_CSS}
           x: off.x + (w ? w.innerWidth : appFrame.clientWidth) / 2,
           y: off.y + (w ? w.innerHeight : appFrame.clientHeight) / 2
         };
+      };
+      coreCtx.viewRect = () => {
+        const off = frameOffset(), w = appFrame.contentWindow;
+        return { x: off.x, y: off.y, w: w ? w.innerWidth : appFrame.clientWidth, h: w ? w.innerHeight : appFrame.clientHeight };
       };
     }
     const core = createCore(coreCtx);
@@ -1264,21 +1267,18 @@ ${HL_CSS}
      ============================================================ */
   function bootOverlay() {
     injectCSS();
-    if (PANEL_SIDE === "left") document.body.classList.add("ss-ov-left");
 
     /* ---- UI (전부 body에 append만 — 기존 DOM 불변) ---- */
     const pill = h("div", { class: "ss-ui ss-pill" }, `
       <button id="ss-ovProto" aria-pressed="true">프로토타입</button>
       <button id="ss-ovDoc" aria-pressed="false">화면정의서</button>`);
     const header = h("div", { class: "ss-ui ss-ov-header" });
-    /* render()가 headerEl.innerHTML을 통째로 갈아끼우므로, 필드는 안쪽 div에 두고 버튼은 형제로 둔다 */
+    /* render()가 headerEl.innerHTML을 통째로 갈아끼우므로, 필드는 안쪽 div에 두고 폭 표시는 형제로 둔다 */
     const hFields = h("div", { class: "ss-ov-hfields" });
-    const bSide = h("button", { class: "ss-ui", id: "ss-ovSide", title: "설명 패널 좌/우 전환" }, "패널 ⇄");
     /* 앱 폭 표시 + 반응형 훅 — overlay 에는 폭 시뮬레이터가 없으므로(개발자 도구 기기 툴바 사용) 지금 몇 px 인지만 보여 준다 (#17) */
     const vw = h("span", { class: "ss-ui", id: "ss-ovVw", title: "앱 영역 폭 (설명 패널 제외). 폭을 바꾸려면 브라우저 개발자 도구의 기기 툴바" });
     header.appendChild(hFields);
     header.appendChild(vw);
-    header.appendChild(bSide);
     function updateWidth() {
       const cs = getComputedStyle(document.body);
       const w = Math.round(innerWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0));
@@ -1317,11 +1317,6 @@ ${HL_CSS}
     }
     bProto.onclick = () => setMode("proto");
     bDoc.onclick = () => setMode("doc");
-    bSide.onclick = () => {
-      document.body.classList.toggle("ss-ov-left");
-      updateWidth();
-      requestAnimationFrame(place);
-    };
 
     function place() {
       if (!document.body.classList.contains("ss-ov-doc")) return; /* 정의서 모드에서만 배치 */
@@ -1343,6 +1338,7 @@ ${HL_CSS}
         return { left: Math.max(r.left, 10) + scrollX, top: Math.max(r.top, 48 + 10) + scrollY, transform: "translate(-40%,-40%)" };
       },
       viewCenter: () => ({ x: scrollX + innerWidth / 2, y: scrollY + innerHeight / 2 }),
+      viewRect: () => ({ x: scrollX, y: scrollY, w: innerWidth, h: innerHeight }),
       rectOf: (t) => {
         const r = t.getBoundingClientRect();
         return { l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY };
