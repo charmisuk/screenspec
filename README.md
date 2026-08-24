@@ -169,6 +169,7 @@ AI가 화면 ID 규칙·번호 부여·설명 작성 룰·자가 검증까지 �
 ```bash
 node tests/lint.js  # 문법·버전 정합·문서 드리프트 (의존성 없음)
 node tests/e2e.js   # 브라우저 회귀 (playwright 필요)
+node tests/smoke.js # 예제 전수 클릭 (playwright 필요)
 ```
 
 전달본 만들기: `node scripts/inline.js 프로토타입.html` — 라이브러리를 파일 안에 넣어 바깥 요청 없이 동작하는 `.inline.html`을 만든다 (실행 후 자동 검증).
