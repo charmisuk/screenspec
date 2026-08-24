@@ -82,6 +82,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 - 앱이 basePath(예: /admin) 아래에 있어도 suffix 매칭으로 동작 — route는 basePath 없이 적는다
 - 해시 라우터(주소가 #/members 형태)도 자동 인식 — route는 동일하게 "/members"로 적는다
 - 라우트가 없는 패널·다이얼로그 화면은 `root` 셀렉터(컨테이너 표시 여부)로 구분 가능 — 패널이 열리면 그 화면으로 자동 전환, 닫히면 라우트 화면으로 복귀
+- 라우트 화면에도 `root`를 함께 주면 **그 컨테이너 안에서만** `data-spec`을 찾는다 — 화면마다 1부터 다시 번호를 매길 수 있고, 늘 떠 있는 골격(GNB·헤더)의 마커와도 섞이지 않는다 (예: `route:"/members", root:"main"`)
 - Next.js(App Router) 적용: `app/layout.tsx`의 `<body>` 안에
 
 ```tsx
