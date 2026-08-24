@@ -46,6 +46,7 @@ description: 이슈 사이클 — GitHub 이슈를 중요순으로 1건씩 plan�
 ## Phase 2 — 사이클 종료
 1. 전체 QA: `node tests/lint.js` + `node tests/e2e.js` + `node tests/smoke.js`(예제 전수 클릭, v1.1 부터 저장소 내장). 결과를 tasks.json `cycle_qa` 에 기록. smoke 경고는 main 브랜치와 비교해 회귀인지 판별한다.
 2. 버전 bump(헤더 주석·워터마크·문서 CDN 태그 — lint 가 정합 검사) + CHANGELOG 작성 → 커밋 1개.
+2-1. **배포는 4단계다: main 머지 → 태그 push → `gh release create` → CDN purge.** 태그만 밀면 저장소 첫 화면(모바일 포함)의 버전은 갱신되지 않는다 — GitHub 은 Release 를 기준으로 표시한다. 릴리스 노트는 그 버전의 CHANGELOG 절을 그대로 쓴다. (2026-08-24: v0.14~v0.18 을 태그만 밀어 저장소가 v0.13.1 로 보였다)
 3. 사용자 브리핑: 처리 목록(커밋 sha) · **사용자 QA 필요 항목**(자동화로 못 보는 것: 실제 Next.js 앱에서의 체감 등) · 보류/차단 항목 · push/PR 여부 질문. 문장은 §보고 규칙.
 
 ## 보고 규칙 — 기획자 눈높이 (v1.1)
