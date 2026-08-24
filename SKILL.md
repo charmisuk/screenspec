@@ -92,7 +92,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.19.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.19.1/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -336,7 +336,7 @@ addEventListener("screenspec:preview", (e) => {
 - [ ] `data-spec` 없는 specs 항목 없음 (마커가 숨겨지면 이것)
 - [ ] 각 화면에 빈 상태·로딩·오류를 적었는가 (해당 없으면 «없음» 을 명시했는가) — 보이는 것에만 마커를 달게 되므로 안 보이는 상태는 의식적으로 묻는다 (`checklist` 를 쓰면 목차의 ⚠ 가 0이 될 때까지)
 - [ ] 헤더의 화면 ID 칩 클릭 → 화면 목록 트리가 path 계층대로 열림 (그룹 행·뎁스 확인)
-- [ ] `preview` 를 준 항목마다 프로토타입에 `screenspec:preview` 리스너를 심었는가 (◑ 버튼을 눌러 실제로 상태가 바뀌는지 — 「만들지 못합니다」가 뜨면 리스너가 없는 것)
+- [ ] `preview` 를 준 항목마다 프로토타입에 `screenspec:preview` 리스너를 심었는가 (preview 스위치를 켜서 실제로 상태가 바뀌는지 — 「만들지 못합니다」가 뜨면 리스너가 없는 것)
 - [ ] arrow 항목 클릭 시 지시선이 대상 요소를 실제로 가리킴 (큰 영역에 arrow를 쓰지 않았는지)
 - [ ] accent를 지정했다면 마커·하이라이트·버튼 색이 함께 바뀌었는지
 - [ ] 전달할 결과물이면 `.inline.html`을 뽑았는지 (명령이 "검증 통과"를 출력했는지)

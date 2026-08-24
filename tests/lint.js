@@ -96,7 +96,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 
 /* 7) 문서 드리프트 — 폐기된 설계의 용어·클래스가 살아 있으면 에이전트가 옛 구조를 믿는다 */
 {
-  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|SpecLayer(?![^\n]*(별칭|alias|호환|legacy))/g;
+  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"(?![^\n]*(폐기|deprecated))|상위 \d+ · 하위|패널 ⇄|SpecLayer(?![^\n]*(별칭|alias|호환|legacy))/g;
   for (const f of ["README.md", "SKILL.md", "screenspec.js"]) {
     const d = fs.readFileSync(path.join(REPO, f), "utf8");
     const hits = [...d.matchAll(STALE)].map((m) => m[0]);
@@ -174,7 +174,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   const want = spec.filter((f) => f !== "n" && f !== "parts");
   const missType = want.filter((f) => !part.includes(f));
   check("Part 타입에 Spec 필드 전부 (" + want.length + "개)", missType.length === 0, "누락: " + JSON.stringify(missType));
-  const sec = (ref.split(/\n### Part\n/)[1] || "").split(/\n## /)[0];
+  const sec = (ref.split(/\r?\n### Part\r?\n/)[1] || "").split(/\r?\n## /)[0];
   check("### Part 절 존재", sec.length > 100, String(sec.length));
   const missRow = want.filter((f) => !sec.includes("`" + f + "`"));
   check("### Part 표에 Spec 필드 전부", missRow.length === 0, "누락: " + JSON.stringify(missRow));

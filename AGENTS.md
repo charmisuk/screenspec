@@ -17,6 +17,8 @@
 | `tests/lint.js` | 의존성 없는 정적 검사 |
 | `tests/e2e.js` | Playwright 브라우저 회귀 |
 | `tests/smoke.js` | 예제 전수 클릭 스모크 (아무거나 눌러도 안 죽는가) |
+| `scripts/backlog-sync.js` | GitHub 이슈 ↔ Notion 보드 싱크 검사 (로컬 전용) |
+| `docs/sprint/` | 이슈 사이클 작업 기록 (tasks.json·회고) — 내부 로그, 라이브러리 동작과 무관 |
 
 ## 검증 (변경 후 반드시)
 
@@ -26,7 +28,7 @@ node tests/e2e.js    # playwright 설치된 폴더에서
 node tests/smoke.js  # 예제 전수 클릭 — JS 에러 0 (릴리스 전)
 ```
 
-둘 다 통과해야 커밋한다. CI(`.github/workflows/ci.yml`)가 push·PR·태그마다 같은 것을 돌린다.
+셋 다 통과해야 커밋한다. CI(`.github/workflows/ci.yml`)가 push·PR·태그마다 같은 것을 돌린다.
 
 ## 문서 동기화 (기계가 강제한다)
 
@@ -52,11 +54,12 @@ node scripts/backlog-sync.js --apply   # 노션 쪽을 맞추고 실행 후 자�
 
 ## 릴리스
 
-1. lint·e2e 통과 확인
+1. lint·e2e·smoke 통과 확인
 2. `CHANGELOG.md`에 항목 추가
 3. 버전 문자열 갱신: `screenspec.js` 헤더·배지, `README.md`·`SKILL.md`의 `@vX.Y.Z`
 4. commit → `git tag vX.Y.Z` → `git push origin main --tags`
 5. jsDelivr 퍼지: `https://purge.jsdelivr.net/gh/charmisuk/screenspec@vX.Y.Z/screenspec.js` 와 `@0`
+6. GitHub Release 작성: `gh release create vX.Y.Z` (본문은 CHANGELOG 해당 절)
 
 ## 코드 규칙
 

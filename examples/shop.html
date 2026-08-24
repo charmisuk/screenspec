@@ -363,6 +363,7 @@ setInterval(() => {
 /* 타임딜 카운트다운 */
 let remain = 3*3600 + 59*60 + 59;
 setInterval(() => {
+  if (dealClosed) return;
   remain = Math.max(0, remain - 1);
   const h = String(Math.floor(remain/3600)).padStart(2,"0");
   const m = String(Math.floor(remain%3600/60)).padStart(2,"0");
@@ -414,16 +415,29 @@ document.getElementById("optRow").addEventListener("click",(e)=>{
   o.classList.add("on");
 });
 document.getElementById("buyBtn").onclick = ()=>toast("장바구니에 담았어요 · 2개");
+
+/* ScreenSpec preview — 정의서의 스위치가 이 상태를 실물로 재현한다 */
+let dealClosed = false;
+addEventListener("screenspec:preview", (e) => {
+  if (String(e.detail.n) !== "5") return;   /* n 은 라벨 문자열 — 하위 요소면 "1a" 같은 값 */
+  e.detail.handled = true;
+  dealClosed = e.detail.on;
+  document.getElementById("timer").textContent = dealClosed ? "오늘 딜 종료" : "03:59:59";
+  if (!dealClosed) remain = 3*3600 + 59*60 + 59;
+});
 </script>
 
 <!-- ==================== ScreenSpec 적용 ==================== -->
 <script>
 window.SCREENSPEC = {
   mode: "wrap",
+  checklist: ["빈 상태", "오류"],   /* 이 프로젝트가 화면마다 챙기기로 한 상태 축 */
   screens: [
     {
       id: "SCR-MOA-HOME-001", name: "홈", path: ["홈"],
       root: '[data-ss-screen="SCR-MOA-HOME-001"]',
+      covers: ["빈 상태"],                       /* 딜 마감·품절을 5번 항목에 적었다 */
+      skip: { "오류": "홈은 정적 구성이라 서버 오류 분기가 없음 — 오류는 상세(PDP)에서 다룬다" },
       specs: [
         { n:1, target:"1", anno:"box", title:"상단 바", defs:[
           { t:"로고 + 알림·장바구니 아이콘 상시 노출" }],
@@ -444,7 +458,7 @@ window.SCREENSPEC = {
           { t:"인디케이터 좌하단, 현재 장은 길게 확장" }]},
         { n:4, target:"4", anno:"box", title:"카테고리", defs:[
           { t:"8종 고정 노출 · 탭 시 해당 카테고리 목록 이동" }]},
-        { n:5, target:"5", anno:"state", title:"오늘의 딜", defs:[
+        { n:5, target:"5", anno:"state", title:"오늘의 딜", preview:{ label:"딜 마감 상태 보기" }, defs:[
           { t:"카운트다운 HH:MM:SS · 1초 단위 갱신" },
           { t:"상품 4개 가로 스크롤 · 할인율 뱃지 좌상단", subs:[
             "마감(00:00:00) 시 타이머를 \"오늘 딜 종료\"로 교체",
