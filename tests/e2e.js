@@ -705,10 +705,21 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
-    check("preview: 버튼 라벨 ◑ + ss-play 액센트 상속", await page.evaluate(() => {
+    check("preview: 스위치 라벨(기호 없음) + ss-play 액센트 상속", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
-      return !!b && b.textContent.trim() === "◑ 빈 상태 보기" &&
+      return !!b && b.textContent.trim() === "빈 상태 보기" && b.dataset.pvlabel === "빈 상태 보기" &&
         b.classList.contains("ss-play") && b.classList.contains("ss-preview") && b.getAttribute("aria-pressed") === "false";
+    }));
+    /* 스위치 모양 — 트랙(::before)·노브(::after)를 CSS 로 그린다. 꺼졌을 땐 노브가 왼쪽 (#29 ①) */
+    check("preview: ▶ 가 아니라 스위치 모양 (트랙 22×13 + 노브, 노브는 왼쪽)", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      const track = getComputedStyle(b, "::before"), knob = getComputedStyle(b, "::after");
+      return track.width === "22px" && track.height === "13px" && knob.width === "9px" &&
+        (knob.transform === "none" || knob.transform === "matrix(1, 0, 0, 1, 0, 0)");
+    }));
+    check("preview: 재현 중 띠는 기본으로 숨어 있다", await page.evaluate(() => {
+      const bar = document.querySelector(".ss-pvbar");
+      return !!bar && getComputedStyle(bar).display === "none";
     }));
     await page.click('[data-preview="9"]');
     await page.waitForTimeout(300);
@@ -718,14 +729,61 @@ function check(name, ok, detail) {
         b.getAttribute("aria-pressed") === "true" && b.classList.contains("ss-on") &&
         window.__pv.join("|") === "9:true:S-PV:목록 공백 상태";
     }));
+    /* ② 되돌리는 방법이 그 자리에 있어야 한다 — 켜지면 라벨이 「원래대로」 */
+    check("preview: 켜지면 라벨이 「원래대로」 (되돌리는 법이 그 자리에)", await page.evaluate(() =>
+      document.querySelector('[data-preview="9"]').textContent.trim() === "원래대로"));
+    check("preview: 켜지면 노브가 오른쪽으로 간다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector('[data-preview="9"]'), "::after").transform === "matrix(1, 0, 0, 1, 9, 0)"));
+    /* ③ 앱만 보는 사람에게도 가짜 상태임이 보여야 한다 — 앱 위 띠 */
+    check("preview: 켜진 동안 앱 위에 재현 중 띠 (항목명 포함)", await page.evaluate(() => {
+      const bar = document.querySelector(".ss-pvbar");
+      const cs = getComputedStyle(bar);
+      return cs.display !== "none" && cs.position === "fixed" && cs.top === "50px" &&
+        bar.textContent.includes("「목록 공백 상태」 재현 중") && bar.textContent.includes("실제 데이터가 아닙니다");
+    }));
     await page.click('[data-preview="9"]');
     await page.waitForTimeout(300);
     check("preview: 다시 누르면 on:false → 원래 화면 복귀", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       return document.getElementById("list").hidden === false && document.getElementById("empty").hidden === true &&
         b.getAttribute("aria-pressed") === "false" && !b.classList.contains("ss-on") &&
+        b.textContent.trim() === "빈 상태 보기" &&
         window.__pv.join("|").endsWith("9:false:S-PV:목록 공백 상태");
     }));
+    check("preview: 끄면 띠도 사라진다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-pvbar")).display === "none"));
+    /* 띠의 「끄기」 = 스위치를 끄는 것과 같은 경로 (앱은 on:false 를 받는다) */
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(200);
+    await page.click(".ss-pvbar-x");
+    await page.waitForTimeout(300);
+    check("preview: 띠의 「끄기」로도 꺼진다 (앱에 on:false + 띠 숨김)", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      return window.__pv.slice(-1)[0] === "9:false:S-PV:목록 공백 상태" &&
+        getComputedStyle(document.querySelector(".ss-pvbar")).display === "none" &&
+        b.getAttribute("aria-pressed") === "false" && document.getElementById("list").hidden === false;
+    }));
+    /* ④ 「현재 미표시」 배지 ↔ 스위치 — 지금 없는 항목의 배지를 눌러도 켜진다 */
+    check("preview: 지금 없는 항목의 「현재 미표시」 배지가 눌리는 배지가 된다", await page.evaluate(() => {
+      const tag = document.querySelector("#ss-def-9 .ss-nowtag");
+      return !!tag && tag.getAttribute("role") === "button" && tag.getAttribute("tabindex") === "0" &&
+        tag.title.includes("재현") && getComputedStyle(tag).cursor === "pointer";
+    }));
+    check("preview: preview 없는 항목의 배지는 그대로 (비클릭)", await page.evaluate(() => {
+      const tag = document.querySelector("#ss-def-1 .ss-nowtag");
+      return !!tag && !tag.hasAttribute("role") && !tag.hasAttribute("tabindex");
+    }));
+    await page.click("#ss-def-9 .ss-nowtag");
+    await page.waitForTimeout(300);
+    check("preview: 배지를 누르면 스위치와 같은 경로로 켜진다", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      return window.__pv.slice(-1)[0] === "9:true:S-PV:목록 공백 상태" &&
+        b.getAttribute("aria-pressed") === "true" && b.textContent.trim() === "원래대로" &&
+        document.getElementById("empty").hidden === false &&
+        getComputedStyle(document.querySelector(".ss-pvbar")).display !== "none";
+    }));
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(200);
 
     /* 2) 아무도 안 듣는 앱 — 죽은 버튼이 아니라 「앱이 아직 못 만든다」로 읽혀야 한다 */
     const infos = [];
@@ -762,7 +820,7 @@ function check(name, ok, detail) {
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
     check("preview: label 생략 시 「{title} 보기」", await page.evaluate(() =>
-      document.querySelector('[data-preview="9"]').textContent.trim() === "◑ 공백 보기"));
+      document.querySelector('[data-preview="9"]').textContent.trim() === "공백 보기"));
     await page.click('[data-preview="9"]');
     await page.waitForTimeout(200);
     await page.click('[data-preview="10"]');
@@ -770,7 +828,11 @@ function check(name, ok, detail) {
     check("preview: 두 번째를 켜면 첫 번째가 먼저 꺼진다 (동시에 하나만)", await page.evaluate(() =>
       window.__pv.join("|") === "9:true|9:false|10:true" &&
       document.querySelector('[data-preview="9"]').getAttribute("aria-pressed") === "false" &&
-      document.querySelector('[data-preview="10"]').getAttribute("aria-pressed") === "true"));
+      document.querySelector('[data-preview="9"]').textContent.trim() === "공백 보기" &&
+      document.querySelector('[data-preview="10"]').getAttribute("aria-pressed") === "true" &&
+      document.querySelector('[data-preview="10"]').textContent.trim() === "원래대로"));
+    check("preview: 띠는 지금 켜진 항목의 이름을 말한다", await page.evaluate(() =>
+      document.querySelector(".ss-pvbar").textContent.includes("「오류」 재현 중")));
 
     /* 4) 화면이 바뀌면 꺼진다 — 앱이 가짜 상태에 갇힌 채 다른 화면으로 넘어가지 않게 */
     await page.goto("about:blank");
@@ -790,6 +852,8 @@ function check(name, ok, detail) {
     await page.waitForTimeout(400);
     check("preview: 화면이 바뀌면 앱에 on:false 가 간다", await page.evaluate(() =>
       window.__pv.join("|") === "S-1/9:true|S-1/9:false" && window.ScreenSpec.current() === "S-2"));
+    check("preview: 화면이 바뀌면 재현 중 띠도 사라진다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-pvbar")).display === "none"));
 
     /* 5) 하위 요소(part)도 같은 파이프라인 — 라벨은 "1a" */
     await page.goto("about:blank");
@@ -808,10 +872,40 @@ function check(name, ok, detail) {
     }));
     await page.click('[data-preview="1a"]');
     await page.waitForTimeout(300);
+    /* 띠가 정의서 헤더를 덮지 않는다 — 뜨면 그 높이(28px)만큼 아래를 민다 (#29 QA 실측) */
+    check("preview: 재현 중 띠가 정의서 헤더를 덮지 않는다", await page.evaluate(() => {
+      const bar = document.querySelector(".ss-pvbar").getBoundingClientRect();
+      const dh = document.querySelector(".ss-dh").getBoundingClientRect();
+      return getComputedStyle(document.querySelector(".ss-pvbar")).display !== "none" && bar.bottom <= dh.top + 0.5;
+    }));
     check("preview: 하위 요소도 실제로 동작 (detail.n = \"1a\")", await page.evaluate(() =>
       window.__pv.join("|") === "1a:true:항목 수" &&
       document.querySelector('[data-spec="1a"]').textContent === "0" &&
       document.querySelector('[data-preview="1a"]').getAttribute("aria-pressed") === "true"));
+
+    /* 6) overlay 모드 — 띠는 정의서 헤더(48px) 바로 아래, 설명 패널에 깔리지 않아 「끄기」가 실제로 눌린다 (#29 ③) */
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">목록</div><script>' +
+      'window.SCREENSPEC={mode:"overlay",screen:{id:"S-OV",name:"목록"},specs:[' +
+      '{n:1,target:"1",title:"목록 영역"},{n:9,target:"9",anno:"state",title:"공백",preview:{}}]};' +
+      'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on);e.detail.handled=true;});<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-ovDoc");
+    await page.waitForTimeout(300);
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(300);
+    check("preview: overlay 도 띠가 헤더 아래(48px)에 · 패널 아래 대역", await page.evaluate(() => {
+      const cs = getComputedStyle(document.querySelector(".ss-pvbar"));
+      const hz = +getComputedStyle(document.querySelector(".ss-ov-header")).zIndex;
+      return cs.display === "flex" && cs.top === "48px" && +cs.zIndex < hz &&
+        document.querySelector(".ss-pvbar").getBoundingClientRect().right <= innerWidth - 400;
+    }));
+    await page.click(".ss-pvbar-x");
+    await page.waitForTimeout(300);
+    check("preview: overlay 의 「끄기」도 실제로 눌린다", await page.evaluate(() =>
+      window.__pv.join("|") === "9:true|9:false" &&
+      getComputedStyle(document.querySelector(".ss-pvbar")).display === "none"));
   }
 
   /* ============ 설정 없이 스크립트만 넣은 경우 ============

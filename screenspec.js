@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.18 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.19 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -267,12 +267,16 @@
   .ss-cov-miss{color:var(--ss-ink);font-weight:800}
   @media(max-width:1000px){
     body.ss-mode-doc .ss-docmode{position:static;display:block;padding-top:50px}
+    body.ss-mode-doc.ss-pv-on .ss-docmode{top:auto;padding-top:78px} /* 좁은 폭: 흐름 배치라 여백으로 민다 */
     .ss-doc-body{display:block}.ss-stage{overflow:visible}
     .ss-defs{width:100%;border-left:0;border-top:1px solid var(--ss-line2)}
   }
   .ss-row{display:flex;border-bottom:1px solid var(--ss-line);cursor:pointer;transition:background .12s}
   /* 지금 화면에 없는 정의(조건부 상태 등) — 번호를 흐리게 + '현재 미표시' (#27) */
   .ss-nowtag{display:none;font-size:10px;color:var(--ss-ink3);border:1px dashed var(--ss-line2);border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap}
+  /* preview 가 있는 항목의 배지는 그 자리에서 눌러 재현한다 — 「지금 없음 → 눌러서 보기」가 한 흐름 (#29) */
+  .ss-nowtag[role="button"]{cursor:pointer;color:var(--ss-accent);border-color:color-mix(in srgb,var(--ss-accent) 45%,#fff);transition:background .12s,color .12s}
+  .ss-nowtag[role="button"]:hover,.ss-nowtag[role="button"]:focus-visible{background:var(--ss-accent-soft);color:var(--ss-accent);border-style:solid}
   .ss-row.ss-now-hidden .ss-no{opacity:.35}
   .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
   .ss-row:hover{background:#FAFAF9}
@@ -299,14 +303,40 @@
     box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent);transition:background .12s}
   .ss-play:hover{background:color-mix(in srgb,var(--ss-accent) 82%,#000)}
   .ss-play:active{transform:translateY(1px)}
-  /* 상태 재현 (#27) — ▶(실제 클릭)와 구분되는 ◑(앱에 상태를 요청). 켜지면 채워진다 */
-  .ss-preview{background:transparent;color:var(--ss-accent);border:1.5px dashed var(--ss-accent);box-shadow:none}
+  /* 상태 재현 (#27·#29) — ▶(실제 클릭)와 다른 물건이다: 실행 버튼이 아니라 **스위치**.
+     기호(◑)는 관습이 없어 읽히지 않았다 (#29) → 트랙+노브를 CSS 로 그려 「토글」임을 모양으로 말한다.
+     마크업은 버튼 하나 그대로 (::before=트랙 · ::after=노브) — 안에 span 을 넣으면 클릭 위임이 깨진다 */
+  .ss-preview{position:relative;background:transparent;color:var(--ss-accent);border:1.5px dashed var(--ss-accent);
+    box-shadow:none;border-radius:99px;padding:6px 13px 6px 10px;gap:8px}
+  .ss-preview::before{content:"";flex:none;width:22px;height:13px;border-radius:99px;
+    border:1px solid var(--ss-line2);background:#fff;transition:background .12s,border-color .12s}
+  .ss-preview::after{content:"";position:absolute;left:13.5px;top:50%;margin-top:-4.5px;width:9px;height:9px;
+    border-radius:50%;background:var(--ss-ink2);transition:transform .14s,background .12s}
   .ss-preview:hover{background:var(--ss-accent-soft)}
   .ss-preview.ss-on{background:var(--ss-accent);color:#fff;border-style:solid;
     box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent)}
+  .ss-preview.ss-on::before{background:var(--ss-accent);border-color:#fff}
+  .ss-preview.ss-on::after{background:#fff;transform:translateX(9px)}
   .ss-preview.ss-on:hover{background:color-mix(in srgb,var(--ss-accent) 82%,#000)}
   /* 아무도 이 이벤트를 듣지 않을 때 — 죽은 버튼이 아니라 「앱이 아직 못 만든다」로 읽히게 */
   .ss-preview-none{display:block;margin:6px 0 0 16px;font-size:11.5px;color:var(--ss-ink3);line-height:1.55}
+  /* 재현 중 띠 (#29) — 패널이 아니라 **앱 위**에 붙는다. 옆에서 화면만 보는 사람에게 「이건 진짜 데이터가 아니다」를
+     알리는 유일한 신호다. 앱마다 각자 만들면 모양이 제각각이라 라이브러리가 그린다. 상단 바 바로 아래에 붙어 앱을 덮는다 */
+  .ss-pvbar{display:none;position:fixed;left:0;right:0;top:0;z-index:9010;height:28px;align-items:center;gap:10px;
+    padding:0 14px;font-size:12px;font-weight:700;color:var(--ss-ink);
+    background:color-mix(in srgb,var(--ss-accent) 14%,#fff);
+    border-bottom:1px solid color-mix(in srgb,var(--ss-accent) 35%,#fff)}
+  .ss-pvbar .ss-pvbar-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ss-pvbar .ss-pvbar-x{flex:none;font-size:11.5px;font-weight:800;color:var(--ss-accent);background:#fff;
+    border:1px solid color-mix(in srgb,var(--ss-accent) 45%,#fff);border-radius:6px;padding:3px 10px}
+  .ss-pvbar .ss-pvbar-x:hover{background:var(--ss-accent-soft)}
+  /* 정의서 모드에서만·모드별 자리: wrap·frame 은 툴바(50px) 아래, overlay 는 정의서 헤더(48px) 아래 */
+  body.ss-wrap.ss-mode-doc .ss-pvbar.ss-show{display:flex;top:50px}
+  /* 띠가 뜨면 그 높이(28px)만큼 아래를 민다 — 덮으면 정의서 헤더의 화면 ID·화면명이 가려진다 (#29) */
+  body.ss-wrap.ss-mode-doc.ss-pv-on .ss-docmode{top:78px}
+  /* overlay: 설명 패널(400px, 더 위 대역)이 오른쪽을 덮으므로 앱 영역까지만 — 「끄기」가 패널 밑에 깔리면 못 끈다 */
+  body.ss-ov-doc .ss-pvbar.ss-show{display:flex;top:48px;right:400px;z-index:2147483005}
+  body.ss-ov-doc.ss-pv-on{padding-top:76px!important} /* 헤더 48 + 띠 28 */
   /* 하위 요소(parts) — 상위 행 안쪽에 한 단 들여쓴 블록. 라벨(1a·1b)은 라이브러리가 매긴다 (#25) */
   .ss-part{margin:10px 0 0 18px;padding:2px 0 5px 12px;border-left:2px solid var(--ss-line2);transition:background .12s}
   .ss-part.ss-active{background:var(--ss-accent-soft);border-left-color:var(--ss-accent);border-radius:0 6px 6px 0}
@@ -456,6 +486,7 @@ ${HL_CSS}
       box-shadow:0 -10px 30px rgba(17,24,39,.18)}
     body.ss-ov-doc{padding-right:0!important;padding-bottom:54vh!important}
     body.ss-ov-doc .ss-pill{top:56px} /* 헤더 글자를 가리지 않게 아래로 */
+    body.ss-ov-doc .ss-pvbar.ss-show{right:0} /* 패널이 하단 시트로 내려가므로 띠는 앱 전체 폭 */
   }
   @media (prefers-reduced-motion: reduce){.ss-ui *{transition:none!important}}
   `;
@@ -512,12 +543,22 @@ ${HL_CSS}
     }
     return "";
   }
-  /* ◑ 상태 재현 버튼(공통) — anno 와 무관하게 preview 가 있으면 붙는다 (#27).
-     ▶(play)는 화면에 있는 요소를 실제로 누르는 것이고, 이건 지금 화면에 없는 상태를 앱에 요청하는 것이다. */
+  /* 상태 재현 스위치(공통) — anno 와 무관하게 preview 가 있으면 붙는다 (#27).
+     ▶(play)는 화면에 있는 요소를 실제로 누르는 것이고, 이건 지금 화면에 없는 상태를 앱에 요청하는 것이다.
+     켜면 라벨이 「원래대로」로 바뀐다 — 되돌리는 방법이 그 자리에 있어야 한다 (#29). 원래 라벨은 data-pvlabel 에 남긴다 */
+  const PV_OFF_LABEL = "원래대로";
   function previewBtnHTML(sp, key) {
     if (!sp.preview) return "";
     const label = sp.preview.label || (sp.title ? sp.title + " 보기" : "이 상태 보기");
-    return '<button class="ss-play ss-preview" data-preview="' + key + '" aria-pressed="false">◑ ' + esc(label) + "</button>";
+    return '<button class="ss-play ss-preview" data-preview="' + key + '" data-pvlabel="' + esc(label) +
+      '" aria-pressed="false">' + esc(label) + "</button>";
+  }
+  /* 스위치 한 개의 켬/끔 표시 — 눌린 상태·채움·라벨을 한 곳에서 맞춘다 (#29) */
+  function pvSetBtn(btn, on) {
+    if (!btn) return;
+    btn.setAttribute("aria-pressed", String(on));
+    btn.classList.toggle("ss-on", on);
+    btn.textContent = on ? PV_OFF_LABEL : (btn.dataset.pvlabel || btn.textContent);
   }
   /* 기능정의 행 HTML (wrap·overlay 공용) — 행은 상위 하나. parts 는 그 안에 한 단 들여쓴 블록으로 (#25) */
   function defsRowsHTML(specs) {
@@ -679,10 +720,7 @@ ${HL_CSS}
         return;
       }
       ctx.listEl.innerHTML = defsRowsHTML(specs()) + covBlockHTML(current);
-      if (previewKey != null) { /* 재렌더돼도 켜진 재현 버튼은 켜진 채로 (#27) */
-        const pb = pvBtn(previewKey);
-        if (pb) { pb.setAttribute("aria-pressed", "true"); pb.classList.add("ss-on"); }
-      }
+      if (previewKey != null) pvSetBtn(pvBtn(previewKey), true); /* 재렌더돼도 켜진 스위치는 켜진 채로 — 라벨(원래대로)까지 (#27·#29) */
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
       items().forEach((it) => {
@@ -788,7 +826,10 @@ ${HL_CSS}
         const t = targetOf(it.spec), m = markerEls[it.key];
         const hidden = !t || t.getClientRects().length === 0;
         const blk = blockOf(it);
-        if (blk && !it.isPart) blk.classList.toggle("ss-now-hidden", hidden); /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
+        if (blk && !it.isPart) { /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
+          blk.classList.toggle("ss-now-hidden", hidden);
+          pvTagWire(blk.querySelector(".ss-main > .ss-title > .ss-nowtag"), it, hidden);
+        }
         if (blk && !hidden) { /* 위치 힌트는 상위·하위 각자의 블록에 (#25) */
           const ph = blk.querySelector(it.isPart ? ".ss-pos" : ".ss-main > .ss-title > .ss-pos");
           if (ph) ph.textContent = posHint(t);
@@ -901,13 +942,44 @@ ${HL_CSS}
       } catch (err) { return false; } /* cross-origin 액자 등 — 조종할 수 없다 */
       return detail.handled === true;
     }
-    /* 켜져 있는 재현을 끈다 (다른 항목을 켤 때 · 화면이 바뀔 때). 앱이 가짜 상태에 갇히지 않게 한다 */
+    /* 재현 중 띠 — 패널을 안 보는 사람(옆에서 화면만 보는 디자이너·개발자)에게 「지금은 가짜 상태」를 알린다 (#29).
+       툴팁·토스트처럼 한 번만 만들고 켜져 있는 동안만 보인다. 「끄기」는 스위치를 끄는 것과 같은 경로 */
+    const pvBar = h("div", { class: "ss-ui ss-pvbar" },
+      '<span class="ss-pvbar-t"></span><button type="button" class="ss-pvbar-x">끄기</button>');
+    document.body.appendChild(pvBar);
+    const pvBarText = pvBar.querySelector(".ss-pvbar-t");
+    pvBar.querySelector(".ss-pvbar-x").onclick = () => previewOff();
+    function pvBarShow(it) {
+      pvBarText.textContent = "◑ 「" + (it.spec.title || it.label) + "」 재현 중 — 실제 데이터가 아닙니다";
+      pvBar.classList.add("ss-show");
+      document.body.classList.add("ss-pv-on");
+    }
+    /* 켜져 있는 재현을 끈다 (다른 항목을 켤 때 · 화면이 바뀔 때 · 띠의 「끄기」). 앱이 가짜 상태에 갇히지 않게 한다 */
     function previewOff() {
       if (previewKey == null) return;
       const it = itemOf(previewKey), btn = pvBtn(previewKey);
       previewKey = null;
-      if (btn) { btn.setAttribute("aria-pressed", "false"); btn.classList.remove("ss-on"); }
+      pvSetBtn(btn, false);
+      pvBar.classList.remove("ss-show");
+      document.body.classList.remove("ss-pv-on");
       if (it) firePreview(it, false);
+    }
+    /* 「현재 미표시」 배지 ↔ 스위치 잇기 (#29) — 지금 화면에 없고 재현할 수 있는 항목만 눌리는 배지가 된다 */
+    function pvTagWire(tag, it, hidden) {
+      if (!tag) return;
+      if (hidden && it.spec.preview) {
+        tag.setAttribute("role", "button");
+        tag.setAttribute("tabindex", "0");
+        tag.setAttribute("title", "눌러서 이 상태를 재현합니다");
+        tag.dataset.pvtag = it.key;
+      } else if (tag.hasAttribute("role")) {
+        tag.removeAttribute("role"); tag.removeAttribute("tabindex"); tag.removeAttribute("title");
+        delete tag.dataset.pvtag;
+      }
+    }
+    function pvTagToggle(tag) {
+      const btn = pvBtn(String(tag.dataset.pvtag));
+      if (btn) previewToggle(btn);
     }
     function previewToggle(btn) {
       const it = itemOf(String(btn.dataset.preview));
@@ -919,8 +991,8 @@ ${HL_CSS}
       previewOff();                                        /* 한 번에 하나만 — 켜기 전에 먼저 끈다 */
       if (firePreview(it, true)) {
         previewKey = it.key;
-        btn.setAttribute("aria-pressed", "true");
-        btn.classList.add("ss-on");
+        pvSetBtn(btn, true);
+        pvBarShow(it);
         return;
       }
       const tag = h("div", { class: "ss-preview-none" });
@@ -933,10 +1005,12 @@ ${HL_CSS}
       }
     }
 
-    /* 패널 상호작용 (위임) — 행 클릭 + play/flow 버튼 + 상태 재현 버튼 */
+    /* 패널 상호작용 (위임) — 행 클릭 + play/flow 버튼 + 상태 재현 스위치 + 「현재 미표시」 배지 */
     ctx.listEl.addEventListener("click", (e) => {
       const pv = e.target.closest("[data-preview]");
       if (pv) { e.stopPropagation(); previewToggle(pv); return; }
+      const tag = e.target.closest("[data-pvtag]");
+      if (tag) { e.stopPropagation(); pvTagToggle(tag); return; }
       const btn = e.target.closest("[data-play]");
       if (btn) {
         e.stopPropagation();
@@ -956,6 +1030,10 @@ ${HL_CSS}
       if (row) activate(String(row.dataset.defrow), "panel");
     });
     ctx.listEl.addEventListener("keydown", (e) => {
+      const tag = e.target.closest("[data-pvtag]");
+      if (tag && (e.key === "Enter" || e.key === " ")) { /* 배지는 role=button 이므로 Enter·Space 둘 다 받는다 */
+        e.preventDefault(); e.stopPropagation(); pvTagToggle(tag); return;
+      }
       const row = e.target.closest("[data-defrow]");
       if (row && e.key === "Enter") activate(String(row.dataset.defrow), "panel");
     });
@@ -1226,7 +1304,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.18</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.19</div>
         </aside>
       </div>`);
 
@@ -1498,7 +1576,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.18] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.19] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -1529,7 +1607,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.18</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.19</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -1619,7 +1697,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.18] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.19] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
