@@ -471,9 +471,21 @@
       render();
       if (prev && !sc._unmapped && ctx.isDoc && ctx.isDoc()) showNav(sc);
     }
+    /* root 기반 화면의 표시/숨김 전환 — 대상만 보이고 나머지는 숨는다.
+       앱 DOM을 건드리므로 wrap 전용(ctx.toggleRoot)이며, overlay는 앱 DOM을 소유하지 않는다. */
+    function showRoot(sc) {
+      SCREENS.forEach((o) => {
+        if (!o.root) return;
+        const el = document.querySelector(o.root);
+        if (el) el.style.display = o === sc ? "" : "none";
+      });
+    }
     function setScreen(id) {
       const next = SCREENS.find((s) => s.id === id);
-      if (next) setCurrent(next);
+      if (!next) return;
+      /* 라우트 없는 root 화면은 앱 화면도 같이 전환해야 화면 감지가 되돌리지 않는다 (wrap 한정) */
+      if (next.root && !next.route && ctx.toggleRoot === true) showRoot(next);
+      setCurrent(next);
     }
 
     function placeMarkers() {
@@ -673,11 +685,7 @@
       } else if (!sc.route && sc.root) {
         /* root 기반 화면: 앱 화면도 같은 방식(표시/숨김)으로 전환 — 정의서·앱 동기 유지.
            안 하면 화면 감지가 "앱은 그대로"라며 이전 화면으로 되돌린다. */
-        SCREENS.forEach((o) => {
-          if (!o.root) return;
-          const el = document.querySelector(o.root);
-          if (el) el.style.display = o === sc ? "" : "none";
-        });
+        showRoot(sc);
       }
     });
     document.addEventListener("click", (e) => { if (!toc.contains(e.target)) closeToc(); });
@@ -916,7 +924,8 @@
       },
       ensureDoc: () => { if (document.body.classList.contains("ss-mode-proto")) setMode("doc"); },
       isDoc: () => document.body.classList.contains("ss-mode-doc"),
-      afterRender: () => requestAnimationFrame(layout)
+      afterRender: () => requestAnimationFrame(layout),
+      toggleRoot: true /* wrap은 앱 DOM을 소유한다 — setScreen이 root 표시/숨김도 함께 전환 */
     });
 
     /* ---- 다중 화면 자동 감지 (root 표시/숨김 추적) ---- */
@@ -926,7 +935,7 @@
         if (!sc.root) continue;
         const el = document.querySelector(sc.root);
         if (el && el.getClientRects().length > 0) {
-          core.setScreen(sc.id);
+          core.setCurrent(sc); /* 감지는 관찰 결과 반영일 뿐 — 여기서 다시 표시/숨김을 쓰면 관찰 루프가 된다 */
           return;
         }
       }
@@ -1022,13 +1031,17 @@
       afterRender: () => requestAnimationFrame(place)
     });
 
-    /* ---- 화면 감지: 라우트 우선(exact → suffix → 경계 prefix), 없으면 컨테이너 표시 여부 ---- */
+    /* ---- 화면 감지: 보이는 root 화면 > 라우트 > 미정의.
+           라우트 매칭은 exact → suffix → 경계 prefix 순. 라우트 없는 root 화면(패널·다이얼로그)은
+           라우트 화면 위에 얹히는 표면이므로, 열려 있으면 라우트 결과를 이긴다(닫히면 라우트 화면으로 복귀).
+           여러 개가 동시에 보이면 문서 순서상 마지막 = 가장 나중에 얹힌 표면을 택한다. ---- */
     function detectScreen() {
       const routed = SCREENS.filter((s) => s.route);
+      /* 해시 라우터(#/members)면 # 뒤를 경로로 사용 — 일반 책갈피(#section)는 해당 없음 */
+      const p = location.hash.indexOf("#/") === 0 ? location.hash.slice(1).split("?")[0] : location.pathname;
+      let hit = null;
       if (routed.length) {
-        /* 해시 라우터(#/members)면 # 뒤를 경로로 사용 — 일반 책갈피(#section)는 해당 없음 */
-        const p = location.hash.indexOf("#/") === 0 ? location.hash.slice(1).split("?")[0] : location.pathname;
-        let hit = routed.find((s) => routeToRe(s.route).test(p));
+        hit = routed.find((s) => routeToRe(s.route).test(p));
         if (!hit) { /* basePath·정적 호스팅: 경계 일치 suffix */
           hit = routed.find((s) => s.route !== "/" && routeToSuffixRe(s.route).test(p));
         }
@@ -1041,18 +1054,21 @@
             if (bounded && base.length > bestLen) { bestLen = base.length; hit = s; }
           });
         }
-        const cur = core.current();
-        core.setCurrent(hit || (cur && cur._unmapped && cur._path === p ? cur : unmappedScreen(p)));
-        return;
       }
-      for (const sc of SCREENS) {
-        if (!sc.root) continue;
+      /* 라우트 없는 root 화면 중 실제로 보이는 것 — 여럿이면 문서 순서상 마지막 */
+      let top = null, topEl = null;
+      SCREENS.forEach((sc) => {
+        if (!sc.root || sc.route) return;
         const el = document.querySelector(sc.root);
-        if (el && el.getClientRects().length > 0) {
-          core.setScreen(sc.id);
-          return;
-        }
-      }
+        if (!el || el.getClientRects().length === 0) return;
+        if (!top || (topEl.compareDocumentPosition(el) & 4 /* DOCUMENT_POSITION_FOLLOWING */)) { top = sc; topEl = el; }
+      });
+      /* overlay는 앱 DOM을 건드리지 않는다 — setCurrent만 (정의서 쪽만 따라간다) */
+      if (top) { core.setCurrent(top); return; }
+      if (hit) { core.setCurrent(hit); return; }
+      if (!routed.length) return; /* 라우트가 하나도 없는 설정: 경로로 판단할 근거가 없으므로 유지 */
+      const cur = core.current();
+      core.setCurrent(cur && cur._unmapped && cur._path === p ? cur : unmappedScreen(p));
     }
     /* SPA 라우팅 추적: pushState/replaceState 패치 + popstate */
     ["pushState", "replaceState"].forEach((fn) => {

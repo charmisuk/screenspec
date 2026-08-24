@@ -25,6 +25,19 @@
   tr[data-row]:hover{background:#FAFAF9}
   .invite{background:#191919;color:#fff;font-weight:700;font-size:13px;border-radius:9px;padding:9px 16px}
   .head-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .rowbtn{font-size:12px;font-weight:700;color:#50524E;border:1px solid #E9E9E7;border-radius:7px;padding:5px 10px}
+  /* 라우트 없는 화면(패널) — 열림/닫힘만으로 화면이 바뀐다 */
+  /* 좌측에 띄운다 — 오버레이 모드의 ScreenSpec 상단 바·우측 패널과 겹치지 않게 */
+  #detailPanel{position:fixed;left:20px;top:110px;width:320px;max-height:calc(100% - 150px);z-index:50;
+    background:#fff;border:1px solid #E9E9E7;border-radius:14px;box-shadow:0 12px 32px rgba(17,24,39,.14);
+    padding:20px;overflow:auto}
+  #detailPanel[hidden]{display:none}
+  #detailPanel .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  #detailPanel h2{font-size:17px;font-weight:800;margin:0}
+  #detailPanel .pclose{font-size:13px;font-weight:700;color:#9B9A97}
+  #detailPanel dl{margin:0;font-size:13.5px}
+  #detailPanel dt{font-size:11.5px;color:#9B9A97;margin-top:12px}
+  #detailPanel dd{margin:2px 0 0;font-weight:700}
 </style>
 </head>
 <body>
@@ -35,6 +48,19 @@
   </nav>
 
   <main id="view"></main>
+
+  <!-- 방문자 상세 패널 — 라우트가 없는 화면. root 셀렉터(표시 여부)로만 감지된다 -->
+  <aside id="detailPanel" data-ss-screen="S-03" hidden>
+    <div class="panel-head" data-spec="5">
+      <h2>방문자 상세</h2>
+      <button class="pclose" onclick="closeDetail()">닫기</button>
+    </div>
+    <dl data-spec="6">
+      <dt>이름</dt><dd id="dName">—</dd>
+      <dt>부서</dt><dd id="dDept">—</dd>
+      <dt>최근 방문</dt><dd>2026-08-21 09:14</dd>
+    </dl>
+  </aside>
 
   <script>
   /* ---- 미니 SPA 라우터 (Next.js 흉내: pushState 기반) ---- */
@@ -52,14 +78,20 @@
         <button class="invite" data-spec="3" onclick="alert('데모: 초대 패널이 열립니다')">+ 초대</button>
       </div>
       <table data-spec="4">
-        <thead><tr><th>이름</th><th>부서</th><th>상태</th></tr></thead>
+        <thead><tr><th>이름</th><th>부서</th><th>상태</th><th></th></tr></thead>
         <tbody>
-          <tr data-row><td>김지수</td><td>운영</td><td>재직</td></tr>
-          <tr data-row><td>박민호</td><td>개발</td><td>재직</td></tr>
-          <tr data-row><td>이서연</td><td>디자인</td><td>초대됨</td></tr>
+          <tr data-row><td>김지수</td><td>운영</td><td>재직</td><td><button class="rowbtn" onclick="openDetail('김지수','운영')">상세</button></td></tr>
+          <tr data-row><td>박민호</td><td>개발</td><td>재직</td><td><button class="rowbtn" onclick="openDetail('박민호','개발')">상세</button></td></tr>
+          <tr data-row><td>이서연</td><td>디자인</td><td>초대됨</td><td><button class="rowbtn" onclick="openDetail('이서연','디자인')">상세</button></td></tr>
         </tbody>
       </table>`
   };
+  function openDetail(name, dept){
+    document.getElementById("dName").textContent = name;
+    document.getElementById("dDept").textContent = dept;
+    document.getElementById("detailPanel").hidden = false;
+  }
+  function closeDetail(){ document.getElementById("detailPanel").hidden = true; }
   function pathKey(){ return "/" + location.pathname.split("/").pop(); }
   function render() {
     const path = VIEWS[pathKey()] ? pathKey() : "/home";
@@ -109,8 +141,23 @@
             play:{ selector:".invite", label:"동작 재생 — 초대 패널" }, defs:[
             { t:"클릭 시 이용자 초대 패널 열림" }]},
           { n:4, target:"4", anno:"box", title:"명단 테이블", defs:[
-            { t:"이름·부서·상태 3열 · 행 클릭 시 상세 이동" },
-            { t:"상태 값: 재직 · 초대됨 · 퇴사" }]}
+            { t:"이름·부서·상태·상세 4열 · 행 클릭 시 상세 이동" },
+            { t:"상태 값: 재직 · 초대됨 · 퇴사" },
+            { t:"'상세' 버튼 클릭 시 방문자 상세 패널(S-03) 열림" }]}
+        ]
+      },
+      {
+        /* 라우트가 없는 화면 — 패널이 열리면 자동으로 이 화면, 닫히면 라우트 화면으로 복귀 */
+        id: "S-03", name: "방문자 상세", path: ["홈","이용자","명단","방문자 상세"],
+        root: "#detailPanel",
+        specs: [
+          { n:1, target:"5", anno:"action", title:"패널 헤더",
+            play:{ selector:"#detailPanel .pclose", label:"동작 재생 — 패널 닫기" }, defs:[
+            { t:"제목 '방문자 상세' + 닫기 버튼" },
+            { t:"닫기 시 이전 라우트 화면으로 복귀" }]},
+          { n:2, target:"6", anno:"state", title:"방문자 정보", defs:[
+            { t:"이름·부서·최근 방문 3항목 표시", subs:[
+              "방문 이력이 없으면 최근 방문에 '—' 표시"]}]}
         ]
       }
     ]

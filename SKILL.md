@@ -81,7 +81,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 - 화면 구분은 `screens[].route`에 라우트 경로: `"/members"`, 동적 세그먼트는 `"/members/[id]"`
 - 앱이 basePath(예: /admin) 아래에 있어도 suffix 매칭으로 동작 — route는 basePath 없이 적는다
 - 해시 라우터(주소가 #/members 형태)도 자동 인식 — route는 동일하게 "/members"로 적는다
-- 라우트가 없는 패널·다이얼로그 화면은 `root` 셀렉터(컨테이너 표시 여부)로 구분 가능
+- 라우트가 없는 패널·다이얼로그 화면은 `root` 셀렉터(컨테이너 표시 여부)로 구분 가능 — 패널이 열리면 그 화면으로 자동 전환, 닫히면 라우트 화면으로 복귀
 - Next.js(App Router) 적용: `app/layout.tsx`의 `<body>` 안에
 
 ```tsx

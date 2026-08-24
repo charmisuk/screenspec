@@ -126,6 +126,23 @@ function check(name, ok, detail) {
     const t = document.querySelector(".ss-nav-toast");
     return t.classList.contains("ss-show") && t.textContent.includes("상품 목록");
   }));
+  /* 공개 API setScreen — wrap은 root 표시/숨김까지 동반해야 감지가 되돌리지 않는다 */
+  await page.evaluate(() => window.ScreenSpec.setScreen("SCR-EX-DTL-002"));
+  await page.waitForTimeout(500);
+  check("setScreen → 정의서·앱 화면 동시 전환", await page.evaluate(() => {
+    const lst = document.querySelector('[data-ss-screen="SCR-EX-LST-001"]');
+    const dtl = document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]');
+    return window.ScreenSpec.current() === "SCR-EX-DTL-002" &&
+      dtl.getClientRects().length > 0 && lst.style.display === "none";
+  }));
+  await page.evaluate(() => window.ScreenSpec.setScreen("SCR-EX-LST-001"));
+  await page.waitForTimeout(500);
+  check("setScreen 복귀 → 목록 화면", await page.evaluate(() => {
+    const lst = document.querySelector('[data-ss-screen="SCR-EX-LST-001"]');
+    const dtl = document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]');
+    return window.ScreenSpec.current() === "SCR-EX-LST-001" &&
+      lst.getClientRects().length > 0 && dtl.style.display === "none";
+  }));
   /* 모바일: 목차 = 전체 화면 시트 */
   await page.setViewportSize({ width: 480, height: 800 });
   await page.waitForTimeout(300);
@@ -231,6 +248,29 @@ function check(name, ok, detail) {
   await page.waitForTimeout(400);
   const hash2 = await page.evaluate(() => window.ScreenSpec.current());
   check("해시 라우터(#/) 감지", hash1 === "S-01" && hash2 === "S-09", hash1 + "→" + hash2);
+  /* 라우트 없는 root 화면(패널) — 열리면 자동 전환, 닫히면 라우트 화면 복귀 (여기서 현재 화면은 S-09) */
+  await page.click("tbody tr:first-child .rowbtn");
+  await page.waitForTimeout(300);
+  check("패널 열림 → 라우트 없는 root 화면 감지", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
+  await page.click("#detailPanel .pclose");
+  await page.waitForTimeout(300);
+  check("패널 닫힘 → 라우트 화면 복귀", await page.evaluate(() => window.ScreenSpec.current()) === "S-09");
+  /* setScreen 후 DOM이 계속 변해도 감지가 되돌리지 않는다 */
+  await page.click("tbody tr:first-child .rowbtn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.ScreenSpec.setScreen("S-03"));
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(() => {
+      const d = document.createElement("div");
+      d.textContent = "mutation probe";
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 60);
+    });
+    await page.waitForTimeout(250);
+  }
+  check("setScreen 유지 (DOM 변경 1초)", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
+  await page.click("#detailPanel .pclose");
+  await page.waitForTimeout(300);
   srv.close();
 
 

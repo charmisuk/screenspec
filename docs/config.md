@@ -27,7 +27,7 @@ type Screen = {
   name:    string,      // 필수. 화면명
   path?:   string[],    // 기획 IA 경로. 이 배열이 그대로 화면 목록 트리가 된다
   specs?:  Spec[],      // 이 화면의 기능 설명
-  root?:   string,      // wrap 다중화면: 이 화면의 컨테이너 CSS 셀렉터
+  root?:   string,      // 이 화면의 컨테이너 CSS 셀렉터 (두 모드 공통 · 표시 여부로 감지)
   route?:  string,      // overlay: 라우트 경로. "/members", "/members/[id]"
 }
 
@@ -77,7 +77,7 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `name` | string | ✔ | 화면명. 헤더·목차·이동 버튼 라벨에 쓰인다 |
 | `path` | string[] | | 기획 IA 경로. `["홈","이용자","명단"]` → 목차에서 홈 › 이용자 아래 "명단" 행. 마지막 = 화면 자신, 앞 = 그룹. 들여쓰기는 최대 6뎁스 |
 | `specs` | Spec[] | | 비어 있으면 목차에 "미정의"로 표시된다 (커버리지 갭 가시화) |
-| `root` | string | | wrap 다중화면에서 이 화면의 컨테이너 셀렉터. 표시/숨김 전환을 자동 감지한다 |
+| `root` | string | | 컨테이너 셀렉터. 두 모드 공통 — 요소가 보이면 그 화면으로 자동 전환(패널·다이얼로그처럼 라우트 없는 화면). overlay에서는 route 화면 위에 얹힌 root 화면이 우선 |
 | `route` | string | | overlay에서 이 화면의 라우트. 동적 세그먼트는 `[id]`. basePath·해시 라우터는 자동 대응 |
 
 ## Spec
@@ -129,6 +129,8 @@ window.ScreenSpec.current()                 // 현재 화면 id
 window.ScreenSpec.refresh()                 // 레이아웃·마커 재계산
 window.ScreenSpec.mode                      // "wrap" | "overlay"
 ```
+
+`setScreen`은 wrap에서 root 표시/숨김 토글을 동반하고, overlay는 앱 DOM을 건드리지 않으므로 root가 보이는 동안만 유지된다.
 
 `window.SpecLayer`는 구명칭 호환 별칭이다 (동일 객체).
 
