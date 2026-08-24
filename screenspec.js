@@ -183,11 +183,12 @@
   function covBlockHTML(s) {
     const c = coverage(s);
     if (!c) return "";
-    const head = c.missing.length ? "상태 커버리지" : "상태 커버리지 — 전부 다룸 (" + CHECKLIST.length + "개 축)";
-    let out = '<div class="ss-cov"><div class="ss-cov-h">' + esc(head) + "</div>";
-    if (c.done.length) out += '<div class="ss-cov-l">다룸: ' + esc(c.done.join(" · ")) + "</div>";
-    if (c.skipped.length) out += '<div class="ss-cov-l">비움: ' + esc(c.skipped.map((z) => z.axis + "(" + z.reason + ")").join(" · ")) + "</div>";
-    if (c.missing.length) out += '<div class="ss-cov-l ss-cov-miss">⚠ 미정의: ' + esc(c.missing.join(" · ")) + "</div>";
+    /* 이건 정의서를 "쓰는 사람" 에게 필요한 정보다 — 다 채우면 사라진다(체크리스트의 정상 동작).
+       읽는 사람의 패널에 «전부 다룸» 이 계속 떠 있으면 무엇을 하라는 것인지 애매해진다. */
+    if (!c.missing.length) return "";
+    let out = '<div class="ss-cov" title="' + esc("설정의 checklist 로 이 프로젝트가 정한 점검 항목입니다 (" + CHECKLIST.join(" · ") + ")") + '">' +
+      '<div class="ss-cov-miss">⚠ 아직 적지 않은 상황 — ' + esc(c.missing.join(" · ")) + "</div>";
+    if (c.skipped.length) out += '<div class="ss-cov-l">해당 없음 — ' + esc(c.skipped.map((z) => z.axis + " (" + z.reason + ")").join(" · ")) + "</div>";
     return out + "</div>";
   }
 
@@ -256,9 +257,10 @@
   .ss-empty code{font-family:var(--ss-mono);font-size:11.5px;background:#F1F1F0;padding:1px 5px;border-radius:4px}
   .ss-empty b{color:var(--ss-ink2)}
   /* 상태 커버리지 (#26) — 정의 목록 맨 아래. 액센트는 쓰지 않는다(경고가 아니라 잔여 작업 표시) */
-  .ss-cov{border-top:1px solid var(--ss-line);padding:14px 18px;font-size:12px;color:var(--ss-ink3);line-height:1.75}
-  .ss-cov-h{font-weight:700;color:var(--ss-ink2);margin-bottom:2px}
-  .ss-cov-miss{color:var(--ss-ink2);font-weight:700}
+  /* 빠진 상황 안내 — 미정의가 있을 때만 나온다. 「할 일이 남았다」로 읽히게 점선 카드로 띄운다 */
+  .ss-cov{margin:10px 14px 16px;padding:10px 12px;border:1px dashed var(--ss-line2);border-radius:8px;
+    background:#FAFAF9;font-size:12px;color:var(--ss-ink3);line-height:1.7}
+  .ss-cov-miss{color:var(--ss-ink);font-weight:800}
   @media(max-width:1000px){
     body.ss-mode-doc .ss-docmode{position:static;display:block;padding-top:50px}
     .ss-doc-body{display:block}.ss-stage{overflow:visible}

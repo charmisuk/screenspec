@@ -620,10 +620,9 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(400);
-    check("커버리지: 다 채운 화면(covers+사유 있는 skip) → 패널 '전부 다룸'", await page.evaluate(() => {
+    check("커버리지: 다 채운 화면 → 아무것도 안 뜬다 (체크리스트는 다 채우면 사라진다)", await page.evaluate(() => {
       const el = document.querySelector(".ss-cov");
-      return !!el && el.querySelector(".ss-cov-h").textContent === "상태 커버리지 — 전부 다룸 (3개 축)" &&
-        !el.querySelector(".ss-cov-miss") && el.innerText.includes("다룸: 빈 상태 · 오류") && el.innerText.includes("비움: 로딩(조회가 없다)");
+      return !el;
     }));
     await page.click(".ss-toc-btn");
     await page.waitForTimeout(300);
@@ -642,8 +641,7 @@ function check(name, ok, detail) {
     check("커버리지: 패널 ⚠ 줄이 미정의 축을 나열", await page.evaluate(() => {
       const el = document.querySelector(".ss-cov");
       const miss = el && el.querySelector(".ss-cov-miss");
-      return !!miss && miss.textContent === "⚠ 미정의: 로딩 · 오류" &&
-        el.querySelector(".ss-cov-h").textContent === "상태 커버리지" && el.innerText.includes("다룸: 빈 상태");
+      return !!miss && miss.textContent === "⚠ 아직 적지 않은 상황 — 로딩 · 오류" && !el.innerText.includes("다룸");
     }));
     check("커버리지: 사유 없는 skip · checklist 밖 covers 경고", 
       cWarns.some((w) => w.includes('skip "오류" 에 사유가 없습니다')) &&
