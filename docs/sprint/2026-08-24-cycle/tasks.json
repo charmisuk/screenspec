@@ -1,0 +1,132 @@
+{
+  "cycle": "2026-08-24-cycle",
+  "branch": "issues/2026-08-24-cycle",
+  "base_version": "0.13.1",
+  "protocol": ".agents/workflows/issue-cycle.md",
+  "rules": [
+    "순서 고정. status != done 인 첫 항목만 작업한다",
+    "게이트 4개(plan→dev→qa→commit)는 증거 없이 done 불가",
+    "이슈 1건 = 커밋 1개. push 는 사용자 요청 시에만"
+  ],
+  "issues": [
+    {
+      "order": 1, "issue": [12, 7], "type": "fix", "release": "1차 결함",
+      "title": "overlay: 라우트가 있으면 root형 화면이 절대 활성화되지 않음 + wrap setScreen 이 감지에 되돌아감",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 2, "issue": [15], "type": "fix", "release": "1차 결함",
+      "title": "overlay 라우트 매칭 선언 순서 우선 — 동적 세그먼트가 구체 경로를 가림",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 3, "issue": [13], "type": "fix", "release": "1차 결함",
+      "title": "overlay 마커가 뷰포트 밖으로 잘림 (x:0 → left:-10px)",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 4, "issue": [14], "type": "fix", "release": "1차 결함",
+      "title": "overlay 설명 패널이 앱 우측 드로어를 덮음 — 패널 좌/우 토글",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 5, "issue": [21], "type": "docs", "release": "2차 DX",
+      "title": "overlay 에서도 root 가 data-spec 조회 범위를 좁힌다는 점 문서화",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "sonnet", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 6, "issue": [20], "type": "feat", "release": "2차 DX",
+      "title": "'못 찾은 정의 N건' 경고에 n·target 표기 + state 조건부 렌더는 제외",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 7, "issue": [19], "type": "feat", "release": "2차 DX",
+      "title": "등록됐지만 specs 가 빈 화면의 빈 상태 안내",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 8, "issue": [16], "type": "feat", "release": "3차 도입 문턱",
+      "title": "target 이 CSS 셀렉터·텍스트·fallback 배열도 받게",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 9, "issue": [18], "type": "feat", "release": "3차 도입 문턱",
+      "title": "accent 가 CSS 변수 var(--x) 를 받게",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 10, "issue": [17], "type": "feat", "release": "4차 기능",
+      "title": "overlay 기기 폭 — 최소안(뷰포트 폭 표시 + .ss-pc/.ss-narrow 훅 + devtools 안내). iframe 전체안은 보류",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 11, "issue": [9], "type": "feat", "release": "4차 기능",
+      "title": "화면 목록 검색 필터 (트리 위 input, 이름/ID 부분 일치)",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 12, "issue": [10], "type": "feat", "release": "4차 기능",
+      "title": "arrowFrom 화살표 시작 방향 수동 지정",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    },
+    {
+      "order": 13, "issue": [8], "type": "feat", "release": "4차 기능",
+      "title": "움직이는 요소 내부 마커 추적 옵션 (rAF)",
+      "status": "todo",
+      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
+      "dev": { "done": false, "model": "opus", "summary": "" },
+      "qa": { "done": false, "evidence": "" },
+      "commit": { "done": false, "sha": "" }
+    }
+  ],
+  "cycle_qa": { "done": false, "evidence": "" },
+  "release": { "done": false, "version": "", "sha": "" }
+}
