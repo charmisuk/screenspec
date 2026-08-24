@@ -12,7 +12,8 @@ ScreenSpec의 API는 전역 객체 `window.SCREENSPEC` 하나다. 이 문서가 
 window.SCREENSPEC = {
   mode?:    "wrap" | "overlay" | "frame",  // 생략 = 자동 판별 (React·Next 감지 시 overlay). frame 은 명시 전용
   accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple", "#7C3AED" 또는 "var(--brand)". 기본 blue
-  devices?: { mobile?: Device, pc?: Device },  // wrap 전용. 기기 프리셋 덮어쓰기
+  baseViewport?: "mobile" | "pc",  // wrap·frame 시작 폭 = 이 문서가 서술하는 기준 폭. 기본 mobile
+  devices?: { mobile?: Device, pc?: Device },  // wrap·frame. 기기 프리셋 덮어쓰기
   checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
 
   // 화면이 하나면 screen + specs
@@ -29,7 +30,8 @@ type Screen = {
   path?:   string[],    // 기획 IA 경로. 이 배열이 그대로 화면 목록 트리가 된다
   specs?:  Spec[],      // 이 화면의 기능 설명
   root?:   string,      // 이 화면의 컨테이너 CSS 셀렉터 (두 모드 공통 · 표시 여부로 감지)
-  route?:  string,      // overlay: 라우트 경로. "/members", "/members/[id]"
+  route?:  string,      // overlay·frame: 라우트 경로. "/members", "/members/[id]"
+  viewports?: string[], // 이 화면이 존재하는 폭. ["pc"] 면 목차에 「PC 전용」
   covers?: string[],    // checklist 중 이 화면이 실제로 적은 축
   skip?:   { [축: string]: string },  // 의도적으로 비운 축 = 사유. 사유가 없으면 미정의로 본다
 }
@@ -38,7 +40,8 @@ type Spec = {
   n:        number,     // 필수. 마커 번호
   target:   string,     // 필수. data-spec 속성값 (문자열)
   anno?:    "box"|"arrow"|"input"|"state"|"motion"|"action"|"popup"|"flow",  // 기본 box
-  title?:   string,     // 영역명
+  title?:   string,     // 영역명 (위치 힌트는 자동)
+  optional?: boolean,   // 조건부 요소 — 누락 경고 제외
   defs?:    Def[],      // 기능 설명 줄
   parts?:   Part[],     // 이 영역 안의 이름 있는 하위 요소. 라벨(1a·1b)은 라이브러리가 매긴다
   play?:    { selector: string, label: string },  // anno action·popup·flow: 재생 버튼
@@ -56,7 +59,7 @@ type Part = {           // 라벨은 적지 않는다 — parts[0] → "1a", par
   arrowTo?: string,
 }
 
-type Def    = { t: string, subs?: string[] }
+type Def    = { t: string, subs?: string[], why?: string }  // why = 그 줄의 근거 (「↳ 이유:」로 분리 렌더)
 type Device = { w: number, h: number }
 ```
 
@@ -101,11 +104,11 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `name` | string | ✔ | 화면명. 헤더·목차·이동 버튼 라벨에 쓰인다 |
 | `path` | string[] | | 기획 IA 경로. `["홈","이용자","명단"]` → 목차에서 홈 › 이용자 아래 "명단" 행. 마지막 = 화면 자신, 앞 = 그룹. 들여쓰기는 최대 6뎁스 |
 | `specs` | Spec[] | | 비어 있으면 목차에 "미정의"로 표시되고(커버리지 갭 가시화), 패널에는 다음 할 일 안내 + 현재 화면의 `data-spec` 요소 수가 뜬다 |
-| `root` | string | | 컨테이너 셀렉터. 두 모드 공통 — 요소가 보이면 그 화면으로 자동 전환(패널·다이얼로그처럼 라우트 없는 화면). overlay에서는 route 화면 위에 얹힌 root 화면이 우선. 두 모드 모두 `data-spec` 조회 범위를 이 컨테이너 안으로 좁힌다 — 화면마다 번호를 1부터 다시 쓸 수 있고, 공통 골격의 마커와 섞이지 않는다 |
+| `root` | string | | 컨테이너 셀렉터. 모든 모드 공통 — 요소가 보이면 그 화면으로 자동 전환(패널·다이얼로그처럼 라우트 없는 화면). overlay·frame에서는 route 화면 위에 얹힌 root 화면이 우선. 어느 모드든 `data-spec` 조회 범위를 이 컨테이너 안으로 좁힌다 — 화면마다 번호를 1부터 다시 쓸 수 있고, 공통 골격의 마커와 섞이지 않는다 |
+| `route` | string | | overlay·frame에서 이 화면의 라우트. 동적 세그먼트는 `[id]`. basePath·해시 라우터는 자동 대응. 구체 경로 우선(동적 세그먼트가 적은 라우트가 먼저 매칭) — 선언 순서 무관 |
 | `viewports` | string[] | | 이 화면이 존재하는 폭. `["pc"]` 처럼 하나만 적으면 목차에 「PC 전용」 배지 (예: 앱 진입에서는 없고 PC 웹에서만 뜨는 로그인). 둘 다면 생략 |
 | `covers` | string[] | | 최상위 `checklist` 중 이 화면이 **실제로 적은** 축. checklist 에 없는 값이면 콘솔 경고 |
 | `skip` | `{축: 사유}` | | 의도적으로 비운 축과 그 사유. 사유가 빈 문자열이면 비운 것으로 치지 않고 **미정의로 본다**(콘솔 경고) |
-| `route` | string | | overlay에서 이 화면의 라우트. 동적 세그먼트는 `[id]`. basePath·해시 라우터는 자동 대응. 구체 경로 우선(동적 세그먼트가 적은 라우트가 먼저 매칭) — 선언 순서 무관 |
 
 ### 상태 커버리지
 
@@ -196,7 +199,7 @@ window.SCREENSPEC = {
 | 속성 | 붙이는 곳 | 설명 |
 |---|---|---|
 | `data-spec="1"` | 설명할 영역의 최상위 컨테이너 | Spec의 `target`과 짝. 값은 화면 안에서 고유 |
-| `data-ss-screen="ID"` | 화면 컨테이너 | wrap 다중화면. Screen의 `root` 셀렉터로 지정할 때 관례적으로 사용 |
+| `data-ss-screen="ID"` | 화면 컨테이너 | Screen의 `root` 셀렉터로 지정할 때의 관례 (wrap 다중화면, overlay·frame 의 패널·다이얼로그 화면) |
 | `data-ss-ignore` | 전역 모달·토스트 등 | 시트로 감싸지 않고 페이지 전역에 남긴다 (wrap) |
 | `data-ss-frame` | (라이브러리가 붙인다) | frame 모드의 액자 iframe 표식. 이 표식이 붙은 액자 안에서 로드된 인스턴스는 UI 를 만들지 않는다 (재귀 방지) |
 
@@ -220,6 +223,8 @@ window.ScreenSpec.mode                      // "wrap" | "overlay" | "frame"
 | `.ss-pc` | 폭 ≥ 1100px | wrap: 시트에 붙는다 — 미디어쿼리 대신 사용 (폭 시뮬레이터는 컨테이너 폭만 바꾸므로 미디어쿼리가 반응하지 않는다). overlay: `body`에 붙는다 (앱 영역 폭 = 뷰포트 − 설명 패널). 정의서 헤더에 현재 앱 폭(px)이 표시된다 |
 | `.ss-narrow` | 폭 ≤ 520px | 동일 |
 
+frame 모드에서는 액자 안 앱에 실제 미디어쿼리가 발화하므로 이 훅이 필요 없다 (뷰어 쪽 시트에는 wrap 과 같이 붙는다).
+
 ```css
 .ss-sheet.ss-pc .page-inner { display: grid; grid-template-columns: 1fr 320px; }
 body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시트 여백 제거 */
@@ -232,10 +237,12 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | 메시지 | 원인 |
 |---|---|
 | 설정이 없어 화면정의서를 만들 수 없습니다 | `window.SCREENSPEC` 미설정 |
-| data-spec 요소를 못 찾은 정의 N건 — #n target="…" | `target`에 해당하는 `data-spec` 속성 누락. 어느 정의인지 `#n target`으로 나열(하위 요소는 `#1a`). `anno:"state"`(조건부 표시)는 없는 게 정상일 수 있어 건수에서 제외하고 "조건부(state) M건은 제외"로 따로 표기 |
+| data-spec 요소를 못 찾은 정의 N건 — #n target="…" | `target`에 해당하는 `data-spec` 속성 누락. 어느 정의인지 `#n target`으로 나열(하위 요소는 `#1a`). `anno:"state"`·`optional:true`(조건부)는 없는 게 정상일 수 있어 건수에서 제외하고 "조건부(state·optional) M건은 제외"로 따로 표기. 앱이 그려질 때까지(DOM 이 1.5초 조용할 때, 최대 5초) 기다렸다가 1회만 |
 | 화면 ID 중복 | 같은 `id`가 둘 이상 (뒤엣것은 목차·이동에서 무시) |
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
 | accent "X" 인식 불가 | 프리셋명·hex·`var(--x)` 어느 것도 아님 |
+| baseViewport "X" 인식 불가 | `mobile`·`pc`(또는 `devices`에 추가한 이름)가 아님 |
+| panel 설정은 v0.15 에서 폐기 | v0.14 의 `panel:"left"`가 남아 있음. 지우고, 겹치면 `mode:"frame"` |
 | checklist 는 문자열 배열이어야 합니다 — 무시 | `checklist`가 빈 배열이거나 문자열이 아닌 값을 포함 |
 | covers "X" 는 checklist 에 없음 | 화면의 `covers`에 `checklist`에 없는 축 이름 (오타·용어 불일치) |
 | skip "X" 에 사유가 없습니다 — 미정의로 봅니다 | `skip`의 값이 빈 문자열. 비운 이유를 적어야 비운 것으로 친다 |

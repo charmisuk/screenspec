@@ -4,7 +4,7 @@
 
 ## 문서
 
-- [README](https://github.com/charmisuk/screenspec/blob/main/README.md): 개요·복붙 가능한 빠른 시작 예제·두 모드·자주 막히는 곳
+- [README](https://github.com/charmisuk/screenspec/blob/main/README.md): 개요·복붙 가능한 빠른 시작 예제·세 가지 모드(wrap·overlay·frame)·실무 문법(parts·why·checklist)·자주 막히는 곳
 - [SKILL.md](https://github.com/charmisuk/screenspec/blob/main/SKILL.md): **AI가 사용자 프로토타입에 적용할 때의 작업 지시서.** 화면 ID 규칙, data-spec 부여, 설정 작성, 설명 텍스트 룰, anno 타입 선택, 자가 검증
 - [설정 레퍼런스](https://github.com/charmisuk/screenspec/blob/main/docs/config.md): 전체 필드의 타입·기본값·필수 여부, HTML 속성, JS API, CSS 훅, 콘솔 경고
 - [AGENTS.md](https://github.com/charmisuk/screenspec/blob/main/AGENTS.md): 라이브러리 저장소 자체를 수정할 때의 규칙
