@@ -273,6 +273,13 @@ function check(name, ok, detail) {
   await page.waitForTimeout(400);
   const spec2 = await page.evaluate(() => window.ScreenSpec.current());
   check("라우트 구체성 우선 (선언 순서 무관)", spec1 === "S-11" && spec2 === "S-10", spec1 + "/" + spec2);
+  /* 등록됐지만 specs 가 빈 화면 — 백지 대신 다음 할 일 안내 (#19). 현재 /members/123 = S-10(specs []) */
+  check("빈 specs 화면 안내 + data-spec 개수", await page.evaluate(() => {
+    const e = document.querySelector(".ss-ov-panel .ss-empty");
+    const n = document.querySelectorAll("[data-spec]").length;
+    return !!e && e.textContent.includes("기능 설명이 아직 없습니다") && e.textContent.includes("S-10") &&
+      e.textContent.includes("data-spec 이 붙은 요소: " + n + "개") && document.querySelector("#ss-ovCnt").textContent === "0항목";
+  }));
   await page.evaluate(() => history.pushState({}, "", "/members"));
   await page.waitForTimeout(400);
   /* 라우트 없는 root 화면(패널) — 열리면 자동 전환, 닫히면 라우트 화면 복귀 (여기서 현재 화면은 S-09) */

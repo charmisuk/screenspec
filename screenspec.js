@@ -457,6 +457,19 @@
         return;
       }
       ctx.cntEl.textContent = specs().length + "항목";
+      if (specs().length === 0) {
+        /* 등록은 했지만 아직 정의를 안 쓴 화면 — 처음 붙이는 사람이 가장 오래 머무는 자리. 백지 대신 다음 할 일 (#19) */
+        const r = rootEl();
+        const have = (r.querySelectorAll ? r : document).querySelectorAll("[data-spec]").length;
+        ctx.listEl.innerHTML = '<div class="ss-empty">이 화면은 등록됐지만 기능 설명이 아직 없습니다.<br><br>' +
+          '1. 설명할 영역에 <code>data-spec="1"</code> 을 붙이세요<br>' +
+          '2. 설정의 <b>' + esc(current.id) + '</b> › <b>specs</b> 에 <code>{ n:1, target:"1", title:"영역명" }</code> 을 넣으세요<br><br>' +
+          '지금 이 화면에서 data-spec 이 붙은 요소: <b>' + have + '개</b></div>';
+        ctx.markerLayer.innerHTML = "";
+        markerEls = {};
+        ctx.afterRender();
+        return;
+      }
       ctx.listEl.innerHTML = defsRowsHTML(specs());
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
