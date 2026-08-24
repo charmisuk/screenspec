@@ -219,6 +219,11 @@ function check(name, ok, detail) {
   }));
   await page.click("#ss-ovDoc");
   await page.waitForTimeout(400);
+  check("뷰포트 끝(x:0) 대상의 마커가 잘리지 않음", await page.evaluate(() => {
+    const t = document.querySelector('[data-spec="1"]').getBoundingClientRect();
+    const m = document.querySelector(".ss-ov-markers .ss-marker").getBoundingClientRect();
+    return t.left === 0 && m.left >= 0 && m.top >= 48;
+  }));
   await page.click('[data-nav][href="./members"]'); /* 정의서 모드에서 앱 조작 */
   await page.waitForTimeout(500);
   check("정의서 모드에서 앱 내비 동작 + 추적", await page.evaluate(() => window.ScreenSpec.current()) === "S-09");

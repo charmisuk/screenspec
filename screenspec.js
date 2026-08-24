@@ -1019,7 +1019,9 @@
       annoLine: annoSvg.querySelector("#ss-ov-line"),
       posOf: (t) => {
         const r = t.getBoundingClientRect();
-        return { left: r.left + scrollX, top: r.top + scrollY, transform: "translate(-40%,-40%)" };
+        /* 마커(24px)는 좌상단에 -40% 로 걸치므로 대상이 뷰포트 끝(x:0)이면 10px 잘린다 — 뷰포트 안으로 클램프.
+           상단은 정의서 헤더(48px, fixed) 아래로 — 마커는 정의서 모드에서만 보이므로 헤더는 항상 있다 (#13) */
+        return { left: Math.max(r.left, 10) + scrollX, top: Math.max(r.top, 48 + 10) + scrollY, transform: "translate(-40%,-40%)" };
       },
       viewCenter: () => ({ x: scrollX + innerWidth / 2, y: scrollY + innerHeight / 2 }),
       rectOf: (t) => {
