@@ -54,6 +54,7 @@ type Part = {           // 라벨은 적지 않는다 — parts[0] → "1a", par
   title:    string,     // 하위 요소명
   target?:  string,     // 있으면 자기 마커를 갖는다. 없으면 패널에만
   anno?:    (Spec 과 동일 8종),
+  optional?: boolean,   // 조건부 — 팝업·패널 안처럼 닫혀 있을 때는 없는 요소
   defs?:    Def[],
   play?:    { selector: string, label: string },
   flowTo?:  string,
@@ -197,6 +198,7 @@ window.SCREENSPEC = {
 | `title` | string | ✔ | 하위 요소명. 패널에서 라벨(`1a`) 옆에 굵게 |
 | `target` | string | | 대상 요소의 `data-spec` 속성값. 있으면 자기 마커(`1a`)를 갖고, 없으면 패널에만 렌더된다 |
 | `anno` | 8종 중 하나 | | Spec 과 동일. 생략하면 `box` |
+| `optional` | boolean | | Spec 과 동일. **팝업·패널 안의 하위 요소에는 사실상 필수** — 닫혀 있는 동안 「못 찾은 정의」 경고가 나기 때문이다 (닫힌 것이 정상이므로) |
 | `defs` | Def[] | | Spec 과 동일 (`subs`·`why` 포함) |
 | `play` | `{selector, label}` | anno에 따라 | Spec 과 동일. ▶ 버튼이 하위 블록 안에 붙는다 |
 | `flowTo` | string | `flow`면 ✔ | Spec 과 동일 |
@@ -207,6 +209,17 @@ window.SCREENSPEC = {
   parts:[
     { title:"항목 수", target:"1a", defs:[{ t:"항목 개수를 1~99까지 표시" }] },
     { title:"더보기 버튼", target:"1b", anno:"popup", play:{ selector:'[data-spec="1b"]', label:"팝업 열기" } },
+  ]}
+```
+
+**하위 요소는 `n`을 빼면 Spec 과 같은 필드를 쓴다** (`optional`·`why` 포함). 팝업·패널 안을 가리키는 하위 요소는
+`optional: true` 를 함께 준다 — 안 주면 패널이 닫혀 있는 동안 경고가 난다.
+
+```js
+{ n:5, target:"5", title:"표 설정", anno:"popup", play:{ selector:'[data-spec="5"]', label:"패널 열기" },
+  parts:[
+    { title:"열 표시", target:"5a", optional:true, defs:[{ t:"열 16개의 표시 여부" }] },
+    { title:"열 고정", target:"5b", optional:true, defs:[{ t:"어느 열까지 고정할지" }] },
   ]}
 ```
 

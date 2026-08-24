@@ -37,6 +37,7 @@
 - **목록처럼 반복 렌더되는 요소**(할 일 행, 상품 카드 등)는 **첫 번째 항목 하나에만** 붙인다. 값은 화면 안에서 고유해야 한다. 재렌더 후에도 마커가 따라온다.
 - **화면 위에 뜨는 전역 요소**(토스트·모달·바텀시트, `position:fixed`)는 `<body>` 직계에 두고 `data-ss-ignore` 속성을 붙인다. 안 붙이면 시뮬레이터 시트 안에 갇혀 위치가 틀어진다.
 - **영역 안의 이름 있는 하위 요소**(항목 수·더보기 버튼·팝업 등)는 번호를 새로 따지 말고 상위 영역의 `parts` 로 넣는다. **번호는 적지 않는다** — 라이브러리가 `1a`·`1b` 로 매긴다. 하위 요소에 자기 마커를 주려면 `data-spec="1a"` 처럼 라벨과 같은 값을 붙인다(마커가 필요 없으면 `target` 생략). 조건·분기는 여전히 `subs`.
+- **팝업·패널 안의 하위 요소에는 `optional: true` 를 함께 준다.** 닫혀 있는 것이 정상인데 안 주면 「못 찾은 정의」 경고가 난다. 하위 요소는 `n` 을 빼면 Spec 과 같은 필드(`optional`·`why` 등)를 쓴다.
 
 ### 3. `window.SCREENSPEC` 설정 작성
 
@@ -91,7 +92,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.17.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.17.1/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)

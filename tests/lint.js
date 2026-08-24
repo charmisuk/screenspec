@@ -16,6 +16,8 @@
  * 14) lint 자기 검증 — 추출기가 빈 배열을 돌려주면 검사가 조용히 통과한다. 추출 결과 최소 개수를 강제 (2026-08-24 회고)
  * 15) Screen·Spec 레벨 필드(route·root·anno·play…)도 docs/config.md 에 있는지 — RAW.x 만 보던 구멍
  * 16) console.info 부팅 로그 버전·CHANGELOG 최상단 버전 = 헤더 버전 (2026-08-24 수동 bump 때 놓칠 뻔)
+ * 17) Part 타입 필드 = Spec 필드 − {n, parts} — 하위 요소는 같은 파이프라인을 쓰므로 필드가 같다.
+       코드는 되는데 문서에만 없어 사용자가 못 찾는 드리프트를 막는다 (2026-08-24 #28: Part.optional 누락)
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
@@ -160,6 +162,22 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("공개 API 추출기 동작 (≥4개)", api.length >= 4, JSON.stringify(api));
   const missApi = api.filter((a) => !ref.includes(a));
   check("공개 API 전부 문서화", missApi.length === 0, "누락: " + JSON.stringify(missApi));
+}
+
+/* 17) Part 필드 커버리지 — Spec 과 같은 필드를 쓰는데 문서에만 빠지면 사용자가 못 찾는다 (#28) */
+{
+  const ref = fs.readFileSync(path.join(REPO, "docs/config.md"), "utf8");
+  const block = (name) => (ref.match(new RegExp("type " + name + " = \\{([\\s\\S]*?)\\n\\}")) || [])[1] || "";
+  const names = (b) => [...b.matchAll(/^\s{2,}(\w+)\??:/gm)].map((m) => m[1]);
+  const spec = names(block("Spec")), part = names(block("Part"));
+  check("Spec·Part 타입 블록 추출 (각 ≥ 5개)", spec.length >= 5 && part.length >= 5, JSON.stringify([spec, part]));
+  const want = spec.filter((f) => f !== "n" && f !== "parts");
+  const missType = want.filter((f) => !part.includes(f));
+  check("Part 타입에 Spec 필드 전부 (" + want.length + "개)", missType.length === 0, "누락: " + JSON.stringify(missType));
+  const sec = (ref.split(/\n### Part\n/)[1] || "").split(/\n## /)[0];
+  check("### Part 절 존재", sec.length > 100, String(sec.length));
+  const missRow = want.filter((f) => !sec.includes("`" + f + "`"));
+  check("### Part 표에 Spec 필드 전부", missRow.length === 0, "누락: " + JSON.stringify(missRow));
 }
 
 /* 10) 에이전트 진입점 — 없으면 에이전트가 SKILL.md를 못 찾는다 */
