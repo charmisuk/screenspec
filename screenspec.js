@@ -35,11 +35,14 @@
  *   popup  팝업   | mech play | 클릭 시 모달·레이어 열림. play:{selector,label}
  *   flow   이동   | mech flow | 다른 화면으로 전환. flowTo:"SCR-ID" (+선택 play.selector)
  *
- * 모드 2종 (자동 판별, mode로 명시 가능):
+ * 모드 3종 (wrap·overlay 는 자동 판별, mode로 명시 가능 · frame 은 명시해야만 켜짐):
  *   wrap    단일 HTML 프로토타입 — 기기 뷰포트 포함 전 기능
  *   overlay React·Next·Vue 등 프레임워크 — DOM 불변, 라우트(route) 기반 화면 추적.
  *           screens[].route: "/members" 또는 "/members/[id]".
  *           basePath·정적 호스팅(경로 접두)도 suffix 매칭으로 지원.
+ *   frame   프레임워크 앱을 iframe(액자)에 넣고 뷰어(툴바·설명 패널·마커)는 바깥에 두는 모드.
+ *           설명 패널이 앱을 덮지 않고, 툴바의 모바일/PC 로 앱의 미디어쿼리가 실제로 발화한다.
+ *           조건: 앱이 주소로 열리고 same-origin. 화면 추적은 overlay 와 같은 route/root 규칙.
  *
  * 액센트: accent 옵션 — 프리셋 blue(기본)·red·orange·green·purple, hex 또는 var(--토큰). 마커·하이라이트·버튼·그립·목차 활성이 묶음으로 바뀐다.
  * 화면 목록(목차): 헤더의 화면 ID 칩 클릭 → path 배열 기반 트리(들여쓰기 + 가이드선, 그룹 행, 최대 6뎁스 들여쓰기).
@@ -143,6 +146,12 @@
      5. 액센트는 묶음(테마 세트): --ss-accent 단일 토큰이 마커·하이라이트·재생버튼·
         드래그 그립·목차 활성까지 견인하고, 파생색(soft·hover·그림자)은 color-mix로만.
         액센트 계열 hex·rgba 하드코딩 금지 — tests/lint.js가 기계 검증 */
+  /* 활성 영역 하이라이트 — frame 모드는 대상이 액자 안에 있어 이 규칙을 그 문서에도 넣는다 */
+  const HL_CSS = `
+  :where(.ss-hl){position:relative}
+  .ss-hl::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+    border:2px solid var(--ss-accent);border-radius:inherit;
+    background:color-mix(in srgb,var(--ss-accent) 8%,transparent)}`;
   const CSS = `
   :root{--ss-canvas:#F1F1F0;--ss-ink:#191919;--ss-ink2:#50524E;--ss-ink3:#9B9A97;
     --ss-line:#E9E9E7;--ss-line2:#D3D1CB;--ss-accent:${ACCENT};--ss-accent-soft:color-mix(in srgb,${ACCENT} 9%,#fff);
@@ -215,6 +224,9 @@
   .ss-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
   .ss-sheet.ss-narrow{padding:20px 14px 32px}
+  /* frame 모드: 시트가 곧 액자다 — 여백 없이 iframe 이 꽉 채운다 (시트 폭 = 앱의 뷰포트 폭) */
+  .ss-sheet.ss-sheet-frame{padding:0;overflow:hidden}
+  .ss-appframe{display:block;width:100%;height:100%;border:0;background:#fff}
   /* DevTools식 리사이즈: 우측·하단 풀렝스 거터 바 + 코너 (touch-action:none = 모바일 드래그 필수) */
   .ss-edge{position:absolute;z-index:8050;touch-action:none}
   .ss-edge-r{top:0;right:-20px;width:20px;height:100%;cursor:ew-resize}
@@ -256,10 +268,7 @@
   .ss-markers,.ss-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
   .ss-anno{z-index:8030;overflow:visible}
   body.ss-mode-proto .ss-marker,body.ss-mode-proto .ss-anno{display:none}
-  :where(.ss-hl){position:relative}
-  .ss-hl::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
-    border:2px solid var(--ss-accent);border-radius:inherit;
-    background:color-mix(in srgb,var(--ss-accent) 8%,transparent)}
+${HL_CSS}
   .ss-tip{position:fixed;z-index:2147483060;max-width:280px;background:#fff;border:1px solid var(--ss-line2);
     border-radius:10px;box-shadow:0 10px 30px rgba(17,24,39,.18);padding:10px 13px;display:none;pointer-events:none}
   .ss-tip .ss-tn{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:var(--ss-accent)}
@@ -426,10 +435,56 @@
     return { id: "—", name: "정의되지 않은 화면", path: [p], specs: [], _unmapped: true, _path: p };
   }
 
+  /* 화면 감지 (overlay·frame 공용): 보이는 root 화면 > 라우트 > 미정의.
+     라우트 매칭은 exact → suffix → 경계 prefix 순. 라우트 없는 root 화면(패널·다이얼로그)은
+     라우트 화면 위에 얹히는 표면이므로, 열려 있으면 라우트 결과를 이긴다(닫히면 라우트 화면으로 복귀).
+     여러 개가 동시에 보이면 문서 순서상 마지막 = 가장 나중에 얹힌 표면을 택한다.
+     win·doc = 앱이 사는 창·문서 (overlay 는 이 창, frame 은 액자 안). 앱 DOM 은 건드리지 않는다 — setCurrent만. */
+  function detectScreenIn(core, win, doc) {
+    /* 구체 경로 우선: 동적 세그먼트([id])가 적은 라우트를 먼저 본다 (동률이면 긴 경로).
+       선언 순서에 의존하면 /members/[id] 가 뒤에 적은 /members/invite 를 삼킨다 (#15) */
+    const dyn = (r) => (r.match(/\[[^\]]+\]/g) || []).length;
+    const routed = SCREENS.filter((s) => s.route)
+      .sort((a, b) => dyn(a.route) - dyn(b.route) || b.route.length - a.route.length);
+    /* 해시 라우터(#/members)면 # 뒤를 경로로 사용 — 일반 책갈피(#section)는 해당 없음 */
+    const loc = win.location;
+    const p = loc.hash.indexOf("#/") === 0 ? loc.hash.slice(1).split("?")[0] : loc.pathname;
+    let hit = null;
+    if (routed.length) {
+      hit = routed.find((s) => routeToRe(s.route).test(p));
+      if (!hit) { /* basePath·정적 호스팅: 경계 일치 suffix */
+        hit = routed.find((s) => s.route !== "/" && routeToSuffixRe(s.route).test(p));
+      }
+      if (!hit) { /* 미등록 하위 경로 → 경계(/)가 일치하는 가장 긴 prefix */
+        let bestLen = -1;
+        routed.forEach((s) => {
+          const base = s.route.replace(/\[[^\]]+\]/g, "").replace(/\/+$/, "");
+          if (!base) return; /* route "/"는 exact 매칭으로만 */
+          const bounded = p === base || (p.indexOf(base) === 0 && p.charAt(base.length) === "/");
+          if (bounded && base.length > bestLen) { bestLen = base.length; hit = s; }
+        });
+      }
+    }
+    /* 라우트 없는 root 화면 중 실제로 보이는 것 — 여럿이면 문서 순서상 마지막 */
+    let top = null, topEl = null;
+    SCREENS.forEach((sc) => {
+      if (!sc.root || sc.route) return;
+      const el = doc.querySelector(sc.root);
+      if (!el || el.getClientRects().length === 0) return;
+      if (!top || (topEl.compareDocumentPosition(el) & 4 /* DOCUMENT_POSITION_FOLLOWING */)) { top = sc; topEl = el; }
+    });
+    if (top) { core.setCurrent(top); return; }
+    if (hit) { core.setCurrent(hit); return; }
+    if (!routed.length) return; /* 라우트가 하나도 없는 설정: 경로로 판단할 근거가 없으므로 유지 */
+    const cur = core.current();
+    core.setCurrent(cur && cur._unmapped && cur._path === p ? cur : unmappedScreen(p));
+  }
+
   /* ============================================================
      공통 코어 — 마커·기능정의·활성화·화살표·툴팁
      ctx = {
        headerEl, cntEl, listEl, markerLayer, tip, annoLine,
+       doc, win        앱이 사는 문서·창 (기본 document·window · frame 모드는 액자 안을 가리키는 게터)
        posOf(target)   → {left, top, transform}   마커 좌표 (부트별 좌표계)
        rectOf(target)  → {l,t,r,b}               화살표 좌표 (콘텐츠 좌표계)
        viewCenter()    → {x,y}                   화살표 시작 방향 기준(보이는 영역 중심)
@@ -438,17 +493,22 @@
      }
      ============================================================ */
   function createCore(ctx) {
+    /* 앱이 사는 문서·창. 기본은 이 창이고, frame 모드는 액자(iframe) 안을 가리킨다(게터).
+       ScreenSpec 자신의 UI(목차·툴팁·토스트·패널)는 어느 모드든 바깥 document 에 남는다. */
+    const appDoc = () => ctx.doc || document;
+    const appWin = () => ctx.win || window;
     let current = null;
     let activeN = null;
     let markerEls = {};
     const warned = {};
 
     function rootEl() {
-      return current && current.root ? document.querySelector(current.root) || document : document;
+      const d = appDoc();
+      return current && current.root ? d.querySelector(current.root) || d : d;
     }
     function targetOf(s) {
       const r = rootEl();
-      return (r.querySelector ? r : document).querySelector('[data-spec="' + s.target + '"]');
+      return (r.querySelector ? r : appDoc()).querySelector('[data-spec="' + s.target + '"]');
     }
     function specs() { return (current && current.specs) || []; }
 
@@ -466,7 +526,7 @@
       if (specs().length === 0) {
         /* 등록은 했지만 아직 정의를 안 쓴 화면 — 처음 붙이는 사람이 가장 오래 머무는 자리. 백지 대신 다음 할 일 (#19) */
         const r = rootEl();
-        const have = (r.querySelectorAll ? r : document).querySelectorAll("[data-spec]").length;
+        const have = (r.querySelectorAll ? r : appDoc()).querySelectorAll("[data-spec]").length;
         ctx.listEl.innerHTML = '<div class="ss-empty">이 화면은 등록됐지만 기능 설명이 아직 없습니다.<br><br>' +
           '1. 설명할 영역에 <code>data-spec="1"</code> 을 붙이세요<br>' +
           '2. 설정의 <b>' + esc(current.id) + '</b> › <b>specs</b> 에 <code>{ n:1, target:"1", title:"영역명" }</code> 을 넣으세요<br><br>' +
@@ -520,7 +580,7 @@
         clearTimeout(missTimer);
         missTimer = setTimeout(attempt, MISS_QUIET);
       });
-      missMo.observe(document.body, { subtree: true, childList: true });
+      missMo.observe(appDoc().body, { subtree: true, childList: true });
       missTimer = setTimeout(attempt, MISS_QUIET);
       missCap = setTimeout(attempt, MISS_CAP);
     }
@@ -546,7 +606,7 @@
     function showRoot(sc) {
       SCREENS.forEach((o) => {
         if (!o.root) return;
-        const el = document.querySelector(o.root);
+        const el = appDoc().querySelector(o.root);
         if (el) el.style.display = o === sc ? "" : "none";
       });
     }
@@ -586,7 +646,7 @@
       const C = { x: (A.l + A.r) / 2, y: (A.t + A.b) / 2 };
       let from, to;
       if (s.arrowTo) {
-        const bEl = document.querySelector(s.arrowTo);
+        const bEl = appDoc().querySelector(s.arrowTo);
         if (!bEl) { ctx.annoLine.setAttribute("visibility", "hidden"); return; }
         const B = ctx.rectOf(bEl);
         from = clampPt((B.l + B.r) / 2, (B.t + B.b) / 2, A);
@@ -654,7 +714,7 @@
         if (!s) return;
         activate(s.n, "panel");
         if (s.play && s.play.selector) {
-          const el = document.querySelector(s.play.selector);
+          const el = appDoc().querySelector(s.play.selector);
           if (el) el.click(); /* flow는 실제 내비 클릭 → 화면 감지가 정의서를 자동 전환 */
         } else if (annoOf(s).mech === "flow" && s.flowTo) {
           setScreen(s.flowTo);
@@ -773,10 +833,11 @@
       setCurrent(sc);
       /* route가 있으면 소프트 내비게이션 시도 — popstate 리스너형 라우터(SPA)는 화면도 따라온다.
          라우터가 반응하지 않는 앱이면 정의서만 전환되고 마커는 자동 숨김(콘솔 진단). */
-      if (sc.route && location.pathname !== sc.route) {
+      const aw = appWin();
+      if (sc.route && aw.location.pathname !== sc.route) {
         try {
-          history.pushState({}, "", sc.route);
-          dispatchEvent(new PopStateEvent("popstate"));
+          aw.history.pushState({}, "", sc.route);
+          aw.dispatchEvent(new aw.PopStateEvent("popstate")); /* 이벤트도 그 창의 realm 것으로 */
         } catch (err) { /* file:// 등 pushState 불가 환경 방어 */ }
       } else if (!sc.route && sc.root) {
         /* root 기반 화면: 앱 화면도 같은 방식(표시/숨김)으로 전환 — 정의서·앱 동기 유지.
@@ -811,6 +872,11 @@
   }
 
   function boot() {
+    /* 우리가 만든 액자(iframe) 안에서 로드된 인스턴스 = 앱 쪽 사본. UI 를 만들지 않고 끝낸다
+       (바깥 인스턴스가 이 문서를 직접 조종한다 — 재귀·이중 UI 방지). cross-origin 접근은 던지므로 무시 */
+    try {
+      if (window.frameElement && window.frameElement.dataset && window.frameElement.dataset.ssFrame) return;
+    } catch (e) { /* cross-origin: 우리 액자가 아니다 */ }
     /* 설정 유무 판정 — screens·screen·specs 중 하나라도 있으면 "설정함"으로 본다 */
     if (!(RAW.screens && RAW.screens.length) && !RAW.screen && !(RAW.specs && RAW.specs.length)) {
       setupNotice();
@@ -830,25 +896,47 @@
     const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
     const mode = RAW.mode || (isFramework ? "overlay" : "wrap");
     if (mode === "overlay") bootOverlay();
+    else if (mode === "frame") bootWrap({ frame: true }); /* frame 은 자동 판별하지 않는다 — 명시해야만 */
     else bootWrap();
+  }
+
+  /* frame 모드: 바깥 창에 남은 앱 DOM 을 숨긴다 — 프레임워크 앱은 옮길 수 없으므로(리액트가 다시 붙인다)
+     감싸는 대신 숨기고, 같은 주소를 액자(iframe)로 다시 연다. 우리 UI 는 전부 .ss-ui 지만 방어적으로 전부 적는다 */
+  const SS_OWN_SEL = ".ss-ui,.ss-toolbar,.ss-proto-wrap,.ss-docmode,.ss-tip,.ss-toc,.ss-nav-toast";
+  function hideAppDom() {
+    Array.from(document.body.children).forEach((n) => {
+      if (n.tagName === "SCRIPT" || n.tagName === "STYLE") return;
+      if (n.matches && n.matches(SS_OWN_SEL)) return;
+      n.style.display = "none";
+    });
   }
 
   /* ============================================================
      wrap 모드 — 단일 HTML: 본문을 기기 뷰포트 시트로 감싼다
+     frame 모드(opts.frame) — 프레임워크 앱: 감싸는 대신 액자(iframe)를 시트에 넣고 뷰어만 재사용
      ============================================================ */
-  function bootWrap() {
+  function bootWrap(opts) {
+    const FRAME = !!(opts && opts.frame);
     document.body.classList.add("ss-wrap");
     injectCSS();
 
-    /* ---- 프로토타입 본문을 시트로 감싸기 ---- */
+    /* ---- 프로토타입 본문을 시트로 감싸기 (frame 은 액자를 넣는다) ---- */
     const sheet = h("div", { class: "ss-sheet" });
-    const keep = [];
-    Array.from(document.body.childNodes).forEach((n) => {
-      if (n.nodeType === 1 && (n.tagName === "SCRIPT" || n.tagName === "STYLE")) return;
-      if (n.nodeType === 1 && n.hasAttribute && n.hasAttribute("data-ss-ignore")) return;
-      keep.push(n);
-    });
-    keep.forEach((n) => sheet.appendChild(n));
+    let appFrame = null;
+    if (FRAME) {
+      sheet.classList.add("ss-sheet-frame");
+      hideAppDom();
+      appFrame = h("iframe", { class: "ss-appframe", "data-ss-frame": "1", src: location.href, title: "프로토타입" });
+      sheet.appendChild(appFrame); /* 마커·화살표보다 먼저 = 항상 그 아래 */
+    } else {
+      const keep = [];
+      Array.from(document.body.childNodes).forEach((n) => {
+        if (n.nodeType === 1 && (n.tagName === "SCRIPT" || n.tagName === "STYLE")) return;
+        if (n.nodeType === 1 && n.hasAttribute && n.hasAttribute("data-ss-ignore")) return;
+        keep.push(n);
+      });
+      keep.forEach((n) => sheet.appendChild(n));
+    }
 
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-anno");
@@ -962,8 +1050,11 @@
       mProto.setAttribute("aria-pressed", String(m === "proto"));
       mDoc.setAttribute("aria-pressed", String(m === "doc"));
       core.clearActive();
+      /* iframe 은 DOM 트리를 옮기면 브라우저가 src 로 다시 로드한다 — 보던 경로를 되돌려 준다 */
+      const back = FRAME ? frameHref() : null;
       if (m === "doc") docHolder.appendChild(frame);
       else { protoHolder.appendChild(frame); frame.style.transform = ""; }
+      if (back) appFrame.src = back;
       requestAnimationFrame(layout);
     }
     mProto.onclick = () => setMode("proto");
@@ -993,8 +1084,28 @@
       core.placeMarkers();
     }
 
+    /* ---- 액자(frame) 보조: 좌표 오프셋 · 현재 경로 · 바깥 주소 미러링 ---- */
+    /* 액자 뷰포트 원점의 시트 콘텐츠 좌표. (액자와 시트의 거리)는 축소된 화면 픽셀이라 /scale,
+       액자 안 rect 는 축소의 영향을 받지 않는 시트 좌표 그대로다 */
+    function frameOffset() {
+      const ir = appFrame.getBoundingClientRect(), sr = sheet.getBoundingClientRect();
+      return { x: (ir.left - sr.left) / scale + sheet.scrollLeft, y: (ir.top - sr.top) / scale + sheet.scrollTop };
+    }
+    function frameHref() {
+      try {
+        const l = appFrame.contentWindow.location;
+        return l.pathname + l.search + l.hash;
+      } catch (e) { return null; } /* 로드 전·cross-origin */
+    }
+    /* 액자 안 경로를 바깥 주소에 미러링 — 새로고침해도 보던 화면으로 돌아온다 */
+    function mirrorUrl() {
+      const to = frameHref();
+      if (!to || to === location.pathname + location.search + location.hash) return;
+      try { history.replaceState(history.state, "", to); } catch (e) { /* file:// 등 방어 */ }
+    }
+
     /* ---- 공통 코어 (좌표계 = 시트 내부 스크롤 + 축소 배율) ---- */
-    const core = createCore({
+    const coreCtx = {
       headerEl: document.getElementById("ss-dh-wrap"),
       cntEl: document.getElementById("ss-cnt"),
       listEl: document.getElementById("ss-defsList"),
@@ -1022,7 +1133,36 @@
       isDoc: () => document.body.classList.contains("ss-mode-doc"),
       afterRender: () => requestAnimationFrame(layout),
       toggleRoot: true /* wrap은 앱 DOM을 소유한다 — setScreen이 root 표시/숨김도 함께 전환 */
-    });
+    };
+    if (FRAME) {
+      /* 액자 모드: 앱은 iframe 안에 산다 — 문서·창을 게터로 넘긴다(내부 내비게이션으로 교체돼도 따라간다).
+         좌표는 "액자 안 좌표 + 액자의 시트 내 위치". 액자가 시트를 꽉 채우므로 시트 스크롤은 0이다. */
+      Object.defineProperties(coreCtx, {
+        doc: { get: () => appFrame.contentDocument || document },
+        win: { get: () => appFrame.contentWindow || window }
+      });
+      coreCtx.toggleRoot = false; /* 앱 DOM 은 앱의 것 — overlay 와 같은 규칙 */
+      coreCtx.posOf = (t) => {
+        const off = frameOffset(), r = t.getBoundingClientRect();
+        return {
+          left: Math.max(12, off.x + r.left),
+          top: Math.max(12, off.y + r.top),
+          transform: "translate(-40%,-40%) scale(" + 1 / scale + ")"
+        };
+      };
+      coreCtx.rectOf = (t) => {
+        const off = frameOffset(), r = t.getBoundingClientRect();
+        return { l: off.x + r.left, t: off.y + r.top, r: off.x + r.right, b: off.y + r.bottom };
+      };
+      coreCtx.viewCenter = () => {
+        const off = frameOffset(), w = appFrame.contentWindow;
+        return {
+          x: off.x + (w ? w.innerWidth : appFrame.clientWidth) / 2,
+          y: off.y + (w ? w.innerHeight : appFrame.clientHeight) / 2
+        };
+      };
+    }
+    const core = createCore(coreCtx);
 
     /* ---- 다중 화면 자동 감지 (root 표시/숨김 추적) ---- */
     function detectScreen() {
@@ -1036,12 +1176,53 @@
         }
       }
     }
-    if (SCREENS.length > 1) {
+    if (!FRAME && SCREENS.length > 1) {
       let detTimer = null;
       new MutationObserver(() => {
         clearTimeout(detTimer);
         detTimer = setTimeout(detectScreen, 80);
       }).observe(sheet, { subtree: true, attributes: true, childList: true, attributeFilter: ["style", "class", "hidden"] });
+    }
+
+    /* ---- frame: 액자 안 추적 — 라우팅·스크롤·DOM 변경을 바깥에서 관찰한다 (same-origin) ---- */
+    if (FRAME) {
+      let placeRaf = null;
+      const queueFramePlace = () => {
+        if (placeRaf) return;
+        placeRaf = requestAnimationFrame(() => { placeRaf = null; core.placeMarkers(); });
+      };
+      const wireFrame = () => {
+        const win = appFrame.contentWindow, doc = appFrame.contentDocument;
+        if (!win || !doc) return; /* cross-origin 이면 조종할 수 없다 */
+        if (!doc.getElementById("ss-frame-css")) { /* 하이라이트는 대상이 사는 문서에서만 그려진다 */
+          const st = doc.createElement("style");
+          st.id = "ss-frame-css";
+          st.textContent = ":root{--ss-accent:" + ACCENT + "}" + HL_CSS;
+          doc.head.appendChild(st);
+        }
+        const detect = () => { detectScreenIn(core, win, doc); mirrorUrl(); };
+        const soon = () => setTimeout(detect, 50); /* 라우터가 DOM 을 바꾼 뒤에 판정 */
+        ["pushState", "replaceState"].forEach((fn) => {
+          const orig = win.history[fn];
+          win.history[fn] = function () {
+            const r = orig.apply(this, arguments);
+            soon();
+            return r;
+          };
+        });
+        win.addEventListener("popstate", soon);
+        win.addEventListener("hashchange", soon);
+        win.addEventListener("scroll", queueFramePlace, { capture: true, passive: true });
+        win.addEventListener("resize", queueFramePlace);
+        let moTimer = null;
+        new MutationObserver(() => {
+          clearTimeout(moTimer);
+          moTimer = setTimeout(() => { detect(); core.placeMarkers(); }, 120);
+        }).observe(doc.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
+        detect();
+        requestAnimationFrame(layout);
+      };
+      appFrame.addEventListener("load", wireFrame); /* 모드 전환으로 액자가 다시 로드돼도 매번 재배선 */
     }
 
     /* ---- 재배치 트리거 ---- */
@@ -1051,12 +1232,13 @@
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
 
     /* ---- 공개 API ---- */
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: "wrap" };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap" };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
     applySize(DEVICES.mobile.w, DEVICES.mobile.h);
-    console.info("[ScreenSpec v0.14] wrap 모드 · 화면 " + SCREENS.length + "개 등록");
+    if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
+    console.info("[ScreenSpec v0.14] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -1152,49 +1334,8 @@
       afterRender: () => requestAnimationFrame(place)
     });
 
-    /* ---- 화면 감지: 보이는 root 화면 > 라우트 > 미정의.
-           라우트 매칭은 exact → suffix → 경계 prefix 순. 라우트 없는 root 화면(패널·다이얼로그)은
-           라우트 화면 위에 얹히는 표면이므로, 열려 있으면 라우트 결과를 이긴다(닫히면 라우트 화면으로 복귀).
-           여러 개가 동시에 보이면 문서 순서상 마지막 = 가장 나중에 얹힌 표면을 택한다. ---- */
-    function detectScreen() {
-      /* 구체 경로 우선: 동적 세그먼트([id])가 적은 라우트를 먼저 본다 (동률이면 긴 경로).
-         선언 순서에 의존하면 /members/[id] 가 뒤에 적은 /members/invite 를 삼킨다 (#15) */
-      const dyn = (r) => (r.match(/\[[^\]]+\]/g) || []).length;
-      const routed = SCREENS.filter((s) => s.route)
-        .sort((a, b) => dyn(a.route) - dyn(b.route) || b.route.length - a.route.length);
-      /* 해시 라우터(#/members)면 # 뒤를 경로로 사용 — 일반 책갈피(#section)는 해당 없음 */
-      const p = location.hash.indexOf("#/") === 0 ? location.hash.slice(1).split("?")[0] : location.pathname;
-      let hit = null;
-      if (routed.length) {
-        hit = routed.find((s) => routeToRe(s.route).test(p));
-        if (!hit) { /* basePath·정적 호스팅: 경계 일치 suffix */
-          hit = routed.find((s) => s.route !== "/" && routeToSuffixRe(s.route).test(p));
-        }
-        if (!hit) { /* 미등록 하위 경로 → 경계(/)가 일치하는 가장 긴 prefix */
-          let bestLen = -1;
-          routed.forEach((s) => {
-            const base = s.route.replace(/\[[^\]]+\]/g, "").replace(/\/+$/, "");
-            if (!base) return; /* route "/"는 exact 매칭으로만 */
-            const bounded = p === base || (p.indexOf(base) === 0 && p.charAt(base.length) === "/");
-            if (bounded && base.length > bestLen) { bestLen = base.length; hit = s; }
-          });
-        }
-      }
-      /* 라우트 없는 root 화면 중 실제로 보이는 것 — 여럿이면 문서 순서상 마지막 */
-      let top = null, topEl = null;
-      SCREENS.forEach((sc) => {
-        if (!sc.root || sc.route) return;
-        const el = document.querySelector(sc.root);
-        if (!el || el.getClientRects().length === 0) return;
-        if (!top || (topEl.compareDocumentPosition(el) & 4 /* DOCUMENT_POSITION_FOLLOWING */)) { top = sc; topEl = el; }
-      });
-      /* overlay는 앱 DOM을 건드리지 않는다 — setCurrent만 (정의서 쪽만 따라간다) */
-      if (top) { core.setCurrent(top); return; }
-      if (hit) { core.setCurrent(hit); return; }
-      if (!routed.length) return; /* 라우트가 하나도 없는 설정: 경로로 판단할 근거가 없으므로 유지 */
-      const cur = core.current();
-      core.setCurrent(cur && cur._unmapped && cur._path === p ? cur : unmappedScreen(p));
-    }
+    /* ---- 화면 감지 (overlay·frame 공용 규칙) ---- */
+    const detectScreen = () => detectScreenIn(core, window, document);
     /* SPA 라우팅 추적: pushState/replaceState 패치 + popstate */
     ["pushState", "replaceState"].forEach((fn) => {
       const orig = history[fn];

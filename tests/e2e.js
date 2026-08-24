@@ -329,6 +329,92 @@ function check(name, ok, detail) {
   srv.close();
 
 
+  /* ============ frame: 액자 모드 (같은 SPA 예제를 iframe 에 담고 뷰어는 바깥) ============ */
+  console.log("[frame] SPA (액자 모드)");
+  const srvF = http.createServer((req, res) => {
+    if (req.url.endsWith("screenspec.js")) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+    res.setHeader("content-type", "text/html");
+    res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8")
+      .replace("../screenspec.js", "/screenspec.js")
+      .replace('mode: "overlay"', 'mode: "frame"')); /* 모드 주입 (e2e 전용) */
+  });
+  await new Promise((r) => srvF.listen(4180, r));
+  const F = 'iframe[data-ss-frame]';
+  const inFrame = () => page.frameLocator(F);
+  const state = () => page.evaluate(() => {
+    const f = document.querySelector("iframe[data-ss-frame]");
+    return {
+      cur: window.ScreenSpec.current(),
+      outer: location.pathname,
+      inner: f.contentWindow.location.pathname
+    };
+  });
+  await page.goto("http://localhost:4180/screenspec/examples/overlay-spa.html");
+  await page.waitForTimeout(1200);
+  check("frame 부팅: 시트 안 액자 1개 + 툴바 + 바깥 앱 DOM 숨김", await page.evaluate(() => {
+    const f = document.querySelectorAll(".ss-sheet iframe[data-ss-frame]");
+    const gnb = document.querySelector("body .gnb");
+    const hidden = !!gnb && (gnb.offsetParent === null || getComputedStyle(gnb).display === "none");
+    return f.length === 1 && !!document.querySelector(".ss-toolbar") && hidden &&
+      window.ScreenSpec.mode === "frame" && window.ScreenSpec.current() === "S-01";
+  }));
+  check("액자 안 인스턴스는 UI 를 만들지 않는다", await page.evaluate(() => {
+    const d = document.querySelector("iframe[data-ss-frame]").contentDocument;
+    return d.querySelectorAll(".ss-pill,.ss-toolbar,.ss-sheet").length === 0 && !!d.querySelector(".gnb");
+  }));
+  await page.click("#ss-mDoc");
+  await page.waitForTimeout(900); /* 액자는 DOM 이동으로 재로드된다 */
+  const mk = await page.evaluate(() => {
+    const f = document.querySelector("iframe[data-ss-frame]");
+    const ir = f.getBoundingClientRect();
+    const t = f.contentDocument.querySelector('[data-spec="1"]').getBoundingClientRect();
+    const m = [...document.querySelectorAll(".ss-markers .ss-marker")].find((e) => e.textContent === "1").getBoundingClientRect();
+    return { dl: Math.round(Math.abs(m.left - (ir.left + t.left))), dt: Math.round(Math.abs(m.top - (ir.top + t.top))) };
+  });
+  check("정의서 모드: 마커가 액자 안 대상 위 (±14px)", mk.dl <= 14 && mk.dt <= 14, JSON.stringify(mk));
+  const widthOf = () => page.evaluate(() => {
+    const f = document.querySelector("iframe[data-ss-frame]");
+    return { w: f.clientWidth, dir: f.contentWindow.getComputedStyle(f.contentDocument.querySelector(".gnb")).flexDirection };
+  });
+  await page.click('#ss-seg button[data-w="pc"]');
+  await page.waitForTimeout(600);
+  const fPc = await widthOf();
+  await page.click('#ss-seg button[data-w="mobile"]');
+  await page.waitForTimeout(600);
+  const fMo = await widthOf();
+  check("툴바 모바일/PC → 액자 폭 + 앱 미디어쿼리 실제 발화", fPc.w === 1920 && fPc.dir === "row" && fMo.w === 360 && fMo.dir === "column", JSON.stringify([fPc, fMo]));
+  await inFrame().locator('[data-nav][href="./members"]').click();
+  await page.waitForTimeout(600);
+  const fNav = await state();
+  check("액자 안 내비 → 화면 추적 + 바깥 주소 미러링", fNav.cur === "S-09" && fNav.inner.endsWith("/members") && fNav.outer === fNav.inner, JSON.stringify(fNav));
+  await page.click(".ss-toc-btn");
+  await page.waitForTimeout(300);
+  await page.click('[data-toc="S-01"]');
+  await page.waitForTimeout(600);
+  const fToc = await state();
+  check("목차 → 액자 안 경로 이동", fToc.cur === "S-01" && fToc.inner.endsWith("/home"), JSON.stringify(fToc));
+  await inFrame().locator('[data-nav][href="./members"]').click();
+  await page.waitForTimeout(600);
+  await inFrame().locator("tbody tr:first-child .rowbtn").click();
+  await page.waitForTimeout(500);
+  check("액자 안 패널 열림 → 라우트 없는 root 화면 감지", (await state()).cur === "S-03");
+  await inFrame().locator("#detailPanel .pclose").click();
+  await page.waitForTimeout(500);
+  check("액자 안 패널 닫힘 → 라우트 화면 복귀", (await state()).cur === "S-09");
+  await page.click('.ss-defs-list [data-play="3"]');
+  await page.waitForTimeout(500);
+  check("▶ 재생이 액자 안 요소를 클릭", await page.evaluate(() => {
+    const b = document.querySelector("iframe[data-ss-frame]").contentDocument.querySelector(".invite");
+    return !!b && b.dataset.opened === "1";
+  }));
+  check("활성 영역 강조가 액자 안 문서에서 그려진다", await page.evaluate(() => {
+    const d = document.querySelector("iframe[data-ss-frame]").contentDocument;
+    const t = d.querySelector(".ss-hl");
+    return !!t && t.getAttribute("data-spec") === "3" && !!d.getElementById("ss-frame-css");
+  }));
+  srvF.close();
+
+
   /* ============ 문서 검증: README 빠른 시작이 진짜 동작하는가 ============
      README의 복붙 예제를 그대로 실행한다. API가 바뀌었는데 문서를 안 고치면 여기서 FAIL. */
   console.log("[docs] README 빠른 시작 예제");

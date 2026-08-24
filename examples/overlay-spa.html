@@ -38,6 +38,8 @@
   #detailPanel dl{margin:0;font-size:13.5px}
   #detailPanel dt{font-size:11.5px;color:#9B9A97;margin-top:12px}
   #detailPanel dd{margin:2px 0 0;font-weight:700}
+  /* 좁은 화면: GNB 세로 배치 — 앱 자체의 미디어쿼리 (frame 모드의 모바일/PC 전환으로 실제 발화한다) */
+  @media (max-width: 480px){ .gnb{flex-direction:column;align-items:flex-start} }
 </style>
 </head>
 <body>
@@ -75,7 +77,7 @@
     "/members": `
       <div class="head-row">
         <h1 data-spec="2">이용자 명단</h1>
-        <button class="invite" data-spec="3" onclick="alert('데모: 초대 패널이 열립니다')">+ 초대</button>
+        <button class="invite" data-spec="3" data-opened="0" onclick="openInvite(this)">+ 초대</button>
       </div>
       <table data-spec="4">
         <thead><tr><th>이름</th><th>부서</th><th>상태</th><th></th></tr></thead>
@@ -86,6 +88,7 @@
         </tbody>
       </table>`
   };
+  function openInvite(btn){ btn.dataset.opened = "1"; btn.textContent = "초대 패널 열림 (데모)"; }
   function openDetail(name, dept){
     document.getElementById("dName").textContent = name;
     document.getElementById("dDept").textContent = dept;

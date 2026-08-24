@@ -10,7 +10,7 @@ ScreenSpec의 API는 전역 객체 `window.SCREENSPEC` 하나다. 이 문서가 
 
 ```ts
 window.SCREENSPEC = {
-  mode?:    "wrap" | "overlay",   // 생략 = 자동 판별 (React·Next 감지 시 overlay)
+  mode?:    "wrap" | "overlay" | "frame",  // 생략 = 자동 판별 (React·Next 감지 시 overlay). frame 은 명시 전용
   accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple", "#7C3AED" 또는 "var(--brand)". 기본 blue
   devices?: { mobile?: Device, pc?: Device },  // wrap 전용. 기기 프리셋 덮어쓰기
 
@@ -50,7 +50,7 @@ type Device = { w: number, h: number }
 
 | 필드 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `mode` | `"wrap"` \| `"overlay"` | 자동 판별 | 단일 HTML은 wrap, React·Next 등 프레임워크는 overlay. 자동 판별이 틀릴 때만 명시 |
+| `mode` | `"wrap"` \| `"overlay"` \| `"frame"` | 자동 판별 | 단일 HTML은 wrap, React·Next 등 프레임워크는 overlay. 자동 판별이 틀릴 때만 명시. `"frame"`은 자동 판별되지 않는다 — 아래 참조 |
 | `accent` | 프리셋명 \| hex \| `var(--x)` | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. `"var(--color-accent)"`처럼 CSS 변수를 가리키면 제품 토큰을 복사하지 않고 따라간다(색 하드코딩 lint·다크 모드 대응). 인식 불가 값이면 콘솔 경고 후 기본값 |
 | `panel` | `"right"` \| `"left"` | `"right"` | overlay 전용. 기능 설명 패널 위치. 앱의 우측 드로어·사이드시트와 겹치면 `"left"`. 정의서 헤더의 「패널 ⇄」 버튼으로도 전환 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap 전용. 기기 프리셋 크기 덮어쓰기 |
@@ -59,6 +59,12 @@ type Device = { w: number, h: number }
 | `screens` | `Screen[]` | — | 화면이 여럿일 때. 있으면 `screen`·`specs`는 무시된다 |
 
 `screens`·`screen`·`specs`가 모두 없으면 라이브러리는 페이지를 건드리지 않고 안내 카드만 띄운다.
+
+**`mode: "frame"` (액자)** — 프레임워크 앱을 iframe(액자)에 넣고 뷰어(툴바·설명 패널·마커·목차)는 그 밖에 두는 모드.
+overlay 는 앱과 뷰어가 한 창에 살기 때문에 (1) 설명 패널이 앱의 우측 드로어를 덮고 (2) 폭을 줄여도 앱의 미디어쿼리가 발화하지 않는다.
+frame 은 앱을 액자 안에 가두므로 **설명 패널이 앱을 덮지 않고**, 툴바의 **모바일/PC 로 실제 미디어쿼리가 발화**한다(폭 시뮬레이터가 그대로 동작).
+화면 추적은 overlay 와 같은 규칙(`route`·`root`)이고, 액자 안 경로는 바깥 주소에 미러링돼 새로고침해도 보던 화면으로 돌아온다.
+조건: **앱이 주소(URL)로 열리고 same-origin** 일 것 (cross-origin 이면 액자 안을 조종할 수 없다). 명시해야만 켜진다.
 
 **accent 프리셋**: `blue` #2952E3 · `red` #E5484D · `orange` #F76B15 · `green` #18794E · `purple` #8E4EC6
 
@@ -121,6 +127,7 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `data-spec="1"` | 설명할 영역의 최상위 컨테이너 | Spec의 `target`과 짝. 값은 화면 안에서 고유 |
 | `data-ss-screen="ID"` | 화면 컨테이너 | wrap 다중화면. Screen의 `root` 셀렉터로 지정할 때 관례적으로 사용 |
 | `data-ss-ignore` | 전역 모달·토스트 등 | 시트로 감싸지 않고 페이지 전역에 남긴다 (wrap) |
+| `data-ss-frame` | (라이브러리가 붙인다) | frame 모드의 액자 iframe 표식. 이 표식이 붙은 액자 안에서 로드된 인스턴스는 UI 를 만들지 않는다 (재귀 방지) |
 
 ## JS API
 
@@ -128,7 +135,7 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 window.ScreenSpec.setScreen("SCR-XXX-002")  // 화면 수동 전환 (자동 감지가 안 될 때)
 window.ScreenSpec.current()                 // 현재 화면 id
 window.ScreenSpec.refresh()                 // 레이아웃·마커 재계산
-window.ScreenSpec.mode                      // "wrap" | "overlay"
+window.ScreenSpec.mode                      // "wrap" | "overlay" | "frame"
 ```
 
 `setScreen`은 wrap에서 root 표시/숨김 토글을 동반하고, overlay는 앱 DOM을 건드리지 않으므로 root가 보이는 동안만 유지된다.
