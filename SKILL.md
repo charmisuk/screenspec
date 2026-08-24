@@ -81,22 +81,23 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 - 화면 구분은 `screens[].route`에 라우트 경로: `"/members"`, 동적 세그먼트는 `"/members/[id]"`
 - 앱이 basePath(예: /admin) 아래에 있어도 suffix 매칭으로 동작 — route는 basePath 없이 적는다
 - 해시 라우터(주소가 #/members 형태)도 자동 인식 — route는 동일하게 "/members"로 적는다
-- 라우트가 없는 패널·다이얼로그 화면은 `root` 셀렉터(컨테이너 표시 여부)로 구분 가능
+- 라우트가 없는 패널·다이얼로그 화면은 `root` 셀렉터(컨테이너 표시 여부)로 구분 가능 — 패널이 열리면 그 화면으로 자동 전환, 닫히면 라우트 화면으로 복귀
+- 라우트 화면에도 `root`를 함께 주면 **그 컨테이너 안에서만** `data-spec`을 찾는다 — 화면마다 1부터 다시 번호를 매길 수 있고, 늘 떠 있는 골격(GNB·헤더)의 마커와도 섞이지 않는다 (예: `route:"/members", root:"main"`)
 - Next.js(App Router) 적용: `app/layout.tsx`의 `<body>` 안에
 
 ```tsx
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.13.1/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.14.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
-- 오버레이 모드에는 기기 뷰포트 시뮬레이터가 없다 (앱 자체 반응형 사용) — 미디어쿼리 훅(§6)도 불필요
-- z-index: 오버레이 모드의 ScreenSpec UI는 항상 최상위(브라우저 최대 z) — 앱 z 대역은 신경 쓸 필요 없다. 앱 모달이 패널 아래 깔리면 '프로토타입' 필로 전체 확인
+- 오버레이 모드에는 기기 뷰포트 시뮬레이터가 없다 (앱 자체 반응형 사용) — 폭을 바꿔 보려면 브라우저 **개발자 도구의 기기 툴바**(⌘⇧M / Ctrl+Shift+M)를 쓴다. 정의서 헤더에 현재 **앱 영역 폭(px)** 이 표시되고, `body`에 `.ss-pc`(≥1100px)/`.ss-narrow`(≤520px) 훅이 붙는다(§6 과 같은 기준 — 미디어쿼리가 이미 동작하므로 선택 사항)
+- z-index: 오버레이 모드의 ScreenSpec UI는 항상 최상위(브라우저 최대 z) — 앱 z 대역은 신경 쓸 필요 없다. 앱의 우측 드로어·사이드시트가 설명 패널에 가려지면 헤더의 「패널 ⇄」 버튼으로 왼쪽에 두거나 설정에 `panel:"left"`
 - 주의: 앱이 자체 고정 헤더(top:0)를 쓰면 정의서 모드에서 ScreenSpec 헤더(48px)와 겹칠 수 있다 — 이 경우 사용자에게 보고
 
-**액센트 컬러**: `accent` 옵션으로 포인트 컬러 묶음(마커·하이라이트·버튼·드래그 그립·목차 활성 전체)을 교체할 수 있다 — 프리셋 `blue`(기본)·`red`·`orange`·`green`·`purple` 또는 hex(`"#7C3AED"`).
+**액센트 컬러**: `accent` 옵션으로 포인트 컬러 묶음(마커·하이라이트·버튼·드래그 그립·목차 활성 전체)을 교체할 수 있다 — 프리셋 `blue`(기본)·`red`·`orange`·`green`·`purple`, hex(`"#7C3AED"`) 또는 CSS 변수(`"var(--color-accent)"` — 제품 디자인 토큰을 그대로 가리키므로 색 하드코딩 lint 에 걸리지 않는다).
 
 **앱형 프로토타입**(모바일 앱처럼 전면 사용): 시트 기본 여백을 제거한다 — `body.ss-wrap .ss-sheet{padding:0}` (body 포함 — 라이브러리 내부 규칙과의 우선순위 동점 방지)
 

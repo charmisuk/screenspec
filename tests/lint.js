@@ -13,6 +13,9 @@
  * 11) README 빠른 시작이 복붙 가능한 완성 HTML인지
  * 12) 코드가 가리키는 README 앵커가 실존하는지
  * 13) 라이브러리 헤더에 저작권·MIT 표기 (인라인 배포 시 LICENSE가 따라가지 않으므로)
+ * 14) lint 자기 검증 — 추출기가 빈 배열을 돌려주면 검사가 조용히 통과한다. 추출 결과 최소 개수를 강제 (2026-08-24 회고)
+ * 15) Screen·Spec 레벨 필드(route·root·anno·play…)도 docs/config.md 에 있는지 — RAW.x 만 보던 구멍
+ * 16) console.info 부팅 로그 버전·CHANGELOG 최상단 버전 = 헤더 버전 (2026-08-24 수동 bump 때 놓칠 뻔)
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
@@ -59,6 +62,11 @@ try {
   const uniq = [...new Set(docTags.map((t) => t.split(":")[1]))];
   check("문서 CDN 태그 단일 (" + (uniq[0] || "?") + ")", uniq.length === 1, JSON.stringify(docTags));
   check("문서 태그 = 헤더 버전 계열", uniq.length === 1 && uniq[0].startsWith(header + "."), uniq[0] + " vs v" + header);
+  /* 16) 부팅 로그·CHANGELOG 도 같은 버전 */
+  const infos = [...new Set([...lib.matchAll(/\[ScreenSpec v(\d+\.\d+)\]/g)].map((m) => m[1]))];
+  check("console.info 버전 = 헤더 버전", infos.length === 1 && infos[0] === header, JSON.stringify(infos));
+  const clTop = (fs.readFileSync(path.join(REPO, "CHANGELOG.md"), "utf8").match(/^## v(\d+\.\d+\.\d+)/m) || [])[1];
+  check("CHANGELOG 최상단 = 문서 CDN 태그 (" + clTop + ")", !!clTop && uniq[0] === clTop, clTop + " vs " + uniq[0]);
 }
 
 /* 4) 예제 target ↔ data-spec 정합 */
@@ -123,8 +131,17 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
 
   const fields = [...new Set([...lib.matchAll(/\bRAW\.([a-zA-Z]+)/g)].map((m) => m[1]))];
+  check("설정 필드 추출기 동작 (≥6개)", fields.length >= 6, JSON.stringify(fields)); /* 14) 빈손 통과 방지 */
   const undoc = fields.filter((f) => !new RegExp("\\b" + f + "\\b").test(ref));
   check("설정 필드 " + fields.length + "개 전부 docs/config.md에 문서화", undoc.length === 0, "누락: " + JSON.stringify(undoc));
+
+  /* 15) Screen·Spec 레벨 필드 — 코드가 읽는 s.xxx / sc.xxx 가 레퍼런스에 없으면 FAIL */
+  const SKIP = new Set(["length", "forEach", "map", "filter", "find", "some", "every", "push", "join", "slice", "indexOf", "replace", "match", "test", "trim", "toLowerCase", "includes", "style", "classList", "dataset", "root", "getClientRects", "getBoundingClientRect", "querySelector", "querySelectorAll", "textContent", "children", "byKey", "screen", "label", "mech"]);
+  const objFields = [...new Set([...lib.matchAll(/\b(?:s|sc|spec|next|o|x|current|cur|sc2)\.([a-zA-Z]+)\b/g)].map((m) => m[1]))]
+    .filter((f) => !SKIP.has(f) && !f.startsWith("_"));
+  check("Screen·Spec 필드 추출기 동작 (≥10개)", objFields.length >= 10, JSON.stringify(objFields));
+  const undocObj = objFields.filter((f) => !ref.includes("`" + f + "`") && !new RegExp("^\\s*" + f + "\\??:", "m").test(ref));
+  check("Screen·Spec 필드 " + objFields.length + "개 전부 docs/config.md에 문서화", undocObj.length === 0, "누락: " + JSON.stringify(undocObj));
 
   const annos = [...new Set([...lib.matchAll(/^ {4}(\w+): +\{ label:/gm)].map((m) => m[1]))];
   check("anno 레지스트리 8종 추출", annos.length === 8, JSON.stringify(annos));
@@ -134,11 +151,13 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   });
 
   const attrs = [...new Set([...lib.matchAll(/data-ss-[a-z]+|data-spec/g)].map((m) => m[0]))];
+  check("HTML 속성 추출기 동작 (data-spec 포함)", attrs.includes("data-spec"), JSON.stringify(attrs));
   const missAttr = attrs.filter((a) => !ref.includes(a));
   check("HTML 속성 전부 문서화", missAttr.length === 0, "누락: " + JSON.stringify(missAttr));
 
   const api = [...new Set([...lib.matchAll(/window\.ScreenSpec = \{([^}]+)\}/g)]
     .flatMap((m) => [...m[1].matchAll(/(\w+):/g)].map((x) => x[1])))];
+  check("공개 API 추출기 동작 (≥4개)", api.length >= 4, JSON.stringify(api));
   const missApi = api.filter((a) => !ref.includes(a));
   check("공개 API 전부 문서화", missApi.length === 0, "누락: " + JSON.stringify(missApi));
 }

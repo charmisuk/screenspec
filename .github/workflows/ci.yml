@@ -23,3 +23,5 @@ jobs:
           npx playwright install --with-deps chromium
       - name: e2e 회귀 (브라우저)
         run: node tests/e2e.js
+      - name: smoke (예제 전수 클릭 — JS 에러 0)
+        run: node tests/smoke.js

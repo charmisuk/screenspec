@@ -126,6 +126,23 @@ function check(name, ok, detail) {
     const t = document.querySelector(".ss-nav-toast");
     return t.classList.contains("ss-show") && t.textContent.includes("상품 목록");
   }));
+  /* 공개 API setScreen — wrap은 root 표시/숨김까지 동반해야 감지가 되돌리지 않는다 */
+  await page.evaluate(() => window.ScreenSpec.setScreen("SCR-EX-DTL-002"));
+  await page.waitForTimeout(500);
+  check("setScreen → 정의서·앱 화면 동시 전환", await page.evaluate(() => {
+    const lst = document.querySelector('[data-ss-screen="SCR-EX-LST-001"]');
+    const dtl = document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]');
+    return window.ScreenSpec.current() === "SCR-EX-DTL-002" &&
+      dtl.getClientRects().length > 0 && lst.style.display === "none";
+  }));
+  await page.evaluate(() => window.ScreenSpec.setScreen("SCR-EX-LST-001"));
+  await page.waitForTimeout(500);
+  check("setScreen 복귀 → 목록 화면", await page.evaluate(() => {
+    const lst = document.querySelector('[data-ss-screen="SCR-EX-LST-001"]');
+    const dtl = document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]');
+    return window.ScreenSpec.current() === "SCR-EX-LST-001" &&
+      lst.getClientRects().length > 0 && dtl.style.display === "none";
+  }));
   /* 모바일: 목차 = 전체 화면 시트 */
   await page.setViewportSize({ width: 480, height: 800 });
   await page.waitForTimeout(300);
@@ -181,9 +198,12 @@ function check(name, ok, detail) {
     res.setHeader("content-type", "text/html");
     res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8")
       .replace("../screenspec.js", "/screenspec.js")
-      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED",')); /* accent 주입 (e2e 전용) */
+      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED", panel: "left",')); /* accent·panel 주입 (e2e 전용) */
   });
   await new Promise((r) => srv.listen(4179, r));
+  const ovWarns = [];
+  const onOvMsg = (msg) => { if (msg.type() === "warning") ovWarns.push(msg.text()); };
+  page.on("console", onOvMsg);
   const bgBefore = "rgb(255, 255, 255)";
   await page.goto("http://localhost:4179/screenspec/examples/overlay-spa.html");
   await page.waitForTimeout(800);
@@ -202,6 +222,23 @@ function check(name, ok, detail) {
   }));
   await page.click("#ss-ovDoc");
   await page.waitForTimeout(400);
+  check("panel:left 설정 → 패널 좌측", await page.evaluate(() => {
+    const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
+    const cs = getComputedStyle(document.body);
+    return r.left === 0 && cs.paddingLeft === "400px" && cs.paddingRight === "0px";
+  }));
+  await page.click("#ss-ovSide");
+  await page.waitForTimeout(300);
+  check("패널 ⇄ → 우측", await page.evaluate(() => {
+    const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
+    const cs = getComputedStyle(document.body);
+    return r.right === innerWidth && cs.paddingRight === "400px" && cs.paddingLeft === "0px";
+  }));
+  check("뷰포트 끝(x:0) 대상의 마커가 잘리지 않음", await page.evaluate(() => {
+    const t = document.querySelector('[data-spec="1"]').getBoundingClientRect();
+    const m = document.querySelector(".ss-ov-markers .ss-marker").getBoundingClientRect();
+    return t.left === 0 && m.left >= 0 && m.top >= 48;
+  }));
   await page.click('[data-nav][href="./members"]'); /* 정의서 모드에서 앱 조작 */
   await page.waitForTimeout(500);
   check("정의서 모드에서 앱 내비 동작 + 추적", await page.evaluate(() => window.ScreenSpec.current()) === "S-09");
@@ -217,9 +254,12 @@ function check(name, ok, detail) {
   await page.waitForTimeout(300);
   await page.click('[data-toc="S-09"]');
   await page.waitForTimeout(400);
+  check("화면 5개: 목차 검색 없음", (await page.locator(".ss-toc-search").count()) === 0);
   check("목차 → route 소프트 내비게이션", await page.evaluate(() =>
     window.ScreenSpec.current() === "S-09" && location.pathname === "/members" &&
     document.body.innerText.includes("이용자 명단")));
+  await page.waitForTimeout(500);
+  check("목차 이동 시 '못 찾은 정의' 오경고 없음 (앱이 그려진 뒤 판정)", !ovWarns.some((w) => w.includes("S-09") && w.includes("못 찾은 정의")), ovWarns.join(" | ").slice(0, 160));
   await page.addScriptTag({ content: LIB });
   await page.waitForTimeout(300);
   check("이중 로드 가드", (await page.locator(".ss-pill").count()) === 1);
@@ -231,6 +271,61 @@ function check(name, ok, detail) {
   await page.waitForTimeout(400);
   const hash2 = await page.evaluate(() => window.ScreenSpec.current());
   check("해시 라우터(#/) 감지", hash1 === "S-01" && hash2 === "S-09", hash1 + "→" + hash2);
+  /* 구체 경로 우선 (#15): /members/[id] 가 먼저 선언돼 있어도 /members/invite 는 초대 화면 */
+  await page.evaluate(() => { location.hash = ""; history.pushState({}, "", "/members/invite"); });
+  await page.waitForTimeout(400);
+  const spec1 = await page.evaluate(() => window.ScreenSpec.current());
+  await page.evaluate(() => history.pushState({}, "", "/members/123"));
+  await page.waitForTimeout(400);
+  const spec2 = await page.evaluate(() => window.ScreenSpec.current());
+  check("라우트 구체성 우선 (선언 순서 무관)", spec1 === "S-11" && spec2 === "S-10", spec1 + "/" + spec2);
+  /* 등록됐지만 specs 가 빈 화면 — 백지 대신 다음 할 일 안내 (#19). 현재 /members/123 = S-10(specs []) */
+  check("빈 specs 화면 안내 + data-spec 개수", await page.evaluate(() => {
+    const e = document.querySelector(".ss-ov-panel .ss-empty");
+    const n = document.querySelectorAll("[data-spec]").length;
+    return !!e && e.textContent.includes("기능 설명이 아직 없습니다") && e.textContent.includes("S-10") &&
+      e.textContent.includes("data-spec 이 붙은 요소: " + n + "개") && document.querySelector("#ss-ovCnt").textContent === "0항목";
+  }));
+  await page.evaluate(() => history.pushState({}, "", "/members"));
+  await page.waitForTimeout(400);
+  /* 라우트 없는 root 화면(패널) — 열리면 자동 전환, 닫히면 라우트 화면 복귀 (여기서 현재 화면은 S-09) */
+  await page.click("tbody tr:first-child .rowbtn");
+  await page.waitForTimeout(300);
+  check("패널 열림 → 라우트 없는 root 화면 감지", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
+  await page.click("#detailPanel .pclose");
+  await page.waitForTimeout(300);
+  check("패널 닫힘 → 라우트 화면 복귀", await page.evaluate(() => window.ScreenSpec.current()) === "S-09");
+  /* setScreen 후 DOM이 계속 변해도 감지가 되돌리지 않는다 */
+  await page.click("tbody tr:first-child .rowbtn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.ScreenSpec.setScreen("S-03"));
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(() => {
+      const d = document.createElement("div");
+      d.textContent = "mutation probe";
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 60);
+    });
+    await page.waitForTimeout(250);
+  }
+  check("setScreen 유지 (DOM 변경 1초)", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
+  await page.click("#detailPanel .pclose");
+  await page.waitForTimeout(300);
+  /* 앱 폭 표시 + overlay 반응형 훅 (#17 최소안). 현재 정의서 모드·패널 우측(400px) */
+  const vw = async () => page.evaluate(() => ({ t: document.getElementById("ss-ovVw").textContent, pc: document.body.classList.contains("ss-pc"), nr: document.body.classList.contains("ss-narrow") }));
+  await page.waitForTimeout(200);
+  const w1 = await vw();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.waitForTimeout(300);
+  const w2 = await vw();
+  await page.setViewportSize({ width: 480, height: 800 });
+  await page.waitForTimeout(300);
+  const w3 = await vw();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(300);
+  check("헤더 앱 폭 표시 (뷰포트 − 패널)", w1.t === "1040px" && w2.t === "1200px" && w3.t === "480px", JSON.stringify([w1, w2, w3]));
+  check("overlay body 반응형 훅 .ss-pc/.ss-narrow", !w1.pc && !w1.nr && w2.pc && !w3.pc && w3.nr, JSON.stringify([w1, w2, w3]));
+  page.off("console", onOvMsg);
   srv.close();
 
 
@@ -254,6 +349,84 @@ function check(name, ok, detail) {
     await page.click('[data-play="2"]');
     await page.waitForTimeout(400);
     check("빠른 시작: 동작 재생이 실제로 동작", await page.evaluate(() => document.getElementById("save").textContent === "저장됨"));
+  }
+
+  /* ============ 누락 경고: 어느 정의가 빠졌는지 + state 제외 (#20) ============ */
+  console.log("[docs] 누락 정의 경고");
+  {
+    const warns = [];
+    const onMsg = (msg) => { if (msg.type() === "warning") warns.push(msg.text()); };
+    page.on("console", onMsg);
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-X",name:"x"},specs:[' +
+      '{n:1,target:"1",title:"있음"},{n:2,target:"2",title:"없음"},{n:3,target:"3",title:"조건부",anno:"state"},{n:4,target:"4",title:"없음2"}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    const w = warns.filter((x) => x.includes("못 찾은 정의"));
+    check("누락 경고 1회 + #n target 나열 + state 제외", w.length === 1 && w[0].includes("2건") &&
+      w[0].includes('#2 target="2"') && w[0].includes('#4 target="4"') && !w[0].includes("#3") && w[0].includes("조건부(state) 1건"), w.join(" | ").slice(0, 200));
+    page.off("console", onMsg);
+    const warns2 = [];
+    const onMsg2 = (msg) => { if (msg.type() === "warning") warns2.push(msg.text()); };
+    page.on("console", onMsg2);
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-Y",name:"y"},specs:[' +
+      '{n:1,target:"1",title:"있음"},{n:2,target:"2",title:"조건부",anno:"state"}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("state 만 누락이면 경고 없음", !warns2.some((x) => x.includes("못 찾은 정의")), warns2.join(" | ").slice(0, 200));
+    page.off("console", onMsg2);
+  }
+
+  /* ============ accent = CSS 변수 참조 (#18) ============ */
+  console.log("[docs] accent var(--x)");
+  {
+    await page.goto("about:blank");
+    await page.setContent('<style>:root{--brand:#123456}</style><div data-spec="1">A</div><script>window.SCREENSPEC={accent:"var(--brand)",screen:{id:"S-V",name:"v"},specs:[{n:1,target:"1",title:"a",anno:"arrow"}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-marker");
+    await page.waitForTimeout(300);
+    check("accent var(--brand) → 토큰 대입 + 화살표 stroke 실제 색", await page.evaluate(() => {
+      const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim();
+      const st = getComputedStyle(document.getElementById("ss-line")).stroke;
+      const hot = getComputedStyle(document.querySelector(".ss-marker.ss-hot")).backgroundColor;
+      return v === "#123456" /* computed 는 var() 치환값 */ && st === "rgb(18, 52, 86)" && hot === "rgb(18, 52, 86)";
+    }));
+  }
+
+  /* ============ 목차 검색 (#9): 화면 8개 이상 ============ */
+  console.log("[docs] 목차 검색");
+  {
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screens:[' +
+      [["S-01","홈",["홈"]],["S-02","목록",["홈","이용자","목록"]],["S-03","초대",["홈","이용자","초대"]],["S-04","상세",["홈","이용자","상세"]],
+       ["S-05","계약",["홈","계약"]],["S-06","정산",["홈","정산"]],["S-07","설정",["홈","설정"]],["S-08","알림",["홈","설정","알림"]],
+       ["S-09","프로필",["홈","설정","프로필"]],["S-10","로그",["홈","로그"]]]
+        .map(([id,name,path]) => JSON.stringify({ id, name, path, specs: [{ n: 1, target: "1", title: "t" }] })).join(",") + "]}</script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    check("화면 10개: 목차 검색 입력 존재", (await page.locator(".ss-toc-search input").count()) === 1);
+    await page.fill(".ss-toc-search input", "초대");
+    await page.waitForTimeout(200);
+    const vis = () => page.evaluate(() => [...document.querySelectorAll(".ss-toc-body > *")].filter((r) => r.style.display !== "none").map((r) => r.dataset.toc || "grp:" + r.textContent.trim()));
+    const v1 = await vis();
+    check("검색 '초대' → 매칭 행 + 조상(홈 화면·이용자 그룹)만", v1.length === 3 && v1[0] === "S-01" && v1[1] === "grp:이용자" && v1[2] === "S-03", JSON.stringify(v1));
+    await page.fill(".ss-toc-search input", "");
+    await page.waitForTimeout(200);
+    const v2 = await vis();
+    check("검색 비우면 전부 복원", v2.filter((x) => !x.startsWith("grp:")).length === 10, String(v2.length));
+    await page.click(".ss-toc-x");
   }
 
   /* ============ 설정 없이 스크립트만 넣은 경우 ============

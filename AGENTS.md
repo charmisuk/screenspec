@@ -16,12 +16,14 @@
 | `scripts/inline.js` | 라이브러리를 프로토타입 파일 안에 넣어 자체 완결 HTML 생성 |
 | `tests/lint.js` | 의존성 없는 정적 검사 |
 | `tests/e2e.js` | Playwright 브라우저 회귀 |
+| `tests/smoke.js` | 예제 전수 클릭 스모크 (아무거나 눌러도 안 죽는가) |
 
 ## 검증 (변경 후 반드시)
 
 ```bash
 node tests/lint.js   # 의존성 없음
 node tests/e2e.js    # playwright 설치된 폴더에서
+node tests/smoke.js  # 예제 전수 클릭 — JS 에러 0 (릴리스 전)
 ```
 
 둘 다 통과해야 커밋한다. CI(`.github/workflows/ci.yml`)가 push·PR·태그마다 같은 것을 돌린다.

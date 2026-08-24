@@ -11,7 +11,7 @@ ScreenSpec의 API는 전역 객체 `window.SCREENSPEC` 하나다. 이 문서가 
 ```ts
 window.SCREENSPEC = {
   mode?:    "wrap" | "overlay",   // 생략 = 자동 판별 (React·Next 감지 시 overlay)
-  accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple" 또는 "#7C3AED". 기본 blue
+  accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple", "#7C3AED" 또는 "var(--brand)". 기본 blue
   devices?: { mobile?: Device, pc?: Device },  // wrap 전용. 기기 프리셋 덮어쓰기
 
   // 화면이 하나면 screen + specs
@@ -27,7 +27,7 @@ type Screen = {
   name:    string,      // 필수. 화면명
   path?:   string[],    // 기획 IA 경로. 이 배열이 그대로 화면 목록 트리가 된다
   specs?:  Spec[],      // 이 화면의 기능 설명
-  root?:   string,      // wrap 다중화면: 이 화면의 컨테이너 CSS 셀렉터
+  root?:   string,      // 이 화면의 컨테이너 CSS 셀렉터 (두 모드 공통 · 표시 여부로 감지)
   route?:  string,      // overlay: 라우트 경로. "/members", "/members/[id]"
 }
 
@@ -51,7 +51,8 @@ type Device = { w: number, h: number }
 | 필드 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `mode` | `"wrap"` \| `"overlay"` | 자동 판별 | 단일 HTML은 wrap, React·Next 등 프레임워크는 overlay. 자동 판별이 틀릴 때만 명시 |
-| `accent` | 프리셋명 \| hex | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. 인식 불가 값이면 콘솔 경고 후 기본값 |
+| `accent` | 프리셋명 \| hex \| `var(--x)` | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. `"var(--color-accent)"`처럼 CSS 변수를 가리키면 제품 토큰을 복사하지 않고 따라간다(색 하드코딩 lint·다크 모드 대응). 인식 불가 값이면 콘솔 경고 후 기본값 |
+| `panel` | `"right"` \| `"left"` | `"right"` | overlay 전용. 기능 설명 패널 위치. 앱의 우측 드로어·사이드시트와 겹치면 `"left"`. 정의서 헤더의 「패널 ⇄」 버튼으로도 전환 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap 전용. 기기 프리셋 크기 덮어쓰기 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
 | `specs` | `Spec[]` | `[]` | 화면이 하나일 때의 기능 설명 |
@@ -76,9 +77,9 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `id` | string | ✔ | 화면 ID. 라이브러리는 불투명 문자열로만 취급하므로 프로젝트 체계를 그대로 쓰면 된다. 중복이면 콘솔 경고 |
 | `name` | string | ✔ | 화면명. 헤더·목차·이동 버튼 라벨에 쓰인다 |
 | `path` | string[] | | 기획 IA 경로. `["홈","이용자","명단"]` → 목차에서 홈 › 이용자 아래 "명단" 행. 마지막 = 화면 자신, 앞 = 그룹. 들여쓰기는 최대 6뎁스 |
-| `specs` | Spec[] | | 비어 있으면 목차에 "미정의"로 표시된다 (커버리지 갭 가시화) |
-| `root` | string | | wrap 다중화면에서 이 화면의 컨테이너 셀렉터. 표시/숨김 전환을 자동 감지한다 |
-| `route` | string | | overlay에서 이 화면의 라우트. 동적 세그먼트는 `[id]`. basePath·해시 라우터는 자동 대응 |
+| `specs` | Spec[] | | 비어 있으면 목차에 "미정의"로 표시되고(커버리지 갭 가시화), 패널에는 다음 할 일 안내 + 현재 화면의 `data-spec` 요소 수가 뜬다 |
+| `root` | string | | 컨테이너 셀렉터. 두 모드 공통 — 요소가 보이면 그 화면으로 자동 전환(패널·다이얼로그처럼 라우트 없는 화면). overlay에서는 route 화면 위에 얹힌 root 화면이 우선. 두 모드 모두 `data-spec` 조회 범위를 이 컨테이너 안으로 좁힌다 — 화면마다 번호를 1부터 다시 쓸 수 있고, 공통 골격의 마커와 섞이지 않는다 |
+| `route` | string | | overlay에서 이 화면의 라우트. 동적 세그먼트는 `[id]`. basePath·해시 라우터는 자동 대응. 구체 경로 우선(동적 세그먼트가 적은 라우트가 먼저 매칭) — 선언 순서 무관 |
 
 ## Spec
 
@@ -130,14 +131,16 @@ window.ScreenSpec.refresh()                 // 레이아웃·마커 재계산
 window.ScreenSpec.mode                      // "wrap" | "overlay"
 ```
 
+`setScreen`은 wrap에서 root 표시/숨김 토글을 동반하고, overlay는 앱 DOM을 건드리지 않으므로 root가 보이는 동안만 유지된다.
+
 `window.SpecLayer`는 구명칭 호환 별칭이다 (동일 객체).
 
 ## CSS 훅
 
 | 훅 | 조건 | 용도 |
 |---|---|---|
-| `.ss-pc` | 시트 폭 ≥ 1100px | wrap에서 미디어쿼리 대신 사용 (폭 시뮬레이터는 컨테이너 폭만 바꾸므로 미디어쿼리가 반응하지 않는다) |
-| `.ss-narrow` | 시트 폭 ≤ 520px | 동일 |
+| `.ss-pc` | 폭 ≥ 1100px | wrap: 시트에 붙는다 — 미디어쿼리 대신 사용 (폭 시뮬레이터는 컨테이너 폭만 바꾸므로 미디어쿼리가 반응하지 않는다). overlay: `body`에 붙는다 (앱 영역 폭 = 뷰포트 − 설명 패널). 정의서 헤더에 현재 앱 폭(px)이 표시된다 |
+| `.ss-narrow` | 폭 ≤ 520px | 동일 |
 
 ```css
 .ss-sheet.ss-pc .page-inner { display: grid; grid-template-columns: 1fr 320px; }
@@ -151,7 +154,7 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | 메시지 | 원인 |
 |---|---|
 | 설정이 없어 화면정의서를 만들 수 없습니다 | `window.SCREENSPEC` 미설정 |
-| data-spec 요소를 못 찾은 정의 N건 | `target`에 해당하는 `data-spec` 속성 누락 |
+| data-spec 요소를 못 찾은 정의 N건 — #n target="…" | `target`에 해당하는 `data-spec` 속성 누락. 어느 정의인지 `#n target`으로 나열. `anno:"state"`(조건부 표시)는 없는 게 정상일 수 있어 건수에서 제외하고 "조건부(state) M건은 제외"로 따로 표기 |
 | 화면 ID 중복 | 같은 `id`가 둘 이상 (뒤엣것은 목차·이동에서 무시) |
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
-| accent "X" 인식 불가 | 프리셋명도 hex도 아님 |
+| accent "X" 인식 불가 | 프리셋명·hex·`var(--x)` 어느 것도 아님 |
