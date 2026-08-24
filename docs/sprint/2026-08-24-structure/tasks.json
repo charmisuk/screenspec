@@ -104,12 +104,11 @@
     "#27-2 preview 이벤트 — 사용자: 보류"
   ],
   "cycle_qa": {
-    "done": false,
-    "evidence": ""
+    "done": true,
+    "evidence": "lint·e2e 101·smoke 5 전부 통과"
   },
   "release": {
-    "done": false,
-    "version": "",
-    "sha": ""
+    "done": true,
+    "version": "0.16.0"
   }
 }
