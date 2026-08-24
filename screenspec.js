@@ -488,21 +488,41 @@
         ctx.markerLayer.appendChild(el);
         markerEls[s.n] = el;
       });
-      /* 누락 경고는 잠시 뒤에 — 목차·flow 로 화면을 옮기면 정의서가 앱보다 먼저 그려져, 즉시 세면 "아직 안 그려진 것"을 누락으로 오인한다 */
-      const sc = current;
-      setTimeout(() => checkMissing(sc), 400);
+      watchMissing(current);
       ctx.afterRender();
     }
-    function checkMissing(sc) {
-      if (sc !== current || warned[sc.id]) return; /* 그새 다른 화면으로 갔거나 이미 경고한 화면 */
-      const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
-      specs().forEach((s) => { if (!targetOf(s)) (s.anno === "state" ? cond : missing).push(s); });
-      if (!missing.length) return;
-      warned[sc.id] = true;
-      console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
-        missing.map((s) => "#" + s.n + " target=\"" + s.target + "\"").join(", ") +
-        " (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)" +
-        (cond.length ? " · 조건부(state) " + cond.length + "건은 제외" : ""));
+    /* 누락 경고 — 시간이 아니라 "앱이 다 그려졌는가" 로 판정 (#23)
+       목차·flow 로 옮기면 정의서가 앱보다 먼저 그려지고, 비동기 조회 화면은 스켈레톤 → 본문 교체가 한참 뒤다.
+       규칙: 앱 DOM(우리 UI 제외)에 노드 추가/삭제가 1.5초 동안 없으면 "다 그려졌다" 로 보고 센다. 변경이 계속되면 5초 상한.
+             전부 찾으면 종료(clean), 못 찾은 게 있으면 그때 1회 경고. */
+    const MISS_QUIET = 1500, MISS_CAP = 5000;
+    const OWN_UI = ".ss-ui,.ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-toolbar,.ss-tip";
+    let missMo = null, missTimer = null, missCap = null;
+    function watchMissing(sc) {
+      if (missMo) { missMo.disconnect(); missMo = null; }
+      clearTimeout(missTimer); clearTimeout(missCap);
+      if (warned[sc.id]) return;
+      const attempt = () => {
+        if (sc !== current || warned[sc.id]) return stop();
+        const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
+        specs().forEach((s) => { if (!targetOf(s)) (s.anno === "state" ? cond : missing).push(s); });
+        if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
+        warned[sc.id] = true;
+        console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
+          missing.map((s) => "#" + s.n + " target=\"" + s.target + "\"").join(", ") +
+          " (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)" +
+          (cond.length ? " · 조건부(state) " + cond.length + "건은 제외" : ""));
+        stop();
+      };
+      const stop = () => { if (missMo) missMo.disconnect(); missMo = null; clearTimeout(missTimer); clearTimeout(missCap); };
+      missMo = new MutationObserver((recs) => {
+        if (!recs.some((r) => !(r.target.closest && r.target.closest(OWN_UI)))) return; /* 우리 UI 안의 변경은 무시 */
+        clearTimeout(missTimer);
+        missTimer = setTimeout(attempt, MISS_QUIET);
+      });
+      missMo.observe(document.body, { subtree: true, childList: true });
+      missTimer = setTimeout(attempt, MISS_QUIET);
+      missCap = setTimeout(attempt, MISS_CAP);
     }
     const navToast = h("div", { class: "ss-ui ss-nav-toast" });
     document.body.appendChild(navToast);

@@ -363,7 +363,7 @@ function check(name, ok, detail) {
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
     const w = warns.filter((x) => x.includes("못 찾은 정의"));
     check("누락 경고 1회 + #n target 나열 + state 제외", w.length === 1 && w[0].includes("2건") &&
       w[0].includes('#2 target="2"') && w[0].includes('#4 target="4"') && !w[0].includes("#3") && w[0].includes("조건부(state) 1건"), w.join(" | ").slice(0, 200));
@@ -377,9 +377,29 @@ function check(name, ok, detail) {
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
     check("state 만 누락이면 경고 없음", !warns2.some((x) => x.includes("못 찾은 정의")), warns2.join(" | ").slice(0, 200));
     page.off("console", onMsg2);
+  }
+  /* 비동기 조회 화면 (#23): 스켈레톤 700ms 뒤 본문 — 경고가 뜨면 안 되고, 진짜 누락은 5초 안에 떠야 한다 */
+  {
+    const warns3 = [];
+    const onMsg3 = (msg) => { if (msg.type() === "warning") warns3.push(msg.text()); };
+    page.on("console", onMsg3);
+    await page.goto("about:blank");
+    await page.setContent('<div id="app">로딩 중…</div><script>window.SCREENSPEC={screen:{id:"S-A",name:"a"},specs:[' +
+      '{n:1,target:"1",title:"본문"},{n:2,target:"2",title:"버튼"},{n:9,target:"9",title:"진짜 누락"}]};' +
+      'setTimeout(()=>{document.getElementById("app").innerHTML=\'<div data-spec="1">본문</div><button data-spec="2">저장</button>\';},700);</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(900); /* t≈1.4s: 본문은 0.7s 에 왔고 판정은 그 뒤 1.5초 조용해야 → 아직 */
+    const early = warns3.filter((x) => x.includes("못 찾은 정의"));
+    check("비동기 로딩(700ms) 중·직후에는 경고 안 뜸", early.length === 0, early.join(" | ").slice(0, 160));
+    await page.waitForTimeout(1600); /* t≈3s: 판정 완료 */
+    const late = warns3.filter((x) => x.includes("못 찾은 정의"));
+    check("다 그려진 뒤 판정: 진짜 누락 #9 만 경고, 늦게 온 #1·#2 는 제외", late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes("#1 "), late.join(" | ").slice(0, 160));
+    page.off("console", onMsg3);
   }
 
   /* ============ accent = CSS 변수 참조 (#18) ============ */
