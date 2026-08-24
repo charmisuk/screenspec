@@ -198,7 +198,7 @@ function check(name, ok, detail) {
     res.setHeader("content-type", "text/html");
     res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8")
       .replace("../screenspec.js", "/screenspec.js")
-      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED",')); /* accent 주입 (e2e 전용) */
+      .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED", panel: "left",')); /* accent·panel 주입 (e2e 전용) */
   });
   await new Promise((r) => srv.listen(4179, r));
   const bgBefore = "rgb(255, 255, 255)";
@@ -219,6 +219,18 @@ function check(name, ok, detail) {
   }));
   await page.click("#ss-ovDoc");
   await page.waitForTimeout(400);
+  check("panel:left 설정 → 패널 좌측", await page.evaluate(() => {
+    const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
+    const cs = getComputedStyle(document.body);
+    return r.left === 0 && cs.paddingLeft === "400px" && cs.paddingRight === "0px";
+  }));
+  await page.click("#ss-ovSide");
+  await page.waitForTimeout(300);
+  check("패널 ⇄ → 우측", await page.evaluate(() => {
+    const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
+    const cs = getComputedStyle(document.body);
+    return r.right === innerWidth && cs.paddingRight === "400px" && cs.paddingLeft === "0px";
+  }));
   check("뷰포트 끝(x:0) 대상의 마커가 잘리지 않음", await page.evaluate(() => {
     const t = document.querySelector('[data-spec="1"]').getBoundingClientRect();
     const m = document.querySelector(".ss-ov-markers .ss-marker").getBoundingClientRect();

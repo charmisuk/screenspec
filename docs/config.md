@@ -52,6 +52,7 @@ type Device = { w: number, h: number }
 |---|---|---|---|
 | `mode` | `"wrap"` \| `"overlay"` | 자동 판별 | 단일 HTML은 wrap, React·Next 등 프레임워크는 overlay. 자동 판별이 틀릴 때만 명시 |
 | `accent` | 프리셋명 \| hex | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. 인식 불가 값이면 콘솔 경고 후 기본값 |
+| `panel` | `"right"` \| `"left"` | `"right"` | overlay 전용. 기능 설명 패널 위치. 앱의 우측 드로어·사이드시트와 겹치면 `"left"`. 정의서 헤더의 「패널 ⇄」 버튼으로도 전환 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap 전용. 기기 프리셋 크기 덮어쓰기 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
 | `specs` | `Spec[]` | `[]` | 화면이 하나일 때의 기능 설명 |

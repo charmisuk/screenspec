@@ -51,6 +51,7 @@
  *   overlay 모드(남의 앱 위에 얹음): ScreenSpec UI는 브라우저 최대 대역(2147482990~)에서 항상 맨 위.
  *     앱의 z-index와 경쟁하지 않는다 (Vercel 툴바·Hotjar 방식). 앱 모달이 패널 아래 깔릴 수 있으나
  *     본문은 밀어내기로 가리지 않고, '프로토타입' 필 한 번으로 전체 확인 가능.
+ *     앱의 우측 드로어·사이드시트가 설명 패널에 가려지면 헤더의 「패널 ⇄」 버튼 또는 panel:"left"로 패널을 왼쪽에 둔다.
  *   wrap 모드(단일 HTML, AI 하네스가 전체 통제): 대역 규칙 사용 —
  *      0 ~ 7999  프로토타입 (시트 내부)
  *   8000 ~ 8099  시트 오버레이 — anno 8030 · markers 8040 · resize 8050
@@ -112,6 +113,16 @@
     if (/^#[0-9a-fA-F]{3,8}$/.test(a)) return a;
     console.warn("[ScreenSpec] accent \"" + a + "\" 인식 불가 — 기본(blue) 사용. 프리셋: " + Object.keys(ACCENT_PRESETS).join(", ") + " 또는 hex");
     return ACCENT_PRESETS.blue;
+  })();
+
+  /* 기능 설명 패널 위치 — panel: "right"(기본) | "left"
+     앱의 우측 드로어·사이드시트가 패널에 가려질 때 "left" (헤더의 「패널 ⇄」 버튼으로도 전환) */
+  const PANEL_SIDE = (function () {
+    const p = RAW.panel;
+    if (!p) return "right";
+    if (p === "right" || p === "left") return p;
+    console.warn("[ScreenSpec] panel \"" + p + "\" 인식 불가 — right 사용 (right | left)");
+    return "right";
   })();
 
   /* 사용자 텍스트는 전부 이걸 거쳐 innerHTML에 들어간다 */
@@ -315,6 +326,10 @@
   .ss-pill button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
   .ss-ov-header{position:fixed;top:0;left:0;right:0;height:48px;z-index:2147483010;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:none;align-items:center;gap:28px;padding:0 16px}
+  .ss-ov-hfields{display:flex;gap:28px;align-items:center;min-width:0}
+  #ss-ovSide{margin-left:auto;flex:none;font-size:12px;font-weight:700;color:var(--ss-ink2);
+    padding:4px 10px;border:1px solid var(--ss-line2);border-radius:6px;background:#fff}
+  #ss-ovSide:hover{background:var(--ss-line)}
   .ss-ov-panel{position:fixed;top:48px;right:0;bottom:0;width:400px;z-index:2147483010;background:#fff;
     border-left:1px solid var(--ss-line2);display:none;flex-direction:column;box-shadow:-8px 0 30px rgba(17,24,39,.12)}
   .ss-ov-markers{position:absolute;top:0;left:0;width:100%;height:0;z-index:2147483000;pointer-events:none;display:none}
@@ -325,12 +340,20 @@
   body.ss-ov-doc .ss-ov-markers,body.ss-ov-doc .ss-ov-anno{display:block}
   /* 정의서 모드: 앱을 덮지 않고 밀어낸다 — 헤더 높이만큼 아래로, 패널 폭만큼 왼쪽으로 */
   body.ss-ov-doc{padding-top:48px!important;padding-right:400px!important}
+  /* panel:"left" — 앱의 우측 드로어·사이드시트를 가리지 않게 패널을 왼쪽으로 (#14) */
+  body.ss-ov-left .ss-ov-panel{left:0;right:auto;border-left:0;border-right:1px solid var(--ss-line2);
+    box-shadow:8px 0 30px rgba(17,24,39,.12)}
+  body.ss-ov-doc.ss-ov-left{padding-right:0!important;padding-left:400px!important}
   /* 좁은 화면: 우측 패널 대신 하단 시트 — 앱은 위에 그대로 보이고 아래로 밀림 */
   @media(max-width:900px){
     .ss-ov-panel{top:auto;left:0;right:0;bottom:0;width:100%;height:52vh;
       border-left:0;border-top:1px solid var(--ss-line2);border-radius:14px 14px 0 0;
       box-shadow:0 -10px 30px rgba(17,24,39,.18)}
     body.ss-ov-doc{padding-right:0!important;padding-bottom:54vh!important}
+    /* 하단 시트에서는 좌/우 개념이 없다 — ss-ov-left를 무력화하고 전환 버튼도 숨긴다 */
+    body.ss-ov-left .ss-ov-panel{left:0;right:0;border-right:0;box-shadow:0 -10px 30px rgba(17,24,39,.18)}
+    body.ss-ov-doc.ss-ov-left{padding-left:0!important}
+    #ss-ovSide{display:none}
     body.ss-ov-doc .ss-pill{top:56px} /* 헤더 글자를 가리지 않게 아래로 */
   }
   @media (prefers-reduced-motion: reduce){.ss-ui *{transition:none!important}}
@@ -968,12 +991,18 @@
      ============================================================ */
   function bootOverlay() {
     injectCSS();
+    if (PANEL_SIDE === "left") document.body.classList.add("ss-ov-left");
 
     /* ---- UI (전부 body에 append만 — 기존 DOM 불변) ---- */
     const pill = h("div", { class: "ss-ui ss-pill" }, `
       <button id="ss-ovProto" aria-pressed="true">프로토타입</button>
       <button id="ss-ovDoc" aria-pressed="false">화면정의서</button>`);
     const header = h("div", { class: "ss-ui ss-ov-header" });
+    /* render()가 headerEl.innerHTML을 통째로 갈아끼우므로, 필드는 안쪽 div에 두고 버튼은 형제로 둔다 */
+    const hFields = h("div", { class: "ss-ov-hfields" });
+    const bSide = h("button", { class: "ss-ui", id: "ss-ovSide", title: "설명 패널 좌/우 전환" }, "패널 ⇄");
+    header.appendChild(hFields);
+    header.appendChild(bSide);
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
@@ -1003,6 +1032,10 @@
     }
     bProto.onclick = () => setMode("proto");
     bDoc.onclick = () => setMode("doc");
+    bSide.onclick = () => {
+      document.body.classList.toggle("ss-ov-left");
+      requestAnimationFrame(place);
+    };
 
     function place() {
       if (!document.body.classList.contains("ss-ov-doc")) return; /* 정의서 모드에서만 배치 */
@@ -1011,7 +1044,7 @@
 
     /* ---- 공통 코어 (좌표계 = 문서 좌표: rect + 페이지 스크롤) ---- */
     const core = createCore({
-      headerEl: header,
+      headerEl: hFields,
       cntEl: panel.querySelector("#ss-ovCnt"),
       listEl: panel.querySelector("#ss-ovList"),
       markerLayer: markerLayer,
