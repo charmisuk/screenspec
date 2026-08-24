@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.17 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.18 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -295,6 +295,14 @@
     box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent);transition:background .12s}
   .ss-play:hover{background:color-mix(in srgb,var(--ss-accent) 82%,#000)}
   .ss-play:active{transform:translateY(1px)}
+  /* 상태 재현 (#27) — ▶(실제 클릭)와 구분되는 ◑(앱에 상태를 요청). 켜지면 채워진다 */
+  .ss-preview{background:transparent;color:var(--ss-accent);border:1.5px dashed var(--ss-accent);box-shadow:none}
+  .ss-preview:hover{background:var(--ss-accent-soft)}
+  .ss-preview.ss-on{background:var(--ss-accent);color:#fff;border-style:solid;
+    box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent)}
+  .ss-preview.ss-on:hover{background:color-mix(in srgb,var(--ss-accent) 82%,#000)}
+  /* 아무도 이 이벤트를 듣지 않을 때 — 죽은 버튼이 아니라 「앱이 아직 못 만든다」로 읽히게 */
+  .ss-preview-none{display:block;margin:6px 0 0 16px;font-size:11.5px;color:var(--ss-ink3);line-height:1.55}
   /* 하위 요소(parts) — 상위 행 안쪽에 한 단 들여쓴 블록. 라벨(1a·1b)은 라이브러리가 매긴다 (#25) */
   .ss-part{margin:10px 0 0 18px;padding:2px 0 5px 12px;border-left:2px solid var(--ss-line2);transition:background .12s}
   .ss-part.ss-active{background:var(--ss-accent-soft);border-left-color:var(--ss-accent);border-radius:0 6px 6px 0}
@@ -500,6 +508,13 @@ ${HL_CSS}
     }
     return "";
   }
+  /* ◑ 상태 재현 버튼(공통) — anno 와 무관하게 preview 가 있으면 붙는다 (#27).
+     ▶(play)는 화면에 있는 요소를 실제로 누르는 것이고, 이건 지금 화면에 없는 상태를 앱에 요청하는 것이다. */
+  function previewBtnHTML(sp, key) {
+    if (!sp.preview) return "";
+    const label = sp.preview.label || (sp.title ? sp.title + " 보기" : "이 상태 보기");
+    return '<button class="ss-play ss-preview" data-preview="' + key + '" aria-pressed="false">◑ ' + esc(label) + "</button>";
+  }
   /* 기능정의 행 HTML (wrap·overlay 공용) — 행은 상위 하나. parts 는 그 안에 한 단 들여쓴 블록으로 (#25) */
   function defsRowsHTML(specs) {
     let out = "";
@@ -510,14 +525,14 @@ ${HL_CSS}
         const key = String(s.n) + partSuffix(i);
         parts += `<div class="ss-part" data-part="${key}">
           <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t">${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
-          <ul class="ss-items">${defItemsHTML(p.defs)}</ul>${playBtnHTML(p, key)}
+          <ul class="ss-items">${defItemsHTML(p.defs)}</ul>${playBtnHTML(p, key)}${previewBtnHTML(p, key)}
         </div>`;
       });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
           <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
-          <ul class="ss-items">${defItemsHTML(s.defs)}</ul>${playBtnHTML(s, s.n)}${parts}
+          <ul class="ss-items">${defItemsHTML(s.defs)}</ul>${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}
         </div></div>`;
     });
     return out;
@@ -610,7 +625,9 @@ ${HL_CSS}
     let current = null;
     let activeKey = null;      /* 활성 항목 key — 상위 "1" · 하위 "1a" (문자열) */
     let markerEls = {};        /* key → 마커 요소 */
+    let previewKey = null;     /* 지금 켜져 있는 상태 재현 항목 key — 동시에 하나만 (#27) */
     const warned = {};
+    const pvTold = {};         /* 「듣는 앱 코드가 없다」 콘솔 안내는 항목당 1회 */
 
     function rootEl() {
       const d = appDoc();
@@ -657,6 +674,10 @@ ${HL_CSS}
         return;
       }
       ctx.listEl.innerHTML = defsRowsHTML(specs()) + covBlockHTML(current);
+      if (previewKey != null) { /* 재렌더돼도 켜진 재현 버튼은 켜진 채로 (#27) */
+        const pb = pvBtn(previewKey);
+        if (pb) { pb.setAttribute("aria-pressed", "true"); pb.classList.add("ss-on"); }
+      }
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
       items().forEach((it) => {
@@ -723,6 +744,7 @@ ${HL_CSS}
       if (!sc || sc === current) return;
       const prev = current;
       clearActive();
+      previewOff(); /* 화면이 바뀌면 재현도 끈다 — 앱이 가짜 상태에 갇히지 않게 (#27) */
       current = sc;
       render();
       if (prev && !sc._unmapped && ctx.isDoc && ctx.isDoc()) showNav(sc);
@@ -857,8 +879,59 @@ ${HL_CSS}
       drawArrow();
     }
 
-    /* 패널 상호작용 (위임) — 행 클릭 + play/flow 버튼 */
+    /* ---- 상태 재현 (#27) — 빈 상태·오류처럼 「지금 화면에 없는 상태」를 앱에게 만들어 달라고 요청한다.
+       라이브러리는 앱의 상태 관리를 모른다. 표준 이벤트(screenspec:preview)를 쏘고, 앱이 듣고 싶으면 듣는다.
+       앱은 리스너에서 e.detail.handled = true 로 「내가 처리했다」를 알린다 (preventDefault 와 같은 관용).
+         handled=true  → 버튼이 눌린 상태(aria-pressed)로 남는다. 다시 누르면 on:false
+         handled=false → 아무도 안 들었다 = 이 프로토타입은 그 상태를 못 만든다. 그 사실을 행에 적는다
+       이벤트는 반드시 **앱이 사는 창**(appWin)에서, 그 창의 CustomEvent 로 만든다 —
+       frame 모드의 앱은 액자(iframe) 안에 살고, 그 안에서 instanceof 가 성립해야 한다. */
+    function pvBtn(key) { return ctx.listEl.querySelector('[data-preview="' + key + '"]'); }
+    function firePreview(it, on) {
+      const aw = appWin();
+      const detail = { screen: current ? current.id : null, n: it.label, title: it.spec.title || "", on: on, handled: false };
+      try {
+        const CE = aw.CustomEvent || CustomEvent;
+        aw.dispatchEvent(new CE("screenspec:preview", { detail: detail }));
+      } catch (err) { return false; } /* cross-origin 액자 등 — 조종할 수 없다 */
+      return detail.handled === true;
+    }
+    /* 켜져 있는 재현을 끈다 (다른 항목을 켤 때 · 화면이 바뀔 때). 앱이 가짜 상태에 갇히지 않게 한다 */
+    function previewOff() {
+      if (previewKey == null) return;
+      const it = itemOf(previewKey), btn = pvBtn(previewKey);
+      previewKey = null;
+      if (btn) { btn.setAttribute("aria-pressed", "false"); btn.classList.remove("ss-on"); }
+      if (it) firePreview(it, false);
+    }
+    function previewToggle(btn) {
+      const it = itemOf(String(btn.dataset.preview));
+      if (!it) return;
+      activate(it.key, "panel");
+      const note = btn.nextElementSibling;
+      if (note && note.classList.contains("ss-preview-none")) note.remove();
+      if (previewKey === it.key) { previewOff(); return; } /* 같은 버튼 = 끄기 */
+      previewOff();                                        /* 한 번에 하나만 — 켜기 전에 먼저 끈다 */
+      if (firePreview(it, true)) {
+        previewKey = it.key;
+        btn.setAttribute("aria-pressed", "true");
+        btn.classList.add("ss-on");
+        return;
+      }
+      const tag = h("div", { class: "ss-preview-none" });
+      tag.textContent = "이 프로토타입은 아직 이 상태를 만들지 못합니다 — 정의는 있지만 화면으로 확인할 수 없습니다";
+      btn.insertAdjacentElement("afterend", tag);
+      const id = (current ? current.id : "") + "/" + it.key;
+      if (!pvTold[id]) {
+        pvTold[id] = 1;
+        console.info('[ScreenSpec] preview "' + (it.spec.title || it.label) + '" 를 받는 앱 코드가 없습니다 — screenspec:preview 이벤트를 들어야 재현됩니다');
+      }
+    }
+
+    /* 패널 상호작용 (위임) — 행 클릭 + play/flow 버튼 + 상태 재현 버튼 */
     ctx.listEl.addEventListener("click", (e) => {
+      const pv = e.target.closest("[data-preview]");
+      if (pv) { e.stopPropagation(); previewToggle(pv); return; }
       const btn = e.target.closest("[data-play]");
       if (btn) {
         e.stopPropagation();
@@ -1146,7 +1219,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.17</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.18</div>
         </aside>
       </div>`);
 
@@ -1418,7 +1491,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.17] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.18] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -1449,7 +1522,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.17</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.18</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -1539,7 +1612,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.17] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.18] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

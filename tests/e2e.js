@@ -681,6 +681,138 @@ function check(name, ok, detail) {
     page.off("console", onBMsg);
   }
 
+  /* ============ 상태 재현 (#27): preview 이벤트 ============
+     빈 상태·오류처럼 지금 화면에 없는 상태는 클릭할 요소가 없다 — 라이브러리는 표준 이벤트를 쏘고 앱이 만든다.
+     앱이 detail.handled = true 로 확인응답을 해야 버튼이 켜진다 (아무도 안 들으면 그 사실을 행에 적는다). */
+  console.log("[docs] preview");
+  {
+    const LISTENER = 'window.__pv=[];addEventListener("screenspec:preview",function(e){' +
+      'window.__pv.push(e.detail.n+":"+e.detail.on+":"+e.detail.screen+":"+e.detail.title);' +
+      'if(e.detail.n!=="9")return;' +
+      'document.getElementById("list").hidden=e.detail.on;' +
+      'document.getElementById("empty").hidden=!e.detail.on;' +
+      'e.detail.handled=true;});';
+    const BODY = '<div id="list" data-spec="1">목록</div><div id="empty" hidden>이 기간에 방문이 없습니다</div>';
+    const CFG = 'window.SCREENSPEC={screen:{id:"S-PV",name:"목록"},specs:[' +
+      '{n:1,target:"1",title:"목록 영역"},' +
+      '{n:9,target:"9",anno:"state",title:"목록 공백 상태",preview:{label:"빈 상태 보기"},defs:[{t:"표시문구 : 이 기간에 방문이 없습니다"}]}]};';
+
+    /* 1) 리스너가 있는 앱 — 실제로 화면이 바뀌고 버튼이 눌린 상태로 남는다 */
+    await page.goto("about:blank");
+    await page.setContent(BODY + "<script>" + CFG + LISTENER + "<\/script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("preview: 버튼 라벨 ◑ + ss-play 액센트 상속", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      return !!b && b.textContent.trim() === "◑ 빈 상태 보기" &&
+        b.classList.contains("ss-play") && b.classList.contains("ss-preview") && b.getAttribute("aria-pressed") === "false";
+    }));
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(300);
+    check("preview: 앱이 실제로 상태를 만든다 + 버튼 눌린 상태", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      return document.getElementById("list").hidden === true && document.getElementById("empty").hidden === false &&
+        b.getAttribute("aria-pressed") === "true" && b.classList.contains("ss-on") &&
+        window.__pv.join("|") === "9:true:S-PV:목록 공백 상태";
+    }));
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(300);
+    check("preview: 다시 누르면 on:false → 원래 화면 복귀", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      return document.getElementById("list").hidden === false && document.getElementById("empty").hidden === true &&
+        b.getAttribute("aria-pressed") === "false" && !b.classList.contains("ss-on") &&
+        window.__pv.join("|").endsWith("9:false:S-PV:목록 공백 상태");
+    }));
+
+    /* 2) 아무도 안 듣는 앱 — 죽은 버튼이 아니라 「앱이 아직 못 만든다」로 읽혀야 한다 */
+    const infos = [];
+    const onInfo = (msg) => { if (msg.type() === "info") infos.push(msg.text()); };
+    page.on("console", onInfo);
+    await page.goto("about:blank");
+    await page.setContent(BODY + "<script>" + CFG + "<\/script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(300);
+    check("preview: 듣는 앱이 없으면 행에 안내 + 버튼은 안 켜짐", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="9"]');
+      const n = document.querySelector(".ss-preview-none");
+      return !!n && n.textContent.includes("아직 이 상태를 만들지 못합니다") &&
+        b.getAttribute("aria-pressed") === "false" && !b.classList.contains("ss-on") &&
+        document.getElementById("list").hidden === false;
+    }));
+    check("preview: 듣는 앱이 없으면 콘솔로도 1회 안내", infos.filter((t) => t.includes("screenspec:preview 이벤트를 들어야")).length === 1,
+      infos.join(" | ").slice(0, 200));
+    page.off("console", onInfo);
+
+    /* 3) 한 번에 하나만 — 켜기 전에 켜져 있던 것을 끈다 (상태 두 개가 겹쳐 뜨지 않게) */
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">목록</div><script>window.SCREENSPEC={screen:{id:"S-PV2",name:"목록"},specs:[' +
+      '{n:1,target:"1",title:"목록 영역"},' +
+      '{n:9,target:"9",anno:"state",title:"공백",preview:{}},' +
+      '{n:10,target:"10",anno:"state",title:"오류",preview:{label:"오류 보기"}}]};' +
+      'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on);e.detail.handled=true;});<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("preview: label 생략 시 「{title} 보기」", await page.evaluate(() =>
+      document.querySelector('[data-preview="9"]').textContent.trim() === "◑ 공백 보기"));
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-preview="10"]');
+    await page.waitForTimeout(300);
+    check("preview: 두 번째를 켜면 첫 번째가 먼저 꺼진다 (동시에 하나만)", await page.evaluate(() =>
+      window.__pv.join("|") === "9:true|9:false|10:true" &&
+      document.querySelector('[data-preview="9"]').getAttribute("aria-pressed") === "false" &&
+      document.querySelector('[data-preview="10"]').getAttribute("aria-pressed") === "true"));
+
+    /* 4) 화면이 바뀌면 꺼진다 — 앱이 가짜 상태에 갇힌 채 다른 화면으로 넘어가지 않게 */
+    await page.goto("about:blank");
+    await page.setContent('<div data-ss-screen="S-1"><div data-spec="1">A</div></div>' +
+      '<div data-ss-screen="S-2" style="display:none"><div data-spec="1">B</div></div>' +
+      '<script>window.SCREENSPEC={screens:[' +
+      '{id:"S-1",name:"하나",root:"[data-ss-screen=\'S-1\']",specs:[{n:1,target:"1",title:"목록"},{n:9,target:"9",anno:"state",title:"공백",preview:{}}]},' +
+      '{id:"S-2",name:"둘",root:"[data-ss-screen=\'S-2\']",specs:[{n:1,target:"1",title:"본문"}]}]};' +
+      'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.screen+"/"+e.detail.n+":"+e.detail.on);e.detail.handled=true;});<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click('[data-preview="9"]');
+    await page.waitForTimeout(200);
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-2"));
+    await page.waitForTimeout(400);
+    check("preview: 화면이 바뀌면 앱에 on:false 가 간다", await page.evaluate(() =>
+      window.__pv.join("|") === "S-1/9:true|S-1/9:false" && window.ScreenSpec.current() === "S-2"));
+
+    /* 5) 하위 요소(part)도 같은 파이프라인 — 라벨은 "1a" */
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">목록<span data-spec="1a">3</span></div>' +
+      '<script>window.SCREENSPEC={screen:{id:"S-PV3",name:"목록"},specs:[{n:1,target:"1",title:"목록 영역",parts:[' +
+      '{title:"항목 수",target:"1a",anno:"state",preview:{label:"0건 보기"}}]}]};' +
+      'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on+":"+e.detail.title);' +
+      'if(e.detail.n==="1a"){document.querySelector("[data-spec=\'1a\']").textContent=e.detail.on?"0":"3";e.detail.handled=true;}});<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("preview: 하위 요소 버튼이 하위 블록 안에 붙는다 (key 1a)", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="1a"]');
+      return !!b && b.closest(".ss-part").dataset.part === "1a" && !document.querySelector('[data-preview="1"]');
+    }));
+    await page.click('[data-preview="1a"]');
+    await page.waitForTimeout(300);
+    check("preview: 하위 요소도 실제로 동작 (detail.n = \"1a\")", await page.evaluate(() =>
+      window.__pv.join("|") === "1a:true:항목 수" &&
+      document.querySelector('[data-spec="1a"]').textContent === "0" &&
+      document.querySelector('[data-preview="1a"]').getAttribute("aria-pressed") === "true"));
+  }
+
   /* ============ 설정 없이 스크립트만 넣은 경우 ============
      남의 페이지를 감싸면 "망가졌다"로 읽힌다 — DOM은 그대로 두고 안내만. */
   console.log("[docs] 설정 없음 상태");

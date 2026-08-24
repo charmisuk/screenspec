@@ -92,7 +92,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.17.1/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.18.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -171,6 +171,7 @@ window.SCREENSPEC = {
 
 - `covers`에는 **실제로 그 축의 `anno:"state"` 정의를 쓴 축만** 적는다. 적지 않고 `covers`에만 넣는 것은 커버리지를 거짓말하게 만든다.
 - 그 화면에 해당 축이 없으면 비우지 말고 `skip`에 **사유와 함께** 적는다. 사유가 비면 라이브러리가 미정의로 되돌리고 경고한다.
+- 적은 상태를 프로토타입이 만들 수 있으면 `preview` + 리스너로 **실물까지 보여준다** (아래 3-F).
 - 목차 배지 `⚠ … 미정의`와 패널의 점선 카드가 **하나도 남지 않을 때까지** 채운다 — 다 채우면 저절로 사라진다. 사용자가 `checklist`를 주지 않았다면 이 필드들은 쓰지 않는다.
 
 ### 3-E. 정의서 끄기 — 프로토타입만 보여줄 자리
@@ -186,6 +187,34 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 */ ] };
 - 반대로 설정은 그대로 두고 그 탭에서만 끄고 싶으면 `?screenspec=0`.
 - **정의를 지워 달라는 요청과 구분한다.** off 는 화면에서 감출 뿐 파일에서 빼지 않는다 — 전달본 파일 안에 정의가 그대로 들어가고, 받은 사람이 파일을 열면 읽힌다.
   사용자가 "외부에 절대 나가면 안 된다"고 하면 off 로 처리하지 말고 **그 사실을 먼저 알린 뒤** 정의를 뺀 사본을 따로 만든다.
+
+### 3-F. 상태 재현 — 적은 상태를 화면에서 보여주기
+
+`anno:"state"` 로 적은 빈 상태·로딩·오류는 **지금 화면에 렌더되지 않는** 화면이다. 읽는 사람은 정의만 보고 실물은 못 본다.
+그 상태를 **프로토타입이 만들 수 있으면** `preview` 를 주고, **프로토타입 쪽에 리스너도 같이 심는다.** 둘은 한 세트다 — 리스너 없이 `preview` 만 주면 버튼이 죽는다.
+
+```js
+// 1) 정의 — 상태 항목에 preview 를 붙인다 (label 생략 시 「{title} 보기」)
+{ n:9, target:"9", anno:"state", title:"목록 공백 상태", preview:{ label:"빈 상태 보기" },
+  defs:[{ t:"표시문구 : 이 기간에 방문이 없습니다" }] }
+```
+
+```html
+<!-- 2) 프로토타입에 리스너 — 이 최소 스니펫을 그대로 심는다 -->
+<script>
+addEventListener("screenspec:preview", (e) => {
+  if (e.detail.n !== "9") return;                        // 항목 라벨(문자열). 하위 요소면 "1a"
+  document.getElementById("list").hidden = e.detail.on;  // 원래 화면 감추기
+  document.getElementById("empty").hidden = !e.detail.on; // 빈 상태 보이기
+  e.detail.handled = true;                               // 「내가 처리했다」 — 이 줄이 없으면 버튼이 켜지지 않는다
+});
+</script>
+```
+
+- 리액트 등 프레임워크면 `useEffect` 로 등록/해제하고 `setState(e.detail.on)` + `e.detail.handled = true` (계약은 동일).
+- **만들 수 없는 상태에는 `preview` 를 주지 않는다.** 정의만 남긴다 — 죽은 버튼은 「이 도구가 고장났다」로 읽힌다.
+- 라이브러리가 알아서 하는 것: 한 번에 하나만 켜기, 화면이 바뀌면 끄기, 아무도 안 들으면 그 사실을 행에 표시. 여기에 자체 구현을 더하지 않는다.
+- 상세 계약(`detail` 필드 전체)은 [docs/config.md 상태 재현](https://github.com/charmisuk/screenspec/blob/main/docs/config.md#상태-재현-preview).
 
 ### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 
@@ -254,6 +283,7 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 */ ] };
 - [ ] `data-spec` 없는 specs 항목 없음 (마커가 숨겨지면 이것)
 - [ ] 각 화면에 빈 상태·로딩·오류를 적었는가 (해당 없으면 «없음» 을 명시했는가) — 보이는 것에만 마커를 달게 되므로 안 보이는 상태는 의식적으로 묻는다 (`checklist` 를 쓰면 목차의 ⚠ 가 0이 될 때까지)
 - [ ] 헤더의 화면 ID 칩 클릭 → 화면 목록 트리가 path 계층대로 열림 (그룹 행·뎁스 확인)
+- [ ] `preview` 를 준 항목마다 프로토타입에 `screenspec:preview` 리스너를 심었는가 (◑ 버튼을 눌러 실제로 상태가 바뀌는지 — 「만들지 못합니다」가 뜨면 리스너가 없는 것)
 - [ ] arrow 항목 클릭 시 지시선이 대상 요소를 실제로 가리킴 (큰 영역에 arrow를 쓰지 않았는지)
 - [ ] accent를 지정했다면 마커·하이라이트·버튼 색이 함께 바뀌었는지
 - [ ] 전달할 결과물이면 `.inline.html`을 뽑았는지 (명령이 "검증 통과"를 출력했는지)

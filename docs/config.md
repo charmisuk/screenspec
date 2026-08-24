@@ -46,6 +46,7 @@ type Spec = {
   defs?:    Def[],      // 기능 설명 줄
   parts?:   Part[],     // 이 영역 안의 이름 있는 하위 요소. 라벨(1a·1b)은 라이브러리가 매긴다
   play?:    { selector: string, label: string },  // anno action·popup·flow: 재생 버튼
+  preview?: { label?: string },  // 상태 재현 버튼. 누르면 앱에 screenspec:preview 이벤트를 쏜다
   flowTo?:  string,     // anno flow: 이동할 화면 id
   arrowTo?: string,     // anno arrow: 관계선을 그을 상대 요소 CSS 셀렉터
 }
@@ -57,6 +58,7 @@ type Part = {           // 라벨은 적지 않는다 — parts[0] → "1a", par
   optional?: boolean,   // 조건부 — 팝업·패널 안처럼 닫혀 있을 때는 없는 요소
   defs?:    Def[],
   play?:    { selector: string, label: string },
+  preview?: { label?: string },  // Spec 과 동일 — 하위 요소도 상태 재현 버튼을 갖는다
   flowTo?:  string,
   arrowTo?: string,
 }
@@ -174,6 +176,7 @@ window.SCREENSPEC = {
 | `defs` | Def[] | | 기능 설명. 항목당 1~4줄 권장 |
 | `parts` | Part[] | | 영역 안의 이름 있는 하위 요소. 라벨 `1a`·`1b`는 라이브러리가 자동으로 매긴다(설정에 적지 않는다). 항목: `title`·`target`(선택)·`anno`·`defs`·`play`·`flowTo`·`arrowTo`. 아래 [Part](#part) 참조 |
 | `play` | `{selector, label}` | anno에 따라 | `action`·`popup`은 필수, `flow`는 선택. `selector`는 실제로 클릭할 요소, `label`은 버튼 문구 |
+| `preview` | `{label?}` | | 지금 화면에 없는 상태(빈 상태·오류…)를 앱에 재현시키는 ◑ 버튼. 누르면 `screenspec:preview` 이벤트가 앱 창으로 날아간다. `label` 생략 시 「{title} 보기」. **앱에 리스너가 있어야 동작한다** — 아래 [상태 재현](#상태-재현-preview) 참조 |
 | `flowTo` | string | `flow`면 ✔ | 이동할 화면 `id`. 없는 id면 콘솔 경고 |
 | `arrowTo` | string | | `arrow`에서만. 지정하면 대상 요소에서 이 요소로 관계선을 긋는다 |
 
@@ -190,6 +193,69 @@ window.SCREENSPEC = {
 | `popup` | 팝업 | 클릭 시 모달·레이어·바텀시트 | ▶ 버튼 → 실제 팝업 열림 |
 | `flow` | 이동 | 클릭 시 다른 화면으로 | ▶ 버튼 → 실제 화면 이동 + 정의서 동시 전환 |
 
+### 상태 재현 (preview)
+
+`anno:"state"` 로 적은 빈 상태·로딩·오류는 **지금 화면에 없는 화면**이다. 정의는 읽히지만 실물은 못 본다.
+`play` 는 화면에 있는 요소를 실제로 클릭하는 장치라 여기엔 쓸 수 없다 — 누를 요소 자체가 없기 때문이다.
+
+`preview` 는 그 자리에 ◑ 버튼을 놓고, 누르면 **앱에 표준 이벤트를 쏜다.** 상태를 만드는 것은 앱의 몫이다
+(라이브러리는 앱의 상태 관리 방식을 알지 않는다 — React·Vue·바닐라 무관, 설정이 JSON 으로 직렬화돼도 그대로 동작한다).
+
+```js
+{ n:9, target:"9", anno:"state", title:"목록 공백 상태",
+  preview: { label:"빈 상태 보기" },        // label 생략 시 「목록 공백 상태 보기」
+  defs:[{ t:"표시문구 : 이 기간에 방문이 없습니다" }] }
+```
+
+**이벤트 계약**
+
+| | |
+|---|---|
+| 이름 | `screenspec:preview` |
+| 쏘는 곳 | **앱이 사는 창** — overlay·wrap 은 `window`, frame 은 액자(iframe) 안의 `window` |
+| `detail.screen` | 현재 화면 `id` |
+| `detail.n` | 항목 라벨. 상위는 `"9"`, 하위(part)는 `"1a"` — **문자열** |
+| `detail.title` | 그 항목의 `title` |
+| `detail.on` | `true` = 켜기, `false` = 끄기 |
+| `detail.handled` | **앱이 채운다.** 처리했으면 리스너 안에서 `true` 로 (아래) |
+
+**앱 쪽 리스너 — 이걸 심어야 동작한다** (바닐라)
+
+```js
+addEventListener("screenspec:preview", (e) => {
+  if (e.detail.n !== "9") return;                       // 내가 아는 항목만
+  document.getElementById("list").hidden = e.detail.on;
+  document.getElementById("empty").hidden = !e.detail.on;
+  e.detail.handled = true;                              // 「내가 처리했다」 — preventDefault 와 같은 관용
+});
+```
+
+React (`useState`) — 프레임워크 앱도 같은 계약이다.
+
+```jsx
+const [forceEmpty, setForceEmpty] = useState(false);
+useEffect(() => {
+  const onPreview = (e) => {
+    if (e.detail.n !== "9") return;
+    setForceEmpty(e.detail.on);
+    e.detail.handled = true;      // 리스너 안에서 동기적으로 (setState 는 나중에 반영돼도 무방)
+  };
+  addEventListener("screenspec:preview", onPreview);
+  return () => removeEventListener("screenspec:preview", onPreview);
+}, []);
+// 렌더: (forceEmpty || rows.length === 0) ? <Empty/> : <List rows={rows}/>
+```
+
+**`handled` 확인응답이 이 설계의 핵심이다.** 이벤트를 쏜 직후 라이브러리가 `detail.handled` 를 읽는다.
+
+- `true` — 버튼이 눌린 상태(`aria-pressed="true"`)로 남는다. 다시 누르면 `on:false` 를 쏘고 원래대로.
+- `false` (아무도 듣지 않음) — 버튼은 켜지지 않고, 그 행에 「이 프로토타입은 아직 이 상태를 만들지 못합니다 — 정의는 있지만 화면으로 확인할 수 없습니다」가 붙는다.
+  콘솔에도 `console.info` 로 1회 안내한다. **죽은 버튼이 아니라 「앱이 아직 못 만든다」로 읽히게 하는 것**이 목적이다.
+
+- **한 번에 하나만 켜진다.** 다른 항목을 켜면 켜져 있던 항목에 먼저 `on:false` 가 간다 (상태 두 개가 겹쳐 뜨지 않게).
+- **화면이 바뀌면 자동으로 꺼진다** — 켜져 있던 항목에 `on:false` 가 간다. 앱이 가짜 상태에 갇힌 채 다른 화면으로 넘어가지 않는다.
+- 리스너를 심을 수 없는 상태(그 프로토타입이 못 만드는 상태)에는 `preview` 를 주지 않는다. 정의만 남기면 된다.
+
 ### Part
 
 영역 안의 **이름 있는 하위 요소** (항목 수·더보기 버튼·팝업 등). 「그 줄의 조건·분기」인 `Def.subs`와 성격이 다르다.
@@ -203,6 +269,7 @@ window.SCREENSPEC = {
 | `optional` | boolean | | Spec 과 동일. **팝업·패널 안의 하위 요소에는 사실상 필수** — 닫혀 있는 동안 「못 찾은 정의」 경고가 나기 때문이다 (닫힌 것이 정상이므로) |
 | `defs` | Def[] | | Spec 과 동일 (`subs`·`why` 포함) |
 | `play` | `{selector, label}` | anno에 따라 | Spec 과 동일. ▶ 버튼이 하위 블록 안에 붙는다 |
+| `preview` | `{label?}` | | Spec 과 동일. ◑ 버튼이 하위 블록 안에 붙고, 이벤트의 `n` 은 하위 라벨(`"1a"`)로 간다 |
 | `flowTo` | string | `flow`면 ✔ | Spec 과 동일 |
 | `arrowTo` | string | | Spec 과 동일 |
 
@@ -288,3 +355,4 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | checklist 는 문자열 배열이어야 합니다 — 무시 | `checklist`가 빈 배열이거나 문자열이 아닌 값을 포함 |
 | covers "X" 는 checklist 에 없음 | 화면의 `covers`에 `checklist`에 없는 축 이름 (오타·용어 불일치) |
 | skip "X" 에 사유가 없습니다 — 미정의로 봅니다 | `skip`의 값이 빈 문자열. 비운 이유를 적어야 비운 것으로 친다 |
+| preview "X" 를 받는 앱 코드가 없습니다 | ◑ 상태 재현 버튼을 눌렀는데 `screenspec:preview` 를 듣는 리스너가 없다(= `detail.handled` 가 그대로). `console.info` 이며 항목당 1회. 패널 행에도 같은 사실이 표시된다 |
