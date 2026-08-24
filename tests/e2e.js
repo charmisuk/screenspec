@@ -323,6 +323,37 @@ function check(name, ok, detail) {
     check("빠른 시작: 동작 재생이 실제로 동작", await page.evaluate(() => document.getElementById("save").textContent === "저장됨"));
   }
 
+  /* ============ 누락 경고: 어느 정의가 빠졌는지 + state 제외 (#20) ============ */
+  console.log("[docs] 누락 정의 경고");
+  {
+    const warns = [];
+    const onMsg = (msg) => { if (msg.type() === "warning") warns.push(msg.text()); };
+    page.on("console", onMsg);
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-X",name:"x"},specs:[' +
+      '{n:1,target:"1",title:"있음"},{n:2,target:"2",title:"없음"},{n:3,target:"3",title:"조건부",anno:"state"},{n:4,target:"4",title:"없음2"}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    const w = warns.filter((x) => x.includes("못 찾은 정의"));
+    check("누락 경고 1회 + #n target 나열 + state 제외", w.length === 1 && w[0].includes("2건") &&
+      w[0].includes('#2 target="2"') && w[0].includes('#4 target="4"') && !w[0].includes("#3") && w[0].includes("조건부(state) 1건"), w.join(" | ").slice(0, 200));
+    page.off("console", onMsg);
+    const warns2 = [];
+    const onMsg2 = (msg) => { if (msg.type() === "warning") warns2.push(msg.text()); };
+    page.on("console", onMsg2);
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-Y",name:"y"},specs:[' +
+      '{n:1,target:"1",title:"있음"},{n:2,target:"2",title:"조건부",anno:"state"}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("state 만 누락이면 경고 없음", !warns2.some((x) => x.includes("못 찾은 정의")), warns2.join(" | ").slice(0, 200));
+    page.off("console", onMsg2);
+  }
+
   /* ============ 설정 없이 스크립트만 넣은 경우 ============
      남의 페이지를 감싸면 "망가졌다"로 읽힌다 — DOM은 그대로 두고 안내만. */
   console.log("[docs] 설정 없음 상태");

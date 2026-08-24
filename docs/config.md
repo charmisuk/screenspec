@@ -154,7 +154,7 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | 메시지 | 원인 |
 |---|---|
 | 설정이 없어 화면정의서를 만들 수 없습니다 | `window.SCREENSPEC` 미설정 |
-| data-spec 요소를 못 찾은 정의 N건 | `target`에 해당하는 `data-spec` 속성 누락 |
+| data-spec 요소를 못 찾은 정의 N건 — #n target="…" | `target`에 해당하는 `data-spec` 속성 누락. 어느 정의인지 `#n target`으로 나열. `anno:"state"`(조건부 표시)는 없는 게 정상일 수 있어 건수에서 제외하고 "조건부(state) M건은 제외"로 따로 표기 |
 | 화면 ID 중복 | 같은 `id`가 둘 이상 (뒤엣것은 목차·이동에서 무시) |
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
 | accent "X" 인식 불가 | 프리셋명도 hex도 아님 |

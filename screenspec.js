@@ -460,9 +460,9 @@
       ctx.listEl.innerHTML = defsRowsHTML(specs());
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
-      let missing = 0;
+      const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
       specs().forEach((s) => {
-        if (!targetOf(s)) missing++;
+        if (!targetOf(s)) (s.anno === "state" ? cond : missing).push(s);
         const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + s.n + ": " + s.title });
         el.textContent = s.n;
         el.onclick = (e) => { e.stopPropagation(); activate(s.n, "marker"); };
@@ -471,9 +471,12 @@
         ctx.markerLayer.appendChild(el);
         markerEls[s.n] = el;
       });
-      if (missing && !warned[current.id]) {
+      if (missing.length && !warned[current.id]) {
         warned[current.id] = true;
-        console.warn("[ScreenSpec] " + current.id + ": data-spec 요소를 못 찾은 정의 " + missing + "건 — 마커가 숨겨집니다. 해당 화면에 data-spec 속성이 있는지 확인하세요.");
+        console.warn("[ScreenSpec] " + current.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
+          missing.map((s) => "#" + s.n + " target=\"" + s.target + "\"").join(", ") +
+          " (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)" +
+          (cond.length ? " · 조건부(state) " + cond.length + "건은 제외" : ""));
       }
       ctx.afterRender();
     }
