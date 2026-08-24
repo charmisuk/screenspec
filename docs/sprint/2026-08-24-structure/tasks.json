@@ -80,18 +80,19 @@
       ],
       "type": "feat",
       "title": "checklist — 화면별 상태 커버리지(covers/skip), 목차·패널에 '⚠ 미정의' 표시",
-      "status": "todo",
+      "status": "done",
       "plan": {
-        "done": false
+        "done": true,
+        "note": "프롬프트에 명세(checklist/covers/skip, 사유 필수, 자동 추론 없음, 목차 배지·패널 블록)"
       },
       "dev": {
-        "done": false,
+        "done": true,
         "model": "opus",
-        "summary": ""
+        "summary": "opus 105k. CHECKLIST 검증·coverage() 캐시·covBadge·covBlockHTML. 이탈: 표기 세부 2건(타당)"
       },
       "qa": {
-        "done": false,
-        "evidence": ""
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 101 / FAIL 0 (+9). smoke 5/5"
       },
       "commit": {
         "done": false,

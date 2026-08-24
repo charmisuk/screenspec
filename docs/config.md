@@ -13,6 +13,7 @@ window.SCREENSPEC = {
   mode?:    "wrap" | "overlay" | "frame",  // 생략 = 자동 판별 (React·Next 감지 시 overlay). frame 은 명시 전용
   accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple", "#7C3AED" 또는 "var(--brand)". 기본 blue
   devices?: { mobile?: Device, pc?: Device },  // wrap 전용. 기기 프리셋 덮어쓰기
+  checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
 
   // 화면이 하나면 screen + specs
   screen?:  Screen,               // specs 없이 메타만
@@ -29,6 +30,8 @@ type Screen = {
   specs?:  Spec[],      // 이 화면의 기능 설명
   root?:   string,      // 이 화면의 컨테이너 CSS 셀렉터 (두 모드 공통 · 표시 여부로 감지)
   route?:  string,      // overlay: 라우트 경로. "/members", "/members/[id]"
+  covers?: string[],    // checklist 중 이 화면이 실제로 적은 축
+  skip?:   { [축: string]: string },  // 의도적으로 비운 축 = 사유. 사유가 없으면 미정의로 본다
 }
 
 type Spec = {
@@ -65,6 +68,7 @@ type Device = { w: number, h: number }
 | `accent` | 프리셋명 \| hex \| `var(--x)` | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. `"var(--color-accent)"`처럼 CSS 변수를 가리키면 제품 토큰을 복사하지 않고 따라간다(색 하드코딩 lint·다크 모드 대응). 인식 불가 값이면 콘솔 경고 후 기본값 |
 | `baseViewport` | `"mobile"` \| `"pc"` | `"mobile"` | wrap·frame 의 시작 폭 = 이 문서가 서술하는 기준 폭. PC 앞에서 쓰는 어드민은 `"pc"`, 앱은 기본값. 반응형 차이는 화면을 늘리지 말고 같은 화면의 `anno:"state"` 항목으로 적는다 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap·frame 전용. 기기 프리셋 크기 덮어쓰기 |
+| `checklist` | string[] | — | 프로젝트가 정한 상태 축. 있으면 화면마다 `covers`/`skip` 로 커버리지를 표시한다. 없거나 문자열 배열이 아니면 기능이 꺼지고 콘솔 경고. 아래 [상태 커버리지](#상태-커버리지) 참조 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
 | `specs` | `Spec[]` | `[]` | 화면이 하나일 때의 기능 설명 |
 | `screens` | `Screen[]` | — | 화면이 여럿일 때. 있으면 `screen`·`specs`는 무시된다 |
@@ -99,7 +103,32 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 | `specs` | Spec[] | | 비어 있으면 목차에 "미정의"로 표시되고(커버리지 갭 가시화), 패널에는 다음 할 일 안내 + 현재 화면의 `data-spec` 요소 수가 뜬다 |
 | `root` | string | | 컨테이너 셀렉터. 두 모드 공통 — 요소가 보이면 그 화면으로 자동 전환(패널·다이얼로그처럼 라우트 없는 화면). overlay에서는 route 화면 위에 얹힌 root 화면이 우선. 두 모드 모두 `data-spec` 조회 범위를 이 컨테이너 안으로 좁힌다 — 화면마다 번호를 1부터 다시 쓸 수 있고, 공통 골격의 마커와 섞이지 않는다 |
 | `viewports` | string[] | | 이 화면이 존재하는 폭. `["pc"]` 처럼 하나만 적으면 목차에 「PC 전용」 배지 (예: 앱 진입에서는 없고 PC 웹에서만 뜨는 로그인). 둘 다면 생략 |
+| `covers` | string[] | | 최상위 `checklist` 중 이 화면이 **실제로 적은** 축. checklist 에 없는 값이면 콘솔 경고 |
+| `skip` | `{축: 사유}` | | 의도적으로 비운 축과 그 사유. 사유가 빈 문자열이면 비운 것으로 치지 않고 **미정의로 본다**(콘솔 경고) |
 | `route` | string | | overlay에서 이 화면의 라우트. 동적 세그먼트는 `[id]`. basePath·해시 라우터는 자동 대응. 구체 경로 우선(동적 세그먼트가 적은 라우트가 먼저 매칭) — 선언 순서 무관 |
+
+### 상태 커버리지
+
+빈 상태·로딩·오류처럼 **보이지 않는 상태**는 화면을 보며 적을 때 가장 먼저 빠진다.
+프로젝트가 상태 축 목록(`checklist`)을 한 번 정해 두면, 화면마다 아직 안 적은 축을 목차 배지와 패널 하단에 표시한다.
+
+```js
+window.SCREENSPEC = {
+  checklist: ["빈 상태", "로딩", "오류", "권한 없음"],   // 프로젝트가 정한다. 없으면 기능 꺼짐
+  screens: [
+    { id: "S-02", name: "목록", specs: [ /* ... */ ],
+      covers: ["빈 상태", "오류"],                        // 이 화면이 다룬 축
+      skip:   { "권한 없음": "이 화면은 권한 분기가 없음" }, // 의도적으로 비운 것 (사유 필수)
+    },
+  ],
+}
+```
+
+- 미정의 = `checklist` − `covers` − `skip`의 키. 위 예에서는 「로딩」이 남아 목차에 `⚠ 로딩 미정의` 배지가 붙는다.
+- `specs`에서 자동으로 추론하지 않는다. `anno:"state"` 항목이 어느 축인지는 기계가 알 수 없고, 선언이 더 정확하다.
+- `skip`에 **사유가 필수**인 이유: 몰라서 빠뜨린 것과 알고 비운 것을 섞지 않기 위해서다. 사유가 비면 미정의로 되돌리고 경고한다.
+- 미정의가 0인 화면에는 배지가 붙지 않고, 패널에는 `상태 커버리지 — 전부 다룸 (N개 축)`만 뜬다.
+- `checklist`가 없으면 배지도 패널 블록도 만들지 않는다 (기존 화면정의서와 완전히 동일).
 
 ## Spec
 
@@ -207,3 +236,6 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | 화면 ID 중복 | 같은 `id`가 둘 이상 (뒤엣것은 목차·이동에서 무시) |
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
 | accent "X" 인식 불가 | 프리셋명·hex·`var(--x)` 어느 것도 아님 |
+| checklist 는 문자열 배열이어야 합니다 — 무시 | `checklist`가 빈 배열이거나 문자열이 아닌 값을 포함 |
+| covers "X" 는 checklist 에 없음 | 화면의 `covers`에 `checklist`에 없는 축 이름 (오타·용어 불일치) |
+| skip "X" 에 사유가 없습니다 — 미정의로 봅니다 | `skip`의 값이 빈 문자열. 비운 이유를 적어야 비운 것으로 친다 |

@@ -123,6 +123,63 @@
   /* v0.14 의 panel:"left" 는 폐기 — 겹침의 정식 해법은 mode:"frame" */
   if (RAW.panel) console.warn("[ScreenSpec] panel 설정은 v0.15 에서 폐기 — 설명 패널은 오른쪽 고정. 앱의 우측 서랍과 겹치면 mode:\"frame\" 을 쓰세요");
 
+  /* ============ 상태 커버리지 (#26) ============
+     프로젝트가 정한 상태 축(checklist)을 화면마다 covers/skip 으로 대조한다.
+     specs 에서 자동 추론하지 않는다 — anno:"state" 가 어느 축인지는 기계가 알 수 없고,
+     "알고 비운 것"과 "몰라서 빠뜨린 것"은 선언으로만 갈린다. checklist 가 없으면 기능 자체가 꺼진다. */
+  const CHECKLIST = (function () {
+    const c = RAW.checklist;
+    if (c == null) return null;
+    if (!Array.isArray(c) || !c.length || !c.every((v) => typeof v === "string" && v.trim())) {
+      console.warn("[ScreenSpec] checklist 는 문자열 배열이어야 합니다 — 무시");
+      return null;
+    }
+    return c.map((v) => v.trim());
+  })();
+  const COV_CACHE = new WeakMap(); /* 화면당 1회만 계산 — 렌더마다 같은 경고가 쌓이지 않게 */
+  /* → { done:[축], skipped:[{axis,reason}], missing:[축] } · checklist 가 없으면 null */
+  function coverage(s) {
+    if (!CHECKLIST || !s || s._unmapped) return null;
+    if (COV_CACHE.has(s)) return COV_CACHE.get(s);
+    const covers = (Array.isArray(s.covers) ? s.covers : []).filter((v) => typeof v === "string").map((v) => v.trim());
+    covers.forEach((v) => {
+      if (!CHECKLIST.includes(v)) console.warn("[ScreenSpec] " + s.id + ": covers \"" + v + "\" 는 checklist 에 없음");
+    });
+    const skipped = [];
+    const sk = (s.skip && typeof s.skip === "object") ? s.skip : {};
+    Object.keys(sk).forEach((k) => {
+      const reason = typeof sk[k] === "string" ? sk[k].trim() : "";
+      /* 사유 없는 skip 은 비운 게 아니라 빠뜨린 것 — 미정의로 되돌린다 */
+      if (!reason) { console.warn("[ScreenSpec] " + s.id + ": skip \"" + k + "\" 에 사유가 없습니다 — 미정의로 봅니다"); return; }
+      if (CHECKLIST.includes(k)) skipped.push({ axis: k, reason: reason });
+    });
+    const r = {
+      done: CHECKLIST.filter((ax) => covers.includes(ax)),
+      skipped: skipped,
+      missing: CHECKLIST.filter((ax) => !covers.includes(ax) && !skipped.some((z) => z.axis === ax))
+    };
+    COV_CACHE.set(s, r);
+    return r;
+  }
+  /* 목차 배지 — 미정의 축이 있을 때만. 0이면 조용히 (다 채운 화면에 잔소리하지 않는다) */
+  function covBadge(s) {
+    const c = coverage(s);
+    if (!c || !c.missing.length) return "";
+    const t = c.missing.join(" · ") + " 미정의";
+    return '<span class="ss-toc-undef ss-toc-cov" title="' + esc("상태 커버리지 — " + t) + '">⚠ ' + esc(t) + "</span>";
+  }
+  /* 패널 하단 블록 — 다룸 / 비움(사유) / ⚠ 미정의. 비어 있는 묶음은 줄 자체를 내지 않는다 */
+  function covBlockHTML(s) {
+    const c = coverage(s);
+    if (!c) return "";
+    const head = c.missing.length ? "상태 커버리지" : "상태 커버리지 — 전부 다룸 (" + CHECKLIST.length + "개 축)";
+    let out = '<div class="ss-cov"><div class="ss-cov-h">' + esc(head) + "</div>";
+    if (c.done.length) out += '<div class="ss-cov-l">다룸: ' + esc(c.done.join(" · ")) + "</div>";
+    if (c.skipped.length) out += '<div class="ss-cov-l">비움: ' + esc(c.skipped.map((z) => z.axis + "(" + z.reason + ")").join(" · ")) + "</div>";
+    if (c.missing.length) out += '<div class="ss-cov-l ss-cov-miss">⚠ 미정의: ' + esc(c.missing.join(" · ")) + "</div>";
+    return out + "</div>";
+  }
+
   /* 사용자 텍스트는 전부 이걸 거쳐 innerHTML에 들어간다 */
   function esc(x) {
     return String(x == null ? "" : x)
@@ -187,6 +244,10 @@
   .ss-empty{padding:24px 18px;font-size:12.5px;color:var(--ss-ink3);line-height:1.7}
   .ss-empty code{font-family:var(--ss-mono);font-size:11.5px;background:#F1F1F0;padding:1px 5px;border-radius:4px}
   .ss-empty b{color:var(--ss-ink2)}
+  /* 상태 커버리지 (#26) — 정의 목록 맨 아래. 액센트는 쓰지 않는다(경고가 아니라 잔여 작업 표시) */
+  .ss-cov{border-top:1px solid var(--ss-line);padding:14px 18px;font-size:12px;color:var(--ss-ink3);line-height:1.75}
+  .ss-cov-h{font-weight:700;color:var(--ss-ink2);margin-bottom:2px}
+  .ss-cov-miss{color:var(--ss-ink2);font-weight:700}
   @media(max-width:1000px){
     body.ss-mode-doc .ss-docmode{position:static;display:block;padding-top:50px}
     .ss-doc-body{display:block}.ss-stage{overflow:visible}
@@ -328,6 +389,7 @@ ${HL_CSS}
   .ss-toc-idr{font-family:var(--ss-mono);font-size:10.5px;font-weight:700;color:var(--ss-ink3);flex-shrink:0;max-width:40%}
   .ss-toc-row.ss-cur .ss-toc-idr{color:var(--ss-accent)}
   .ss-toc-undef{font-size:10.5px;color:var(--ss-ink3);font-weight:500;flex-shrink:0}
+  .ss-toc-cov{color:var(--ss-ink2);font-weight:700}
   /* 화면 전환 알림 토스트 — 이동 인지용 */
   .ss-nav-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:2147483055;
     background:var(--ss-ink);color:#fff;font-size:12.5px;font-weight:700;padding:7px 16px;border-radius:99px;
@@ -575,13 +637,13 @@ ${HL_CSS}
         ctx.listEl.innerHTML = '<div class="ss-empty">이 화면은 등록됐지만 기능 설명이 아직 없습니다.<br><br>' +
           '1. 설명할 영역에 <code>data-spec="1"</code> 을 붙이세요<br>' +
           '2. 설정의 <b>' + esc(current.id) + '</b> › <b>specs</b> 에 <code>{ n:1, target:"1", title:"영역명" }</code> 을 넣으세요<br><br>' +
-          '지금 이 화면에서 data-spec 이 붙은 요소: <b>' + have + '개</b></div>';
+          '지금 이 화면에서 data-spec 이 붙은 요소: <b>' + have + '개</b></div>' + covBlockHTML(current);
         ctx.markerLayer.innerHTML = "";
         markerEls = {};
         ctx.afterRender();
         return;
       }
-      ctx.listEl.innerHTML = defsRowsHTML(specs());
+      ctx.listEl.innerHTML = defsRowsHTML(specs()) + covBlockHTML(current);
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
       items().forEach((it) => {
@@ -847,7 +909,7 @@ ${HL_CSS}
         html += `<div class="ss-toc-row${current && s.id === current.id ? " ss-cur" : ""}${n ? "" : " ss-undef"}" data-toc="${esc(s.id)}" data-depth="${depth}">
           ${guides(depth)}<span class="ss-toc-dot"></span>
           <span class="ss-toc-name">${esc(s.name)}</span>
-          ${n ? "" : '<span class="ss-toc-undef">미정의</span>'}${vpBadge(s)}
+          ${n ? "" : '<span class="ss-toc-undef">미정의</span>'}${vpBadge(s)}${covBadge(s)}
           <span class="ss-toc-idr" title="${esc(s.id)}">${esc(idShow)}</span></div>`;
       } else {
         html += `<div class="ss-toc-grp" data-depth="${depth}">${guides(depth)}<span class="ss-toc-dash"></span>${esc(node.label)}</div>`;

@@ -596,6 +596,93 @@ function check(name, ok, detail) {
     await page.click(".ss-toc-x");
   }
 
+  /* ============ 상태 커버리지 (#26): checklist × covers/skip ============ */
+  console.log("[docs] checklist");
+  {
+    const covHtml = (head) => '<div data-ss-screen="S-A"><div data-spec="1">A</div></div>' +
+      '<div data-ss-screen="S-B"><div data-spec="1">B</div></div>' +
+      '<div data-ss-screen="S-C"><div data-spec="1">C</div></div>' +
+      "<script>window.SCREENSPEC={" + head + "screens:[" +
+      [["S-A", "다 채운 화면", { covers: ["빈 상태", "오류"], skip: { "로딩": "조회가 없다" } }],
+       ["S-B", "덜 채운 화면", { covers: ["빈 상태"] }],
+       ["S-C", "사유 없는 화면", { covers: ["없는축"], skip: { "오류": "" } }]]
+        .map(([id, name, meta]) => JSON.stringify(Object.assign({
+          id, name, path: ["홈", name], root: '[data-ss-screen="' + id + '"]',
+          specs: [{ n: 1, target: "1", title: "영역" }]
+        }, meta))).join(",") + "]}<\/script>";
+
+    const cWarns = [];
+    const onCMsg = (msg) => { if (msg.type() === "warning") cWarns.push(msg.text()); };
+    page.on("console", onCMsg);
+    await page.goto("about:blank");
+    await page.setContent(covHtml('checklist:["빈 상태","로딩","오류"],'));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("커버리지: 다 채운 화면(covers+사유 있는 skip) → 패널 '전부 다룸'", await page.evaluate(() => {
+      const el = document.querySelector(".ss-cov");
+      return !!el && el.querySelector(".ss-cov-h").textContent === "상태 커버리지 — 전부 다룸 (3개 축)" &&
+        !el.querySelector(".ss-cov-miss") && el.innerText.includes("다룸: 빈 상태 · 오류") && el.innerText.includes("비움: 로딩(조회가 없다)");
+    }));
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    check("커버리지: 미정의 0인 화면은 목차 배지 없음 (조용히)", await page.evaluate(() =>
+      !document.querySelector('[data-toc="S-A"] .ss-toc-cov')));
+    check("커버리지: 목차 배지 '⚠ 로딩 · 오류 미정의'", await page.evaluate(() =>
+      (document.querySelector('[data-toc="S-B"] .ss-toc-cov') || {}).textContent === "⚠ 로딩 · 오류 미정의"));
+    check("커버리지: 사유 없는 skip 은 비운 것으로 치지 않는다 (배지에 오류 포함)", await page.evaluate(() => {
+      const t = (document.querySelector('[data-toc="S-C"] .ss-toc-cov') || {}).textContent || "";
+      return t === "⚠ 빈 상태 · 로딩 · 오류 미정의";
+    }));
+    await page.click(".ss-toc-x");
+    await page.waitForTimeout(200);
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-B"));
+    await page.waitForTimeout(300);
+    check("커버리지: 패널 ⚠ 줄이 미정의 축을 나열", await page.evaluate(() => {
+      const el = document.querySelector(".ss-cov");
+      const miss = el && el.querySelector(".ss-cov-miss");
+      return !!miss && miss.textContent === "⚠ 미정의: 로딩 · 오류" &&
+        el.querySelector(".ss-cov-h").textContent === "상태 커버리지" && el.innerText.includes("다룸: 빈 상태");
+    }));
+    check("커버리지: 사유 없는 skip · checklist 밖 covers 경고", 
+      cWarns.some((w) => w.includes('skip "오류" 에 사유가 없습니다')) &&
+      cWarns.some((w) => w.includes('covers "없는축" 는 checklist 에 없음')), cWarns.join(" | ").slice(0, 200));
+    page.off("console", onCMsg);
+
+    /* checklist 가 없으면 아무 것도 달라지지 않는다 */
+    const nWarns = [];
+    const onNMsg = (msg) => { if (msg.type() === "warning") nWarns.push(msg.text()); };
+    page.on("console", onNMsg);
+    await page.goto("about:blank");
+    await page.setContent(covHtml(""));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    check("checklist 없으면 커버리지 UI 자체가 없음 (.ss-cov · .ss-toc-cov 0개)", await page.evaluate(() =>
+      document.querySelectorAll(".ss-cov").length === 0 && document.querySelectorAll(".ss-toc-cov").length === 0));
+    check("checklist 없으면 covers·skip 경고도 없음", !nWarns.some((w) => w.includes("covers") || w.includes("skip")), nWarns.join(" | ").slice(0, 160));
+    await page.click(".ss-toc-x");
+    page.off("console", onNMsg);
+
+    /* 잘못된 checklist → 경고 후 기능 꺼짐 */
+    const bWarns = [];
+    const onBMsg = (msg) => { if (msg.type() === "warning") bWarns.push(msg.text()); };
+    page.on("console", onBMsg);
+    await page.goto("about:blank");
+    await page.setContent(covHtml("checklist:[],"));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("checklist 가 빈 배열 → 경고 + 기능 꺼짐", await page.evaluate(() => document.querySelectorAll(".ss-cov").length === 0) &&
+      bWarns.some((w) => w.includes("checklist 는 문자열 배열이어야 합니다")), bWarns.join(" | ").slice(0, 160));
+    page.off("console", onBMsg);
+  }
+
   /* ============ 설정 없이 스크립트만 넣은 경우 ============
      남의 페이지를 감싸면 "망가졌다"로 읽힌다 — DOM은 그대로 두고 안내만. */
   console.log("[docs] 설정 없음 상태");
