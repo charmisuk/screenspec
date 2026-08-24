@@ -10,123 +10,509 @@
   ],
   "issues": [
     {
-      "order": 1, "issue": [12, 7], "type": "fix", "release": "1차 결함",
+      "order": 1,
+      "issue": [
+        12,
+        7
+      ],
+      "type": "fix",
+      "release": "1차 결함",
       "title": "overlay: 라우트가 있으면 root형 화면이 절대 활성화되지 않음 + wrap setScreen 이 감지에 되돌아감",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "overlay detectScreen(screenspec.js ~L1026)이 routed.length 면 무조건 return 해 root 분기(L1048~)에 도달 불가. 또한 core.setScreen(L474)은 setCurrent 만 하므로 wrap MutationObserver(L936)·overlay MutationObserver(L1075)가 detectScreen 을 재실행하면 root 표시 상태 기준으로 이전 화면으로 되돌림. wrap 목차 클릭(L673~)은 root display 토글로 이미 해결돼 있으나 setScreen API 는 미적용",
+        "change": "(1) overlay detectScreen: 라우트 매칭 결과를 hit 에 두고 return 하지 않는다. 이어서 route 없는 root 화면 중 요소가 보이는(getClientRects().length>0) 것을 찾아 있으면 그것이 hit 을 이긴다(패널은 라우트 위에 얹히므로 나중 표면 우선). 보이는 root 화면이 여럿이면 문서 순서상 뒤(compareDocumentPosition)의 요소를 택한다. 둘 다 없으면 기존 unmapped 로직. (2) createCore 에 showRoot(sc) 헬퍼 추출: SCREENS 의 root 요소 display 를 sc 만 ''·나머지 'none' (기존 목차 클릭 L673~ 로직 이동). (3) core.setScreen(id): 대상이 route 없고 root 있으며 ctx.toggleRoot 가 true(wrap 부트만 전달)면 showRoot 호출 후 setCurrent. overlay 는 앱 DOM 을 건드리지 않고 setCurrent 만 — root 가 보이는 동안은 (1) 덕에 유지되고, 숨겨지면 감지가 되돌리는 것이 정상 동작. (4) 범위 밖 수정 금지: routeToRe·매칭 순서(#15)는 손대지 않는다",
+        "accept": [
+          "overlay: screens=[{S-02 route:/visitors},{S-03 root:'[data-ss-screen=S-03]'}] 에서 /visitors 진입 시 S-02, S-03 컨테이너가 display 되면 300ms 내 current()==='S-03', 다시 숨기면 S-02 로 복귀",
+          "overlay: S-03 가 보이는 동안 setScreen('S-03') 후 1초간 DOM 변경이 있어도 current() 가 S-03 유지",
+          "wrap multi-screen: window.ScreenSpec.setScreen('SCR-EX-DTL-002') 호출만으로 500ms 후에도 current 유지 + DTL root 표시·LST root 숨김",
+          "기존 e2e 49건 전부 통과 + 위 3건이 e2e 로 추가",
+          "lint 통과"
+        ],
+        "qa": [
+          "examples/overlay-spa.html 에 route 없는 root 화면 1개(S-03 상세 패널: 버튼으로 열고 닫는 hidden 패널, specs 1~2개)를 추가하고 e2e overlay 블록에 accept 1·2 검사 추가",
+          "e2e multi-screen 블록에 accept 3 검사 추가",
+          "node tests/lint.js && node tests/e2e.js 전부 PASS"
+        ],
+        "docs": [
+          "docs/config.md Screen.root 설명: wrap 전용 표현을 '두 모드 공통 — 컨테이너 표시 여부로 화면 감지' 로 (조회 범위 문구는 #21 에서 별도 처리)",
+          "docs/config.md JS API setScreen: wrap 은 root 표시 토글 동반, overlay 는 root 가 보일 때만 유지된다는 1줄",
+          "SKILL.md §3-B 의 'root 셀렉터로 구분 가능' 줄에 '패널이 열리면 그 화면으로 자동 전환, 닫히면 라우트 화면으로 복귀' 보강"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "opus",
+        "summary": "opus 서브에이전트. showRoot 헬퍼 추출, setScreen 에 wrap 한정 root 토글(ctx.toggleRoot), overlay detectScreen 을 보이는 root > 라우트 > 미정의 순으로 재구성. 이탈 3건 수용: wrap detectScreen 은 setCurrent 로(감지 루프 방지), unmapped 는 routed.length 가드 유지, 예제 패널은 좌측 카드"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "git diff 범위 일치(routeToRe 미변경). lint 전부 통과. e2e PASS 54 / FAIL 0 (+5: wrap setScreen 전환·복귀, overlay 패널 열림→S-03·닫힘→S-09·setScreen 1초 유지)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "05609f2"
+      }
     },
     {
-      "order": 2, "issue": [15], "type": "fix", "release": "1차 결함",
+      "order": 2,
+      "issue": [
+        15
+      ],
+      "type": "fix",
+      "release": "1차 결함",
       "title": "overlay 라우트 매칭 선언 순서 우선 — 동적 세그먼트가 구체 경로를 가림",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "overlay detectScreen 의 exact/suffix 매칭이 routed.find 라 선언 순서상 먼저 맞는 화면이 이김. /members/[id] 의 정규식이 /members/invite 에도 맞아 뒤에 선언된 구체 경로에 도달 못 함",
+        "change": "detectScreen 안에서 routed 를 매칭 전에 구체성 순으로 정렬: 동적 세그먼트([x]) 수 오름차순, 동률이면 경로 길이 내림차순. exact·suffix find 모두 정렬된 배열 사용. prefix 분기(bestLen)는 이미 최장 우선이라 그대로. 경고는 넣지 않는다(정렬로 순서 의존이 사라지므로)",
+        "accept": [
+          "screens 에 /members/[id] 를 /members/invite 보다 먼저 선언해도 /members/invite → invite 화면, /members/123 → [id] 화면",
+          "기존 e2e 전부 통과 + 위 케이스 e2e 추가"
+        ],
+        "qa": [
+          "overlay-spa 예제에 S-10 /members/[id] 를 S-11 /members/invite 보다 앞에 선언(뷰 렌더는 기존 라우터의 fallback 으로 충분) 후 e2e 에서 pushState 로 두 경로 확인"
+        ],
+        "docs": [
+          "docs/config.md route 행에 '구체 경로 우선(동적 세그먼트가 적은 라우트가 먼저) — 선언 순서 무관' 1구 추가"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접(5줄). routed 를 dyn 세그먼트 수 asc·길이 desc 로 정렬. 예제에 S-10 [id]·S-11 invite 를 역순 선언, e2e 1건, config.md route 행"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 55 / FAIL 0 (+1 라우트 구체성 우선: /members/invite→S-11, /members/123→S-10)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "7d3532c"
+      }
     },
     {
-      "order": 3, "issue": [13], "type": "fix", "release": "1차 결함",
+      "order": 3,
+      "issue": [
+        13
+      ],
+      "type": "fix",
+      "release": "1차 결함",
       "title": "overlay 마커가 뷰포트 밖으로 잘림 (x:0 → left:-10px)",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "bootOverlay posOf 가 r.left+scrollX 에 translate(-40%,-40%) 를 그대로 걸어 대상이 뷰포트 좌/상단 끝(x:0, y:0)이면 마커(24px)가 9.6px 바깥으로 나감. wrap posOf 는 이미 Math.max(12, …) 클램프가 있어 overlay 만 해당",
+        "change": "overlay posOf: left = Math.max(r.left, 10) + scrollX, top = Math.max(r.top, 10) + scrollY (10 = 24*0.4 올림). 뷰포트 기준으로 클램프한 뒤 스크롤 오프셋을 더한다. 우/하단은 마커가 안쪽으로 걸치므로 대상 없음",
+        "accept": [
+          "overlay-spa 정의서 모드에서 GNB(x:0) 마커 1 의 getBoundingClientRect().left >= 0 이고 top >= 48(헤더 아래)",
+          "기존 e2e 전부 통과 + 1건 추가"
+        ],
+        "qa": [
+          "e2e overlay 블록 정의서 모드 진입 직후 마커 1 rect 검사"
+        ],
+        "docs": [
+          "없음 (설정·API 변경 없음)"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접(2줄). overlay posOf left=max(r.left,10), top=max(r.top,58). 1차 시도에서 top 클램프 10 으로는 마커가 fixed 헤더(48px) 밑으로 들어감을 실측으로 발견 → 58 로 수정"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "실측: target(0,48) → 마커 rect left 0.4, top 48.4 (수정 전 top 38.4 = 헤더 밑). lint 통과. e2e PASS 56 / FAIL 0 (+1)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "ab2ae25"
+      }
     },
     {
-      "order": 4, "issue": [14], "type": "fix", "release": "1차 결함",
+      "order": 4,
+      "issue": [
+        14
+      ],
+      "type": "fix",
+      "release": "1차 결함",
       "title": "overlay 설명 패널이 앱 우측 드로어를 덮음 — 패널 좌/우 토글",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": ".ss-ov-panel 이 right:0 고정(400px, 최상위 z)이라 앱의 우측 드로어·사이드시트를 덮음. 좌측으로 옮길 수단이 없음",
+        "change": "(1) 최상위 설정 panel: 'right'(기본)|'left' — RAW.panel 로 읽어 초기 side 결정. (2) body.ss-ov-left 클래스로 좌측 배치: .ss-ov-panel left:0/right:auto, border-right, 그림자 반전; body.ss-ov-doc.ss-ov-left 는 padding-left:400px·padding-right:0. (3) 정의서 헤더(.ss-ov-header) 우측 끝에 버튼 '패널 ⇄'(title: 설명 패널 좌/우 전환, id ss-ovSide) — 클릭 시 클래스 토글 후 place(). (4) ≤900px 미디어(하단 시트)에서는 버튼 숨김·클래스 무시. (5) 인식 불가 값은 콘솔 경고 후 right. 자동 회피는 범위 밖",
+        "accept": [
+          "기본: 패널 rect.right === innerWidth, body padding-right 400px",
+          "버튼 클릭: 패널 rect.left === 0, body padding-left 400px·padding-right 0, 마커 위치 재계산됨",
+          "panel:'left' 설정으로 부팅하면 처음부터 좌측",
+          "lint 필드 커버리지(RAW.panel) 통과, e2e 전부 통과 +2"
+        ],
+        "qa": [
+          "e2e overlay 서버의 SCREENSPEC 주입에 panel:'left' 추가 → 초기 좌측 확인 → 버튼 클릭 → 우측 확인"
+        ],
+        "docs": [
+          "config.md 최상위 필드 표에 panel 행",
+          "SKILL §3-B '앱 모달이 패널 아래 깔리면 프로토타입 필로 전체 확인' 줄을 '우측 드로어와 겹치면 헤더의 패널 ⇄ 버튼 또는 panel:\"left\" 로 왼쪽에 둔다' 로 교체",
+          "screenspec.js 상단 주석 z-index 원칙 문단의 같은 문장 갱신"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "opus",
+        "summary": "opus 서브에이전트(55k). PANEL_SIDE(RAW.panel) + body.ss-ov-left CSS + 헤더 ⇄ 버튼(hfields 분리로 render 덮어쓰기 회피) + 모바일 무력화. 이탈 1건 수용: ≤900px 에서 좌측 규칙 완전 무력화 CSS 추가"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "diff 범위 일치. lint 통과(필드 8개 문서화). e2e PASS 58 / FAIL 0 (+2: panel:left 초기 좌측, ⇄ → 우측)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "e273efd"
+      }
     },
     {
-      "order": 5, "issue": [21], "type": "docs", "release": "2차 DX",
+      "order": 5,
+      "issue": [
+        21
+      ],
+      "type": "docs",
+      "release": "2차 DX",
       "title": "overlay 에서도 root 가 data-spec 조회 범위를 좁힌다는 점 문서화",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "sonnet", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "root 의 'data-spec 조회 범위 한정' 효과(createCore.rootEl → targetOf)가 wrap 절에만 적혀 있어 overlay 사용자가 자기 얘기로 읽지 않음",
+        "change": "SKILL §3-B 에 1줄, config.md root 행에 조회 범위 문구 추가. 코드 변경 없음",
+        "accept": [
+          "SKILL §3-B overlay 절에 root 조회 범위·번호 재시작·골격 마커와 안 섞임 설명 존재",
+          "lint 통과"
+        ],
+        "qa": [
+          "lint (문서 드리프트 검사)"
+        ],
+        "docs": [
+          "SKILL.md §3-B",
+          "docs/config.md Screen.root"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. SKILL §3-B 1줄, config.md root 행 보강"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과(문서 드리프트 검사 포함)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "2ce83d0"
+      }
     },
     {
-      "order": 6, "issue": [20], "type": "feat", "release": "2차 DX",
+      "order": 6,
+      "issue": [
+        20
+      ],
+      "type": "feat",
+      "release": "2차 DX",
       "title": "'못 찾은 정의 N건' 경고에 n·target 표기 + state 조건부 렌더는 제외",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "createCore.render 가 missing 을 개수로만 세어 어느 정의인지 알 수 없음. anno:'state'(조건부 표시)는 정상인데도 같은 경고",
+        "change": "missing 을 배열로 수집. anno==='state' 인 정의는 별도 배열(cond)로 분리해 경고 본문에서 제외. 경고 문구: '[ScreenSpec] S-02: data-spec 요소를 못 찾은 정의 N건 — #6 target=\"6\", #7 target=\"7\" (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)' + cond 가 있으면 ' · 조건부(state) M건은 제외' 덧붙임. state 만 없고 진짜 누락 0건이면 경고 없음. 새 설정 필드 없음(optional 플래그는 anno:state 로 충분)",
+        "accept": [
+          "누락 2건(일반)+1건(state) 화면에서 경고가 정확히 1회, 본문에 #n target 2개, 'state 1건 제외' 포함",
+          "state 만 누락이면 경고 없음",
+          "기존 e2e 통과 + 2건 추가"
+        ],
+        "qa": [
+          "e2e: setContent 로 최소 페이지 + 설정(3 specs 중 target 2 누락, 그중 1은 state) 로드 → console warning 캡처 검사"
+        ],
+        "docs": [
+          "docs/config.md '콘솔 진단' 절의 해당 경고 설명 갱신"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. missing/cond 배열 분리, 경고 본문에 #n target 나열 + state 제외 표기. config.md 콘솔 진단 갱신. e2e 2건"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 60 / FAIL 0 (+2: 누락 2건 나열·state 제외 / state 만 누락 시 무경고)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "3e7c220"
+      }
     },
     {
-      "order": 7, "issue": [19], "type": "feat", "release": "2차 DX",
+      "order": 7,
+      "issue": [
+        19
+      ],
+      "type": "feat",
+      "release": "2차 DX",
       "title": "등록됐지만 specs 가 빈 화면의 빈 상태 안내",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "render() 가 _unmapped 만 빈 상태 안내를 내고, 등록됐지만 specs 가 [] 인 화면은 listEl 이 빈 문자열(백지)",
+        "change": "render() 에서 !current._unmapped && specs().length===0 이면 listEl 에 .ss-empty 안내: '이 화면은 등록됐지만 기능 설명이 아직 없습니다.' + 2단계 할 일(data-spec 부여 / 설정의 {id} › specs 에 { n:1, target:\"1\", title:\"영역명\" }) + '지금 이 화면에서 data-spec 이 붙은 요소: N개' (rootEl().querySelectorAll('[data-spec]').length). 후보 영역 세기는 범위 밖(추정 품질 불확실)",
+        "accept": [
+          "overlay-spa 에서 /members/invite(S-11, specs []) 진입 시 패널에 '기능 설명이 아직 없습니다' 와 'data-spec 이 붙은 요소: N개' 표시, 개수 = 실제 [data-spec] 수",
+          "기존 e2e 통과 +1"
+        ],
+        "qa": [
+          "e2e overlay 블록: pushState /members/invite 후 .ss-empty 텍스트 검사"
+        ],
+        "docs": [
+          "config.md Screen.specs 행: '비어 있으면 목차 미정의 + 패널에 다음 할 일 안내'"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. render() 에 specs 빈 분기 — 2단계 안내 + rootEl 내 [data-spec] 수. config.md specs 행. e2e 1건"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 61 / FAIL 0 (+1: S-10 빈 화면 안내·개수 일치·0항목)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "7918593"
+      }
     },
     {
-      "order": 8, "issue": [16], "type": "feat", "release": "3차 도입 문턱",
+      "order": 8,
+      "issue": [
+        16
+      ],
+      "type": "feat",
+      "release": "3차 도입 문턱",
       "title": "target 이 CSS 셀렉터·텍스트·fallback 배열도 받게",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "blocked",
+      "plan": {
+        "done": false,
+        "cause": "",
+        "change": "",
+        "accept": [],
+        "qa": [],
+        "docs": []
+      },
+      "dev": {
+        "done": false,
+        "model": "opus",
+        "summary": ""
+      },
+      "qa": {
+        "done": false,
+        "evidence": ""
+      },
+      "commit": {
+        "done": false,
+        "sha": ""
+      },
+      "blocked_reason": "사용자 판단 대기 — target 셀렉터: sel+fallback 만 / text 포함 / 보류 중 선택 필요 (라이브러리 계약 변경)"
     },
     {
-      "order": 9, "issue": [18], "type": "feat", "release": "3차 도입 문턱",
+      "order": 9,
+      "issue": [
+        18
+      ],
+      "type": "feat",
+      "release": "3차 도입 문턱",
       "title": "accent 가 CSS 변수 var(--x) 를 받게",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "ACCENT 검증이 프리셋명·hex 만 통과. 색 하드코딩 lint 를 쓰는 팀은 hex 를 못 넣고 프리셋은 제품 색과 어긋남",
+        "change": "ACCENT 에 /^var\\(--[\\w-]+(\\s*,[^)]*)?\\)$/ 허용(그대로 대입). 파생색은 이미 color-mix(--ss-accent 기반)라 추가 작업 없음. SVG 화살표의 fill/stroke 속성은 var() 를 못 받을 수 있어 style=\"fill:…\"/\"stroke:…\" 로 전환(wrap·overlay 2곳). 경고 문구에 var(--x) 추가",
+        "accept": [
+          "accent:'var(--brand)' + :root{--brand:#123456} 에서 --ss-accent 가 var(--brand) 로 대입되고 화살표 line 의 computed stroke 가 rgb(18, 52, 86)",
+          "hex·프리셋 기존 동작 유지(기존 e2e accent 검사 통과)"
+        ],
+        "qa": [
+          "e2e: setContent 최소 페이지 + accent var → computed stroke 검사"
+        ],
+        "docs": [
+          "config.md accent 행·타입 주석·콘솔 진단 행",
+          "SKILL §3-B 액센트 문단",
+          "screenspec.js 헤더 주석 L44"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. ACCENT 에 var(--x) 허용, SVG fill/stroke 속성 → style 로(var 안전), 문서 4곳, e2e 1건"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "실측: --ss-accent computed=#123456(var 치환), #ss-line stroke·활성 마커 rgb(18,52,86). 1차 검사식 오류(var 원문 기대)를 수정. lint 통과. e2e PASS 62 / FAIL 0"
+      },
+      "commit": {
+        "done": true,
+        "sha": "943fcbb"
+      }
     },
     {
-      "order": 10, "issue": [17], "type": "feat", "release": "4차 기능",
+      "order": 10,
+      "issue": [
+        17
+      ],
+      "type": "feat",
+      "release": "4차 기능",
       "title": "overlay 기기 폭 — 최소안(뷰포트 폭 표시 + .ss-pc/.ss-narrow 훅 + devtools 안내). iframe 전체안은 보류",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "폭 시뮬레이터(applySize·모바일/PC 버튼)가 bootWrap 전용. overlay 는 '지금 몇 px 인지' 조차 안 보임. iframe 전체안은 same-origin·라우팅 동기화·마커 주입이 필요한 아키텍처급이라 이번 범위 밖",
+        "change": "(1) overlay 헤더에 #ss-ovVw span(bSide 앞): 앱 폭 = innerWidth - body padding-left/right 를 'N px' 로 표시, resize·패널 전환·모드 전환 시 갱신. (2) overlay 에서 body 에 .ss-pc(앱 폭 ≥1100)/.ss-narrow(≤520) 토글 — 같은 갱신 함수에서. (3) SKILL §3-B L96 을 '시뮬레이터 없음 → 개발자 도구 기기 툴바(⌘⇧M) 로 폭을 바꾸고, 헤더의 앱 폭 표시로 확인. body.ss-pc/.ss-narrow 훅 사용 가능' 으로. config.md CSS 훅 표에 overlay 열 추가",
+        "accept": [
+          "1440 뷰포트 정의서 모드(패널 우측)에서 헤더 텍스트에 '1040px' 표시, body.ss-pc 없음(1040<1100)",
+          "뷰포트 1600 → '1200px' + body.ss-pc",
+          "뷰포트 480(하단 시트) → '480px' + body.ss-narrow",
+          "기존 e2e 통과 +2"
+        ],
+        "qa": [
+          "e2e overlay 블록 끝(srv.close 전)에 setViewportSize 로 3케이스 검사 후 1440 복원"
+        ],
+        "docs": [
+          "SKILL §3-B",
+          "config.md CSS 훅 표"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. 헤더 #ss-ovVw 앱 폭 표시(updateWidth: resize·모드·패널 전환·부팅), body .ss-pc/.ss-narrow, SKILL·config.md 문서. iframe 전체안은 보류(별도 이슈 제안)"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 64 / FAIL 0 (+2: 1440→1040px·1600→1200px+ss-pc·480→480px+ss-narrow)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "48829e8"
+      }
     },
     {
-      "order": 11, "issue": [9], "type": "feat", "release": "4차 기능",
+      "order": 11,
+      "issue": [
+        9
+      ],
+      "type": "feat",
+      "release": "4차 기능",
       "title": "화면 목록 검색 필터 (트리 위 input, 이름/ID 부분 일치)",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "트리 목차가 30화면 이상이면 스크롤이 길어짐. 필터 수단 없음",
+        "change": "renderToc: SCREENS.length >= 8 이면 .ss-toc-head 아래 .ss-toc-search(input, placeholder '화면 이름·ID 검색') 삽입(sticky). input 이벤트에서 소문자 부분 일치(name·id)로 .ss-toc-row 표시/숨김, 매칭 행의 조상 그룹(.ss-toc-grp, 더 낮은 depth 를 거슬러)만 표시. 빈 질의면 전부 표시. openToc 시 입력 초기화·포커스(모바일 제외). 설정 필드 없음",
+        "accept": [
+          "화면 10개 설정에서 목차 열면 검색 input 존재, '초대' 입력 시 매칭 1행 + 조상 그룹만 보이고 나머지 숨김, 지우면 전부 복원",
+          "화면 5개(overlay-spa) 에서는 input 없음",
+          "기존 e2e 통과 +2"
+        ],
+        "qa": [
+          "e2e: setContent 로 path 있는 화면 10개 wrap 설정 → 검색 검사; overlay-spa 목차에 input 부재 검사"
+        ],
+        "docs": [
+          "config.md 는 필드 없음 — README 목차 설명이 있으면 1구, 없으면 CHANGELOG 만"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "summary": "메인 직접. TOC_SEARCH_MIN=8 이상이면 sticky 검색 input, filterToc 로 부분 일치 + 조상 행 유지. 1차 구현은 조상 그룹만 남겨 화면형 조상(홈)이 빠짐 → 얕은 행 전부로 수정"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 통과. e2e PASS 68 / FAIL 0 (+3: 5개 시 미표시, 10개 시 표시+필터 [S-01, grp:이용자, S-03], 비우면 복원)"
+      },
+      "commit": {
+        "done": true,
+        "sha": "0d4f119"
+      }
     },
     {
-      "order": 12, "issue": [10], "type": "feat", "release": "4차 기능",
+      "order": 12,
+      "issue": [
+        10
+      ],
+      "type": "feat",
+      "release": "4차 기능",
       "title": "arrowFrom 화살표 시작 방향 수동 지정",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "blocked",
+      "plan": {
+        "done": false,
+        "cause": "",
+        "change": "",
+        "accept": [],
+        "qa": [],
+        "docs": []
+      },
+      "dev": {
+        "done": false,
+        "model": "opus",
+        "summary": ""
+      },
+      "qa": {
+        "done": false,
+        "evidence": ""
+      },
+      "commit": {
+        "done": false,
+        "sha": ""
+      },
+      "blocked_reason": "사용자 판단 대기 — 운영자 스스로 '요청 오면' 우선순위. 보류 제안"
     },
     {
-      "order": 13, "issue": [8], "type": "feat", "release": "4차 기능",
+      "order": 13,
+      "issue": [
+        8
+      ],
+      "type": "feat",
+      "release": "4차 기능",
       "title": "움직이는 요소 내부 마커 추적 옵션 (rAF)",
-      "status": "todo",
-      "plan": { "done": false, "cause": "", "change": "", "accept": [], "qa": [], "docs": [] },
-      "dev": { "done": false, "model": "opus", "summary": "" },
-      "qa": { "done": false, "evidence": "" },
-      "commit": { "done": false, "sha": "" }
+      "status": "blocked",
+      "plan": {
+        "done": false,
+        "cause": "",
+        "change": "",
+        "accept": [],
+        "qa": [],
+        "docs": []
+      },
+      "dev": {
+        "done": false,
+        "model": "opus",
+        "summary": ""
+      },
+      "qa": {
+        "done": false,
+        "evidence": ""
+      },
+      "commit": {
+        "done": false,
+        "sha": ""
+      },
+      "blocked_reason": "사용자 판단 대기 — 매 프레임 재배치 비용 + SKILL 룰로 회피 중. 보류 제안"
     }
   ],
-  "cycle_qa": { "done": false, "evidence": "" },
-  "release": { "done": false, "version": "", "sha": "" }
+  "cycle_qa": {
+    "done": true,
+    "evidence": "lint 전부 통과. e2e PASS 68 / FAIL 0. 예제 5개(demo·multi-screen·shop·tree·overlay-spa) Playwright 전수: 정의서 모드→마커 전부 클릭→재생 버튼→목차 6행→480/1440 리사이즈, JS 에러 0. overlay-spa 경고 1건(S-09 #4 목차 클릭 타이밍)은 main v0.13.1 에서도 동일 — 회귀 아님, 신규 이슈 후보"
+  },
+  "release": {
+    "done": true,
+    "version": "0.14.0",
+    "sha": "fd3f4f2"
+  }
 }
