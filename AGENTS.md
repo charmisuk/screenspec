@@ -18,6 +18,7 @@
 | `tests/e2e.js` | Playwright 브라우저 회귀 |
 | `tests/smoke.js` | 예제 전수 클릭 스모크 (아무거나 눌러도 안 죽는가) |
 | `scripts/release.js` | 릴리스 — 태그·푸시·퍼지·실물 확인 (문서가 미출시 태그를 가리키는지 검사) |
+| `.github/workflows/release.yml` | 릴리스를 Actions 버튼으로 (같은 검사를 release.js 와 공유) |
 | `scripts/backlog-sync.js` | GitHub 이슈 ↔ Notion 보드 싱크 검사 (로컬 전용) |
 | `docs/sprint/` | 이슈 사이클 작업 기록 (tasks.json·회고) — 내부 로그, 라이브러리 동작과 무관 |
 
@@ -58,14 +59,20 @@ node scripts/backlog-sync.js --apply   # 노션 쪽을 맞추고 실행 후 자�
 1. lint·e2e·smoke 통과 확인
 2. `CHANGELOG.md`에 항목 추가 (최상단 `## vX.Y.Z`)
 3. 버전 문자열 갱신: `screenspec.js` 헤더·배지, `README.md`·`SKILL.md`의 `@vX.Y.Z`
-4. commit → **main 에 올린 뒤** 아래를 돌린다
+4. commit → **main 에 올린 뒤** 둘 중 하나로 내보낸다
+
+**A. Actions 버튼** (터미널 없이 · 태그 푸시 권한이 없는 환경에서도)
+Actions 탭 → **release** → *Run workflow* → 버전(`vX.Y.Z`) 입력.
+버전 정합 → lint·e2e·smoke → 태그+Release 발행 → 퍼지 → 실물 검증까지 한 번에 돈다.
+
+**B. 로컬**
 
 ```bash
 node scripts/release.js           # 검사만 — 나갈 준비가 됐는지
 node scripts/release.js --apply   # 태그 → 푸시 → jsDelivr 퍼지 → 실물 확인
 ```
 
-5. 스크립트가 마지막에 출력하는 `gh release create vX.Y.Z` 를 실행 (본문은 같이 출력되는 CHANGELOG 절)
+5. B 로 냈다면 스크립트가 마지막에 출력하는 `gh release create vX.Y.Z` 를 실행 (본문은 같이 출력되는 CHANGELOG 절). A 는 이 단계까지 자동이다
 
 > **버전 문자열만 올리고 태그를 만들지 않으면 안 된다.** 그 순간 README·SKILL 이 존재하지 않는 CDN 주소(`@vX.Y.Z` → 404)를 가리키고,
 > 그 주소를 심은 프로토타입은 조용히 아무것도 안 뜬다. lint 는 이걸 못 잡는다 — 헤더·배지·CHANGELOG·문서 태그가 *서로 같은지*만 보지

@@ -1,0 +1,84 @@
+name: release
+
+# 릴리스를 버튼 하나로. Actions 탭 → release → "Run workflow" → 버전 입력.
+# 태그 생성 권한이 없는 환경(로컬 터미널이 없을 때·에이전트 세션)에서도 낼 수 있게 하려는 것이 목적이다.
+# 로컬에서 낼 때는 AGENTS.md 대로 `node scripts/release.js --apply` 를 쓰면 된다 — 같은 검사를 공유한다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "내보낼 버전 — CHANGELOG 최상단과 같아야 한다 (예: v0.19.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: write # 태그·릴리스 생성
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 태그 조회에 전체 히스토리가 필요하다
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 1) 낼 수 있는 상태인가 — 입력 버전 = CHANGELOG 최상단 = 문서 CDN 태그
+      #    (입력값은 셸에 직접 끼워 넣지 않는다 — env 로 넘겨 인젝션을 막는다)
+      - name: 버전 정합 (입력 = CHANGELOG 최상단 = 문서 CDN 태그)
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/release.js --pre --expect "$VERSION"
+
+      - name: 이미 나간 버전인지
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
+            echo "::error::$VERSION 태그가 이미 있다 — 이미 릴리스된 버전이다"
+            exit 1
+          fi
+          echo "$VERSION 미출시 확인"
+
+      # 2) 통과해야만 나간다 — ci.yml 과 같은 3종
+      - name: lint
+        run: node tests/lint.js
+      - name: playwright 설치
+        run: |
+          npm init -y > /dev/null
+          npm i playwright > /dev/null
+          npx playwright install --with-deps chromium
+      - name: e2e 회귀
+        run: node tests/e2e.js
+      - name: smoke
+        run: node tests/smoke.js
+
+      # 3) 태그 + 릴리스 (gh 가 태그를 target 커밋에 만들어 준다)
+      - name: GitHub Release 발행
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          node scripts/release.js --notes > /tmp/notes.md
+          echo "--- 릴리스 본문 ---"; cat /tmp/notes.md
+          gh release create "$VERSION" --title "$VERSION" --notes-file /tmp/notes.md --target "$GITHUB_SHA"
+
+      # 4) 퍼지 — 태그가 생긴 뒤라야 의미가 있다. @0 별칭이 특히 늦게 따라온다
+      - name: jsDelivr 퍼지
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          for t in "$VERSION" "0"; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" \
+              "https://purge.jsdelivr.net/gh/charmisuk/screenspec@$t/screenspec.js")
+            echo "@$t 퍼지 → HTTP $code"
+          done
+
+      # 5) 진짜 나갔는지 확인 — 고정 태그 200 · @0 재해석 · 문서가 시키는 주소가 열리는가
+      - name: 실물 검증
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/release.js --verify --expect "$VERSION"
