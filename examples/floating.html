@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>할 일 — 고정·플로팅 요소 예제</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    color:#1C1B18;background:#fff;padding:52px 0 64px}
+
+  /* AI 프로토타입이 가장 흔히 만들어내는 다섯 가지 — 전부 화면(뷰포트) 기준으로 붙는 요소들이다 */
+  .appbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:100;background:#fff;
+    border-bottom:1px solid #E8E6E0;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+  .appbar h1{font-size:16px;font-weight:800;margin:0}
+  .appbar .cnt{font-size:12px;color:#8A877F;font-variant-numeric:tabular-nums}
+
+  .filters{position:sticky;top:52px;z-index:50;background:#fff;padding:10px 16px;
+    border-bottom:1px solid #F1F0EC;display:flex;gap:6px}
+  .filters button{border:1px solid #DBD8D0;background:#fff;border-radius:99px;padding:5px 13px;
+    font-size:12.5px;font-weight:700;color:#55534E;cursor:pointer}
+  .filters button[aria-pressed="true"]{background:#1C1B18;color:#fff;border-color:#1C1B18}
+
+  .list{padding:8px 16px 24px;display:flex;flex-direction:column;gap:8px}
+  .item{border:1px solid #EEEDE9;border-radius:10px;padding:12px 14px}
+  .item b{display:block;font-size:14px;margin-bottom:3px}
+  .item span{font-size:12px;color:#8A877F}
+  .empty{padding:40px 16px;text-align:center;color:#8A877F;font-size:13px}
+
+  .fab{position:fixed;right:18px;bottom:74px;z-index:9999;width:52px;height:52px;border-radius:50%;
+    border:0;background:#2952E3;color:#fff;font-size:26px;line-height:1;cursor:pointer;
+    box-shadow:0 6px 18px rgba(41,82,227,.35)}
+
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:100;height:58px;background:#fff;
+    border-top:1px solid #E8E6E0;display:flex}
+  .tabbar button{flex:1;border:0;background:none;font-size:11.5px;font-weight:700;color:#8A877F;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+  .tabbar button[aria-pressed="true"]{color:#2952E3}
+  .tabbar .ico{font-size:17px}
+
+  .sheet{position:fixed;inset:0;z-index:10000;display:none}
+  .sheet.open{display:block}
+  .sheet .dim{position:absolute;inset:0;background:rgba(17,24,39,.45)}
+  .sheet .panel{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;
+    padding:18px 18px 24px}
+  .sheet h2{font-size:15px;margin:0 0 12px}
+  .sheet input{width:100%;padding:11px 12px;border:1px solid #DBD8D0;border-radius:9px;font-size:14px;margin-bottom:12px}
+  .sheet .row{display:flex;gap:8px}
+  .sheet .row button{flex:1;padding:11px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer}
+  .sheet .ok{border:0;background:#2952E3;color:#fff}
+  .sheet .no{border:1px solid #DBD8D0;background:#fff;color:#55534E}
+</style>
+</head>
+<body>
+
+<header class="appbar" data-spec="1">
+  <h1>할 일</h1>
+  <span class="cnt" id="cnt">3건</span>
+</header>
+
+<nav class="filters" data-spec="2">
+  <button aria-pressed="true">전체</button>
+  <button aria-pressed="false">오늘</button>
+  <button aria-pressed="false">완료</button>
+</nav>
+
+<main class="list" id="list" data-spec="3">
+  <div class="item"><b>기획서 초안 리뷰</b><span>오늘 · 오후 4시</span></div>
+  <div class="item"><b>디자인 시안 피드백 정리</b><span>오늘 · 오후 6시</span></div>
+  <div class="item"><b>스프린트 회고 준비</b><span>내일</span></div>
+  <div class="item"><b>API 명세 확인</b><span>내일</span></div>
+  <div class="item"><b>배포 일정 공유</b><span>이번 주</span></div>
+  <div class="item"><b>사용자 인터뷰 일정 잡기</b><span>이번 주</span></div>
+  <div class="item"><b>경쟁사 화면 캡처 정리</b><span>다음 주</span></div>
+  <div class="item"><b>온보딩 문구 다듬기</b><span>다음 주</span></div>
+</main>
+
+<button class="fab" id="fab" data-spec="4" onclick="openSheet()" aria-label="할 일 추가">+</button>
+
+<nav class="tabbar" data-spec="5">
+  <button aria-pressed="true" data-spec="5a"><span class="ico">✓</span>할 일</button>
+  <button aria-pressed="false"><span class="ico">◷</span>기록</button>
+  <button aria-pressed="false" data-spec="5b"><span class="ico">☺</span>내 정보</button>
+</nav>
+
+<div class="sheet" id="sheet" data-spec="6">
+  <div class="dim" onclick="closeSheet()"></div>
+  <div class="panel">
+    <h2>할 일 추가</h2>
+    <input id="newTitle" placeholder="무엇을 하나요?">
+    <div class="row">
+      <button class="no" onclick="closeSheet()">취소</button>
+      <button class="ok" id="sheetOk" onclick="closeSheet()">추가</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openSheet(){ document.getElementById("sheet").classList.add("open"); }
+  function closeSheet(){ document.getElementById("sheet").classList.remove("open"); }
+
+  /* 빈 상태 재현 — 정의서의 스위치가 이 이벤트를 쏜다 */
+  var saved = null;
+  window.addEventListener("screenspec:preview", function (e) {
+    var list = document.getElementById("list"), cnt = document.getElementById("cnt");
+    if (e.detail.on) {
+      if (saved === null) saved = list.innerHTML;
+      list.innerHTML = '<div class="empty">아직 할 일이 없습니다<br>+ 를 눌러 첫 할 일을 추가하세요</div>';
+      cnt.textContent = "0건";
+    } else if (saved !== null) {
+      list.innerHTML = saved; saved = null; cnt.textContent = "3건";
+    }
+    e.detail.handled = true;
+  });
+</script>
+
+<script>
+window.SCREENSPEC = {
+  screen: { id: "S-TODO-001", name: "할 일 목록", path: ["할 일", "목록"] },
+  specs: [
+    { n: 1, target: "1", anno: "box", title: "상단 앱바", defs: [
+      { t: "화면 상단에 고정 — 목록을 내려도 따라온다", why: "건수를 항상 볼 수 있어야 「몇 개 남았나」를 스크롤 없이 안다" },
+      { t: "표시문구 : 미완료 건수 「N건」" }
+    ]},
+    { n: 2, target: "2", anno: "state", title: "필터 바", defs: [
+      { t: "기본값 : 전체" },
+      { t: "선택값 : 전체 · 오늘 · 완료" },
+      { t: "앱바 아래에 붙어 함께 고정 (sticky)" }
+    ]},
+    { n: 3, target: "3", anno: "box", title: "할 일 목록",
+      preview: { label: "빈 상태 보기" }, defs: [
+      { t: "정렬 : 마감 빠른 순" },
+      { t: "빈 상태 : 「아직 할 일이 없습니다」 + 추가 유도 문구" }
+    ]},
+    { n: 4, target: "4", anno: "action", title: "추가 버튼 (플로팅)",
+      play: { selector: "#fab", label: "동작 재생: 추가 시트 열기" }, defs: [
+      { t: "화면 우하단 고정 — 목록 길이와 무관하게 늘 같은 자리", why: "한 손으로 닿는 자리에 고정돼야 주 동작이 산다" },
+      { t: "클릭 : 할 일 추가 시트 열림" }
+    ]},
+    { n: 5, target: "5", anno: "box", title: "하단 탭바", parts: [
+      { title: "할 일 탭", target: "5a", defs: [{ t: "기본 선택 탭" }] },
+      { title: "내 정보 탭", target: "5b", defs: [{ t: "클릭 : 내 정보 화면으로 이동" }] }
+    ], defs: [
+      { t: "화면 하단 고정 · 3개 탭" }
+    ]},
+    { n: 6, target: "6", anno: "popup", title: "할 일 추가 시트", optional: true,
+      play: { selector: "#fab", label: "동작 재생: 시트 열기" }, defs: [
+      { t: "화면 전체를 덮는 딤 + 하단 시트" },
+      { t: "딤 클릭 · 취소 : 닫힘" },
+      { t: "제목 미입력 시 추가 불가" }
+    ]}
+  ]
+};
+</script>
+<script src="../screenspec.js"></script>
+</body>
+</html>

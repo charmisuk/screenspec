@@ -345,7 +345,10 @@
   .ss-part-no{font-family:var(--ss-mono);font-size:11.5px;font-weight:800;color:var(--ss-ink3)}
   .ss-part.ss-active .ss-part-no{color:var(--ss-accent)}
   .ss-part .ss-play{margin:7px 0 0 16px}
-  .ss-frame{position:relative}
+  /* transform 이 있으면 자손의 position:fixed 기준이 뷰포트가 아니라 이 상자가 된다 — 기기 화면이 곧 뷰포트다.
+     없으면 프로토타입의 플로팅 버튼·바텀시트·전면 모달이 폰을 탈출해 브라우저 창 구석에 뜨고, 우리 툴바까지 덮는다.
+     정의서 모드는 축소 scale() 때문에 이미 갇혀 있었다 — 프로토타입 모드만 새던 것을 같은 규칙으로 맞춘다 */
+  .ss-frame{position:relative;transform:translate(0)}
   .ss-sheet{position:relative;background:#fff;border-radius:14px;overflow:auto;
     box-shadow:0 1px 3px rgba(17,24,39,.08),0 16px 44px rgba(17,24,39,.10);padding:28px 24px 40px}
   .ss-sheet.ss-narrow{padding:20px 14px 32px}
