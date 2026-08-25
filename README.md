@@ -160,7 +160,7 @@ node scripts/inline.js 내프로토타입.html     # → 내프로토타입.inli
 나온 파일은 어디서든 열리고, 그 시점 그대로 고정된다. 최신으로 올리고 싶으면 같은 명령을 한 번 더 치면 된다.
 원본은 그대로 두고 전달본만 다시 뽑는 구조라, 원본을 고칠 일은 없다.
 
-**주소 고르기** (원본용): `@0`은 릴리스가 나올 때마다 자동 반영, `@v0.19.1`처럼 태그를 박으면 그 시점으로 고정.
+**주소 고르기** (원본용): `@0`은 릴리스가 나올 때마다 자동 반영, `@v0.19.2`처럼 태그를 박으면 그 시점으로 고정.
 
 ### 정의서를 잠깐 끄기
 
@@ -192,6 +192,7 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 둔다 */ ] }
 | 프레임워크 화면이 깨진다 | wrap으로 붙은 것. `mode: "overlay"` 명시 |
 | 정의서 없이 프로토타입만 보여주고 싶다 | 정의를 지우지 말고 `off: true` 한 줄. 볼 때는 주소에 `?screenspec=1` |
 | 앱의 오른쪽 서랍이 패널에 가려진다 · 모바일 폭으로 보고 싶다 | `mode: "frame"` — 뷰어가 앱 밖(액자)에 있어 겹칠 수 없고, 툴바의 모바일/PC로 앱의 미디어쿼리가 실제로 발화한다 |
+| 플로팅 버튼·바텀시트가 폰 화면 밖 허공에 뜬다 | v0.19.1 이하의 wrap 모드 증상 — v0.19.2 에서 기기 화면이 `position:fixed` 의 기준이 되도록 고쳤다. 라이브러리를 올리면 사라진다 (`@0` 은 자동) |
 | 상태 정의는 적었는데 화면에 마커가 없다 | 지금 화면에 그 상태가 안 떠 있는 것. 패널의 「현재 미표시」 표시로 구분된다 (정상) |
 
 ## 예제
@@ -201,6 +202,7 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 둔다 */ ] }
 - [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — 단일 화면 (콘텐츠형)
 - [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — 다중 화면 + flow·popup
 - [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — 오버레이 모드 (React·Next와 같은 구조)
+- [floating.html](https://charmisuk.github.io/screenspec/examples/floating.html) — 고정·플로팅 요소 (앱바·FAB·탭바·전면 시트)
 
 ## 개발
 

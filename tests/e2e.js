@@ -197,6 +197,71 @@ function check(name, ok, detail) {
   }));
   await page.click('#ss-seg button[data-w="mobile"]');
 
+  /* ============ wrap: floating.html — 고정·플로팅 요소가 기기 화면을 벗어나지 않는가 ============
+     프로토타입의 position:fixed 는 기본적으로 브라우저 창에 붙는다. 시트 밖으로 새면 폰 옆 허공에 뜨고
+     우리 툴바까지 덮는다. .ss-frame 의 transform 이 이것을 가둔다 — 두 모드·두 폭 모두에서 (v0.19.2) */
+  console.log("[wrap] floating.html (고정 요소 가둠)");
+  await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/floating.html");
+  await page.waitForTimeout(500);
+
+  /* 시트(기기 화면) 안에 들어 있는가 — 좌우상하 전부. 여유 2px 은 그림자·반올림 */
+  const inSheet = (sel) => page.evaluate((s) => {
+    const el = document.querySelector(s), sh = document.querySelector(".ss-sheet");
+    if (!el || !sh) return null;
+    const a = el.getBoundingClientRect(), b = sh.getBoundingClientRect();
+    if (!a.width || !a.height) return null;
+    return a.left >= b.left - 2 && a.right <= b.right + 2 && a.top >= b.top - 2 && a.bottom <= b.bottom + 2;
+  }, sel);
+
+  for (const [name, sel] of [["앱바", ".appbar"], ["FAB", ".fab"], ["탭바", ".tabbar"]]) {
+    check("프로토타입 모드: " + name + " 가 기기 화면 안", (await inSheet(sel)) === true);
+  }
+  check("프로토타입 모드: 툴바가 프로토타입 위 (z 경쟁 없음)", await page.evaluate(() => {
+    const tb = document.querySelector(".ss-toolbar").getBoundingClientRect();
+    const hit = document.elementFromPoint(tb.left + tb.width / 2, tb.top + tb.height / 2);
+    return !!(hit && hit.closest(".ss-toolbar"));
+  }));
+
+  /* 전면 모달(inset:0 · z 10000)도 폰 안에서만 덮는다 */
+  await page.click("#fab");
+  await page.waitForTimeout(250);
+  check("프로토타입 모드: 전면 시트가 기기 화면 안", (await inSheet("#sheet")) === true);
+  await page.click("#sheet .dim");
+  await page.waitForTimeout(200);
+
+  /* 본문을 스크롤해도 고정 요소는 기기 화면에 붙어 있다 (진짜 폰과 같은 거동) */
+  const fabBefore = await page.evaluate(() => document.querySelector(".fab").getBoundingClientRect().top);
+  await page.evaluate(() => { document.querySelector(".ss-sheet").scrollTop = 300; });
+  await page.waitForTimeout(200);
+  const fabAfter = await page.evaluate(() => document.querySelector(".fab").getBoundingClientRect().top);
+  check("본문 스크롤에도 FAB 고정", Math.abs(fabBefore - fabAfter) < 2, [fabBefore, fabAfter]);
+  await page.evaluate(() => { document.querySelector(".ss-sheet").scrollTop = 0; });
+
+  /* 화면정의서 모드 — 고정 요소가 설명 패널을 침범하지 않는다 */
+  await page.click("#ss-mDoc");
+  await page.waitForTimeout(500);
+  for (const [name, sel] of [["앱바", ".appbar"], ["FAB", ".fab"], ["탭바", ".tabbar"]]) {
+    check("정의서 모드: " + name + " 가 기기 화면 안", (await inSheet(sel)) === true);
+  }
+  check("정의서 모드: 고정 요소가 설명 패널을 덮지 않음", await page.evaluate(() => {
+    const pan = document.querySelector(".ss-defs").getBoundingClientRect();
+    return [".appbar", ".fab", ".tabbar"].every((s) => {
+      const r = document.querySelector(s).getBoundingClientRect();
+      return r.right <= pan.left + 1;
+    });
+  }));
+  /* 상위 5 + 하위 5a·5b + 지금 닫혀 있는 시트 6 (optional — 패널에 「현재 미표시」) */
+  check("정의서 모드: 마커 8개", (await page.locator(".ss-marker").count()) === 8);
+
+  /* PC 폭(1920 시트 → 축소 배치)에서도 같은 규칙 */
+  await page.click('#ss-seg button[data-w="pc"]');
+  await page.waitForTimeout(500);
+  for (const [name, sel] of [["앱바", ".appbar"], ["FAB", ".fab"], ["탭바", ".tabbar"]]) {
+    check("정의서 모드 PC 폭: " + name + " 가 기기 화면 안", (await inSheet(sel)) === true);
+  }
+  await page.click('#ss-seg button[data-w="mobile"]');
+  await page.waitForTimeout(300);
+
   /* ============ overlay: 하위경로(basePath) 환경 ============ */
   console.log("[overlay] SPA (하위경로 서빙)");
   const srv = http.createServer((req, res) => {
