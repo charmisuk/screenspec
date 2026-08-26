@@ -746,12 +746,27 @@ ${HL_CSS}
              전부 찾으면 종료(clean), 못 찾은 게 있으면 그때 1회 경고. */
     const MISS_QUIET = 1500, MISS_CAP = 5000;
     const OWN_UI = ".ss-ui,.ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-toolbar,.ss-tip";
+    /* 우리가 «그린» 것 — 마커·주석선·툴팁. 앱을 «감싸는» 컨테이너(.ss-proto-wrap·.ss-docmode)와 구분해야 한다 */
+    const OWN_DRAWN = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-tip,.ss-toc,.ss-nav-toast,.ss-pvbar";
+    /* 이 변경이 «앱» 의 것인가.
+       wrap·frame 은 앱을 .ss-holder 안으로 옮기는데 그 조상 컨테이너에 .ss-ui 가 붙어 있다.
+       그래서 OWN_UI 만 보면 앱의 모든 변경이 «우리 UI 변경» 으로 오인돼 1.5초 리셋이 죽는다
+       — 비동기 조회 화면이 여전히 누락 오탐을 받던 원인 (2026-08-26). 홀더 안쪽은 앱으로 본다. */
+    const isAppChange = (n) => {
+      if (!n || !n.closest) return false;
+      if (n.closest(OWN_DRAWN)) return false;      /* 마커를 다시 놓는 것은 앱의 변화가 아니다 */
+      if (n.closest(".ss-holder")) return true;    /* wrap·frame: 앱은 홀더 안에 산다 */
+      return !n.closest(OWN_UI);                   /* overlay: 앱은 우리 UI 밖에 그대로 있다 */
+    };
     let missMo = null, missTimer = null, missCap = null;
     function watchMissing(sc) {
       if (missMo) { missMo.disconnect(); missMo = null; }
       clearTimeout(missTimer); clearTimeout(missCap);
       if (warned[sc.id]) return;
-      const attempt = () => {
+      /* final=false 는 «조용해졌다» 신호, final=true 는 «상한(5초) 도달».
+         전부 찾았으면 즉시 끝내고, 못 찾은 게 있으면 상한까지 기다렸다 경고한다 —
+         조용하다고 다 온 것은 아니기 때문이다(응답이 1.5초보다 늦는 조회 화면). 낙관적으로 기다린다. */
+      const attempt = (final) => {
         if (sc !== current || warned[sc.id]) return stop();
         const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
         items().forEach((it) => { /* 하위 요소도 target 이 있으면 센다 — 보고는 #1a (#25) */
@@ -760,6 +775,7 @@ ${HL_CSS}
           if (!targetOf(sp)) (sp.anno === "state" || sp.optional ? cond : missing).push(it); /* optional:true — anno 와 무관하게 조건부 (#23) */
         });
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
+        if (!final) return; /* 아직 상한 전 — 늦게 올 수도 있으니 경고를 미룬다 (감시는 계속) */
         warned[sc.id] = true;
         console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
           missing.map((it) => "#" + it.label + " target=\"" + it.spec.target + "\"").join(", ") +
@@ -769,13 +785,13 @@ ${HL_CSS}
       };
       const stop = () => { if (missMo) missMo.disconnect(); missMo = null; clearTimeout(missTimer); clearTimeout(missCap); };
       missMo = new MutationObserver((recs) => {
-        if (!recs.some((r) => !(r.target.closest && r.target.closest(OWN_UI)))) return; /* 우리 UI 안의 변경은 무시 */
+        if (!recs.some((r) => isAppChange(r.target))) return; /* 우리가 그린 것의 변경은 무시 */
         clearTimeout(missTimer);
-        missTimer = setTimeout(attempt, MISS_QUIET);
+        missTimer = setTimeout(() => attempt(false), MISS_QUIET);
       });
       missMo.observe(appDoc().body, { subtree: true, childList: true });
-      missTimer = setTimeout(attempt, MISS_QUIET);
-      missCap = setTimeout(attempt, MISS_CAP);
+      missTimer = setTimeout(() => attempt(false), MISS_QUIET);
+      missCap = setTimeout(() => attempt(true), MISS_CAP);
     }
     const navToast = h("div", { class: "ss-ui ss-nav-toast" });
     document.body.appendChild(navToast);

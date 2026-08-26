@@ -513,8 +513,11 @@ function check(name, ok, detail) {
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
-    const w = warns.filter((x) => x.includes("못 찾은 정의"));
+    /* 못 찾은 게 있으면 경고는 상한(5초)에 나온다 — 조용해졌다고 다 온 것은 아니므로 (#23 개정).
+       고정 대기 대신 «도착할 때까지» 로 잡는다 (경합 방지) */
+    const missW = () => warns.filter((x) => x.includes("못 찾은 정의"));
+    for (let i = 0; i < 80 && missW().length === 0; i++) await page.waitForTimeout(100);
+    const w = missW();
     check("지금 화면에 없는 정의는 패널에서 '현재 미표시' (#27)", await page.evaluate(() => {
       const c = (n) => document.querySelector('[data-defrow="' + n + '"]').classList.contains("ss-now-hidden");
       return !c(1) && c(2) && c(3) && c(4) && getComputedStyle(document.querySelector('[data-defrow="2"] .ss-nowtag')).display !== "none";
@@ -539,26 +542,33 @@ function check(name, ok, detail) {
     check("state 만 누락이면 경고 없음", !warns2.some((x) => x.includes("못 찾은 정의")), warns2.join(" | ").slice(0, 200));
     page.off("console", onMsg2);
   }
-  /* 비동기 조회 화면 (#23): 스켈레톤 700ms 뒤 본문 — 경고가 뜨면 안 되고, 진짜 누락은 5초 안에 떠야 한다 */
-  {
+  /* 비동기 조회 화면 (#23): 스켈레톤 뒤 본문 — 늦게 온 요소는 경고에서 빠져야 한다.
+     경고는 «조용해지면» 이 아니라 «상한(5초)» 에 나온다 — 조용하다고 다 온 것은 아니기 때문이다.
+     전부 찾으면 그 전에 조용히 끝난다(경고 없음). 그래서 대기는 고정이 아니라 «도착할 때까지» 로 잡는다 */
+  for (const [라벨, 지연] of [["0.7초", 700], ["2.5초(조용한 뒤 도착)", 2500]]) {
     const warns3 = [];
     const onMsg3 = (msg) => { if (msg.type() === "warning") warns3.push(msg.text()); };
     page.on("console", onMsg3);
     await page.goto("about:blank");
     await page.setContent('<div id="app">로딩 중…</div><script>window.SCREENSPEC={screen:{id:"S-A",name:"a"},specs:[' +
       '{n:1,target:"1",title:"본문"},{n:2,target:"2",title:"버튼"},{n:9,target:"9",title:"진짜 누락"}]};' +
-      'setTimeout(()=>{document.getElementById("app").innerHTML=\'<div data-spec="1">본문</div><button data-spec="2">저장</button>\';},700);</script>');
+      'setTimeout(()=>{document.getElementById("app").innerHTML=\'<div data-spec="1">본문</div><button data-spec="2">저장</button>\';},' + 지연 + ');</script>');
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(900); /* t≈1.4s: 본문은 0.7s 에 왔고 판정은 그 뒤 1.5초 조용해야 → 아직 */
-    const early = warns3.filter((x) => x.includes("못 찾은 정의"));
-    check("비동기 로딩(700ms) 중·직후에는 경고 안 뜸", early.length === 0, early.join(" | ").slice(0, 160));
-    await page.waitForTimeout(1600); /* t≈3s: 판정 완료 */
-    const late = warns3.filter((x) => x.includes("못 찾은 정의"));
-    check("다 그려진 뒤 판정: 진짜 누락 #9 만 경고, 늦게 온 #1·#2 는 제외", late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes("#1 "), late.join(" | ").slice(0, 160));
+    const miss = () => warns3.filter((x) => x.includes("못 찾은 정의"));
+    /* 데이터가 오기 전에는 경고가 없어야 한다 (조용해졌다고 성급히 판정하면 안 된다) */
+    await page.waitForTimeout(지연 + 300);
+    check("비동기 " + 라벨 + ": 데이터 도착 전에는 경고 없음", miss().length === 0, miss().join(" | ").slice(0, 160));
+    /* 상한까지 기다린다 — 고정 대기가 아니라 도착할 때까지 (경합 방지) */
+    for (let i = 0; i < 80 && miss().length === 0; i++) await page.waitForTimeout(100);
+    const late = miss();
+    check("비동기 " + 라벨 + ": 진짜 누락 #9 만 경고 · 늦게 온 #1·#2 는 제외",
+      late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes('#1 ') && !late[0].includes('#2 '),
+      late.join(" | ").slice(0, 160));
     page.off("console", onMsg3);
   }
+
 
   /* ============ parts: 영역 안의 이름 있는 하위 요소 + 자동 라벨 (#25) ============ */
   console.log("[docs] parts");
@@ -606,8 +616,11 @@ function check(name, ok, detail) {
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
-    const pw = pWarns.filter((x) => x.includes("못 찾은 정의"));
+    /* 못 찾은 게 있으면 경고는 상한(5초)에 나온다 — 조용해졌다고 다 온 것은 아니므로 (#23 개정).
+       고정 대기 대신 «도착할 때까지» 로 잡는다 (경합 방지) */
+    const missP = () => pWarns.filter((x) => x.includes("못 찾은 정의"));
+    for (let i = 0; i < 80 && missP().length === 0; i++) await page.waitForTimeout(100);
+    const pw = missP();
     check("parts: target 없는 하위 요소도 누락 경고에 #1c 로 나온다", pw.length === 1 && pw[0].includes('#1c target="1c-none"') && pw[0].includes("1건"), pw.join(" | ").slice(0, 200));
     page.off("console", onPMsg);
   }
