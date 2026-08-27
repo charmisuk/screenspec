@@ -20,6 +20,7 @@
        코드는 되는데 문서에만 없어 사용자가 못 찾는 드리프트를 막는다 (2026-08-24 #28: Part.optional 누락)
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
+ * 18) 라이브러리 소스의 스크립트 종료 태그·HTML 주석 여는 표시 — 인라인 산출물이 통째로 깨진다 (2026-08-27 2회)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
@@ -139,7 +140,9 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 
   /* 15) Screen·Spec 레벨 필드 — 코드가 읽는 s.xxx / sc.xxx 가 레퍼런스에 없으면 FAIL */
   const SKIP = new Set(["length", "forEach", "map", "filter", "find", "some", "every", "push", "join", "slice", "indexOf", "replace", "match", "test", "trim", "toLowerCase", "includes", "style", "classList", "dataset", "root", "getClientRects", "getBoundingClientRect", "querySelector", "querySelectorAll", "textContent", "children", "byKey", "screen", "label", "mech"]);
-  const objFields = [...new Set([...lib.matchAll(/\b(?:s|sc|spec|next|o|x|current|cur|sc2)\.([a-zA-Z]+)\b/g)].map((m) => m[1]))]
+  /* o·x 는 뺀다 — 흔한 콜백 인자 이름이라 x.text()·o.markers 같은 «설정과 무관한» 속성 접근을 잡아
+     코드가 검사에 맞춰 변수명을 바꾸게 만들었다(2026-08-27 사이클에 3회). 실측상 이 둘의 고유 기여는 0개다 */
+  const objFields = [...new Set([...lib.matchAll(/\b(?:s|sc|spec|next|current|cur|sc2)\.([a-zA-Z]+)\b/g)].map((m) => m[1]))]
     .filter((f) => !SKIP.has(f) && !f.startsWith("_"));
   check("Screen·Spec 필드 추출기 동작 (≥10개)", objFields.length >= 10, JSON.stringify(objFields));
   const undocObj = objFields.filter((f) => !ref.includes("`" + f + "`") && !new RegExp("^\\s*" + f + "\\??:", "m").test(ref));
@@ -224,6 +227,23 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   const lic = fs.readFileSync(path.join(REPO, "LICENSE"), "utf8");
   const who = (s) => ((s.match(/Copyright \(c\)\s*\d{4}\s*([^\n·]+)/i) || [])[1] || "").trim();
   check("저작권자 = LICENSE와 동일 (" + who(lic) + ")", who(head) === who(lic), who(head) + " vs " + who(lic));
+}
+
+/* 18) 인라인 빌드 안전 — 라이브러리 소스에 «스크립트 종료 태그»나 «HTML 주석 여는 표시»가 있으면
+       scripts/inline.js 가 만든 자체 완결 파일이 통째로 깨진다. <script> 안에서 HTML 파서가 escaped
+       상태로 빠져 닫는 태그를 못 보기 때문이다. 2026-08-27 사이클에 실제로 두 번 빌드가 죽었는데,
+       e2e 는 「인라인 부팅 실패」라는 먼 증상으로만 알려줘 원인을 찾는 데 시간이 들었다. 여기서 바로 짚는다 */
+{
+  const lib = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+  const CLOSE = "<" + "/script", OPENC = "<" + "!--";
+  const at = (needle) => lib.split("\n").reduce((a, l, i) => (l.includes(needle) ? a.concat(i + 1) : a), []);
+  check("라이브러리에 스크립트 종료 태그 없음 (인라인 산출물이 깨진다)", at(CLOSE).length === 0, "줄 " + JSON.stringify(at(CLOSE)));
+  check("라이브러리에 HTML 주석 여는 표시 없음 (인라인 산출물이 깨진다)", at(OPENC).length === 0, "줄 " + JSON.stringify(at(OPENC)));
+  /* 음성 테스트 — 검사가 살아 있는지 양쪽으로 확인한다. 미끼는 잡고 정상은 통과해야 한다 */
+  const seen = (src, needle) => src.includes(needle);
+  check("(자체검사) 위 두 검사가 실제로 잡아낸다",
+    seen("앞 " + CLOSE + "> 뒤", CLOSE) && !seen("정상 소스", CLOSE) &&
+    seen("앞 " + OPENC + " 뒤", OPENC) && !seen("정상 소스", OPENC));
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));

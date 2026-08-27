@@ -236,5 +236,15 @@
     "done": false,
     "version": "0.20.0",
     "note": "버전 bump + CHANGELOG 커밋까지 완료. 실제 배포(main 머지 → 태그 → gh release → CDN 퍼지)는 사용자 확인 뒤."
+  },
+  "retro": {
+    "done": true,
+    "file": "docs/sprint/2026-08-27-cycle/retro.md",
+    "lint_added": [
+      "18) 인라인 빌드를 깨뜨리는 스크립트 종료 태그·HTML 주석 여는 표시 (음성 테스트로 검증)",
+      "Screen·Spec 필드 추출기에서 o·x 접두사 제거 — 고유 기여 0개 실측 확인"
+    ],
+    "protocol_proposals": 3,
+    "note": "프로토콜 변경 3건은 사용자 승인 대기 — 승인 없이 issue-cycle.md 를 고치지 않는다"
   }
 }
