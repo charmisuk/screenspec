@@ -226,9 +226,15 @@
     }
   ],
   "cycle_qa": {
-    "done": false
+    "done": true,
+    "lint": "전부 통과 (버전 정합 4항목 포함)",
+    "e2e": "PASS 248 / FAIL 0 — 사이클 시작 시점 150 에서 +98",
+    "smoke": "FAIL 1건 = examples/demo.html 외부 이미지 차단. 이슈마다 git stash 로 변경을 제거하고 재실행해 동일하게 실패함을 확인 — 샌드박스 한정이며 회귀 아님",
+    "release_pre": "node scripts/release.js --pre 통과 — CHANGELOG 최상단 v0.20.0 · 문서 CDN 태그 v0.20.0 일치"
   },
   "release": {
-    "done": false
+    "done": false,
+    "version": "0.20.0",
+    "note": "버전 bump + CHANGELOG 커밋까지 완료. 실제 배포(main 머지 → 태그 → gh release → CDN 퍼지)는 사용자 확인 뒤."
   }
 }
