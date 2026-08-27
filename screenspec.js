@@ -85,6 +85,12 @@
     if (m) return /^(0|off|false|no)$/i.test(decodeURIComponent(m[1] || "1")) ? "off" : "on";
     return RAW.off === true ? "off" : "on";
   })();
+  /* 편집 잠금 (#37) — 전달본을 못 고치게 한다. 「보여 주기만」 하는 사본에 건다.
+     숨김이 아니라 미생성이다: 편집 버튼도 저장 경로도 아예 만들지 않는다 */
+  const READONLY = RAW.readonly === true;
+  /* 저장은 «원본 HTML 의 설정 블록만» 갈아끼운다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 원본이 아니므로,
+     손대기 전 사본을 부팅 직전에 떠 둔다 — file:// 처럼 fetch 가 막힌 자리에서는 이게 유일한 원본이다 */
+  let SRC_SNAPSHOT = null;
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
     : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
@@ -225,6 +231,100 @@
   /* 모션 감소 설정 반영 */
   const SB = (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) ? "auto" : "smooth";
 
+  /* ============================================================
+     편집 엔진 (#37) — DOM 을 모르는 순수 함수. 여기서 만든 텍스트가 그대로 파일이 된다.
+     기획자가 정의서를 고치는 것과, 그 결과를 파일로 되돌리는 것은 다른 일이다.
+     되돌리는 쪽을 순수 함수로 떼어 두면 브라우저 없이도 검증할 수 있다.
+     ============================================================ */
+  /* 필드 순서를 고정해야 «고친 줄만» 바뀐 파일이 나온다 — 순서가 흔들리면 매 저장이 전면 수정으로 보인다.
+     모르는 키는 뒤에 원래 순서로 붙인다: 설정이 늘어나도 저장이 필드를 잃지 않는다 */
+  const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "style", "off", "readonly",
+    "vocab", "prefixes", "endings", "idScheme", "notes",
+    "screen", "screens", "id", "name", "path", "route", "root", "viewports", "covers", "skip",
+    "n", "target", "anno", "title", "optional", "t", "why", "subs", "defs", "parts",
+    "play", "preview", "flowTo", "arrowTo", "selector", "label", "w", "h", "specs"];
+  function ssStr(s) {
+    /* JSON.stringify 가 따옴표·역슬래시·줄바꿈을 맡고, 우리는 «스크립트 블록을 깨뜨리는» 것만 더 막는다.
+       스크립트 종료 태그와 HTML 주석 여는 표시의 < 만 이스케이프한다 — 「a < b」 같은 본문은 읽히는 채로 둔다.
+       이 파일 자체도 인라인 대상이라 소스에 종료 태그를 «쓸 수 없다» — 그래서 아래도 \/ 로 적는다 */
+    return JSON.stringify(String(s))
+      .replace(/<(?=[/!])/g, "\\u003C")
+      .replace(/[\u2028\u2029]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).toUpperCase());
+  }
+  function ssKey(k) { return /^[A-Za-z_$][\w$]*$/.test(k) ? k : ssStr(k); }
+  function ssKeys(o) {
+    const ks = Object.keys(o).filter((k) => o[k] !== undefined && typeof o[k] !== "function");
+    const orig = {};
+    ks.forEach((k, i) => (orig[k] = i));
+    return ks.slice().sort((a, b) => {
+      const ra = KEY_RANK.indexOf(a), rb = KEY_RANK.indexOf(b);
+      if (ra < 0 && rb < 0) return orig[a] - orig[b];
+      if (ra < 0) return 1;
+      if (rb < 0) return -1;
+      return ra - rb;
+    });
+  }
+  function ssVal(v, ind) {
+    if (v === null) return "null";
+    const t = typeof v;
+    if (t === "string") return ssStr(v);
+    if (t === "number" || t === "boolean") return String(v);
+    if (Array.isArray(v)) {
+      if (!v.length) return "[]";
+      /* 원시값만 든 짧은 배열은 한 줄로 — path·covers·subs 가 세로로 늘어지면 사람이 못 읽는다 */
+      if (v.every((x) => x === null || typeof x !== "object")) {
+        const one = "[" + v.map((x) => ssVal(x, ind)).join(", ") + "]";
+        if (one.length + ind.length <= 96) return one;
+      }
+      return "[\n" + v.map((x) => ind + "  " + ssVal(x, ind + "  ")).join(",\n") + "\n" + ind + "]";
+    }
+    if (t === "object") {
+      const ks = ssKeys(v);
+      if (!ks.length) return "{}";
+      return "{\n" + ks.map((k) => ind + "  " + ssKey(k) + ": " + ssVal(v[k], ind + "  ")).join(",\n") + "\n" + ind + "}";
+    }
+    return "null"; /* 함수·undefined 는 설정에 올 수 없다 */
+  }
+  function serializeConfig(cfg) { return "window.SCREENSPEC = " + ssVal(cfg, "") + ";"; }
+
+  /* 설정 <script> 블록만 골라낸다 — src 가 있는 태그(라이브러리 로드)는 건드리지 않는다 */
+  const CFG_BLOCK_RE = /<script(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script\s*>/gi;
+  function findConfigBlock(html) {
+    CFG_BLOCK_RE.lastIndex = 0;
+    let m;
+    while ((m = CFG_BLOCK_RE.exec(html))) {
+      if (/(?:window\s*\.\s*)?(?:SCREENSPEC|SPECLAYER)\s*=/.test(m[0])) return { start: m.index, end: m.index + m[0].length };
+    }
+    return null;
+  }
+  /* 설정 블록만 갈아끼운 새 HTML. 블록을 못 찾으면 null — 부르는 쪽이 「이 파일이 맞나요」를 묻는다.
+     나머지 바이트는 손대지 않는다: 프로토타입 코드가 저장 때문에 바뀌면 안 된다 */
+  function replaceConfigBlock(html, body) {
+    const at = findConfigBlock(html);
+    if (!at) return null;
+    return html.slice(0, at.start) + "<script>\n" + body + "\n<\/script>" + html.slice(at.end);
+  }
+  /* 복원은 «제자리»여야 한다 — 부팅 때 잡아 둔 배열·객체 참조를 살려야 화면 목록과 설정이
+     계속 같은 것을 가리킨다. 통째로 갈아끼우면 그 연결이 끊겨 편집이 화면에 반영되지 않는다 */
+  function adoptInto(dst, src) {
+    if (Array.isArray(dst) && Array.isArray(src)) {
+      if (dst.length > src.length) dst.length = src.length;
+      src.forEach((v, i) => {
+        const a = dst[i];
+        if (a && v && typeof a === "object" && typeof v === "object" && Array.isArray(a) === Array.isArray(v)) adoptInto(a, v);
+        else dst[i] = v;
+      });
+      return dst;
+    }
+    Object.keys(dst).forEach((k) => { if (!(k in src)) delete dst[k]; });
+    Object.keys(src).forEach((k) => {
+      const a = dst[k], b = src[k];
+      if (a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b)) adoptInto(a, b);
+      else dst[k] = b;
+    });
+    return dst;
+  }
+
   /* ============ 디자인 시스템 ============
      1. 토큰: 색·서체는 --ss-* 변수로만 사용 (하드코딩 금지)
      2. 리셋: :where()로 특이도 0 — 컴포넌트 클래스가 항상 이긴다
@@ -274,6 +374,45 @@
   .ss-defs-head{padding:12px 18px;border-bottom:1px solid var(--ss-line);display:flex;align-items:center;gap:8px}
   .ss-defs-head h2{font-size:13px;font-weight:800;margin:0;color:var(--ss-ink)}
   .ss-defs-head .ss-cnt{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);font-weight:700}
+  /* 편집 모드 (#37) — 기획자가 코드를 안 보고 정의서를 고치는 자리.
+     읽는 화면을 그대로 두고 «고칠 수 있음» 만 얹는다: 편집을 켜야 손잡이가 보인다.
+     새 고정(fixed) 요소를 만들지 않는다 — 전부 패널 안쪽 흐름 배치라 마커·재현 중 띠를 가리지 않는다 */
+  .ss-editbtn{margin-left:auto;border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);
+    font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:inherit}
+  .ss-editbtn:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  .ss-editbtn[aria-pressed="true"]{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
+  .ss-editbtn .ss-dot{display:none;width:6px;height:6px;border-radius:50%;background:#E5484D;margin-left:5px}
+  .ss-editbtn.ss-dirty .ss-dot{display:inline-block;vertical-align:middle}
+  .ss-edbar{display:none;align-items:center;gap:6px;padding:8px 18px;border-bottom:1px solid var(--ss-line);
+    background:#FAFAF9;font-size:11.5px;color:var(--ss-ink3);flex-wrap:wrap}
+  body.ss-editing .ss-edbar{display:flex}
+  .ss-edbar button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);font-size:11.5px;
+    font-weight:700;padding:4px 9px;border-radius:7px;cursor:pointer;font-family:inherit}
+  .ss-edbar button:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  .ss-edbar .ss-edsave{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
+  .ss-edmsg{flex-basis:100%;color:var(--ss-ink2);line-height:1.6}
+  .ss-edmsg:empty{display:none}
+  /* 고칠 수 있는 글자 — 밑줄 한 겹으로만 알린다. 읽을 때의 인상을 바꾸지 않기 위해 */
+  body.ss-editing [data-ed]{cursor:text;border-radius:4px;box-shadow:inset 0 -1px 0 var(--ss-line2)}
+  body.ss-editing [data-ed]:hover{background:#FFF8E1;box-shadow:inset 0 -1px 0 var(--ss-ink3)}
+  body.ss-editing [data-ed].ss-ed-on{background:#fff;box-shadow:0 0 0 2px var(--ss-accent);outline:none}
+  .ss-edrow{display:none;gap:5px;margin-top:9px;flex-wrap:wrap}
+  body.ss-editing .ss-edrow{display:flex}
+  .ss-edrow button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);font-size:11px;
+    font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;font-family:inherit}
+  .ss-edrow button:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  .ss-edline{display:none;gap:4px;margin-left:6px}
+  /* 흐리게 늘 보인다 → 있는 줄 모르는 일이 없고, 얹으면 또렷해진다 */
+  body.ss-editing .ss-edline{display:inline-flex;opacity:.4;transition:opacity .12s}
+  body.ss-editing .ss-items li:hover .ss-edline{opacity:1}
+  .ss-edline button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);font-size:10.5px;
+    font-weight:700;padding:0 6px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1.7}
+  .ss-edline button:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  .ss-draft{display:none;align-items:center;gap:8px;padding:9px 18px;background:#FFF8E1;
+    border-bottom:1px solid #F0E4B8;font-size:11.5px;color:#7A5B00;line-height:1.6}
+  .ss-draft.ss-show{display:flex}
+  .ss-draft button{border:1px solid #E0CE96;background:#fff;color:#7A5B00;font-size:11px;font-weight:700;
+    padding:3px 9px;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap}
   .ss-defs-list{flex:1;overflow-y:auto}
   .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
   .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
@@ -547,12 +686,49 @@ ${HL_CSS}
     });
     return out;
   }
+  /* 편집 모드는 «켜야 보이는» 것이다 (#37) — 꺼져 있으면 아래 함수들이 빈 문자열을 내므로
+     정의서 DOM 은 편집 기능이 없던 때와 한 글자도 다르지 않다. 회귀 위험을 0 으로 두려는 배치다 */
+  let EDIT = false;
+  function edMark(field, di, si) {
+    if (!EDIT) return "";
+    return ' data-ed="' + field + '"' + (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"');
+  }
+  function edBtn(cmd, label, title, di, si) {
+    return '<button type="button" data-ec="' + cmd + '"' + (di == null ? "" : ' data-di="' + di + '"') +
+      (si == null ? "" : ' data-si="' + si + '"') + (title ? ' title="' + title + '"' : "") + ">" + label + "</button>";
+  }
+  /* 줄 하나의 손잡이 — 이유가 이미 있으면 「＋ 이유」는 내지 않는다 */
+  function edLineCtl(di, hasWhy) {
+    if (!EDIT) return "";
+    return '<span class="ss-edline ss-ui">' + (hasWhy ? "" : edBtn("addwhy", "＋ 이유", "이 줄에 근거 붙이기", di)) +
+      edBtn("delline", "×", "이 줄 삭제", di) + "</span>";
+  }
+  function edSubCtl(di, si) {
+    if (!EDIT) return "";
+    return '<span class="ss-edline ss-ui">' + edBtn("delsub", "×", "이 하위 줄 삭제", di, si) + "</span>";
+  }
+  /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
+  function edRowCtl() {
+    if (!EDIT) return "";
+    return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") +
+      edBtn("addsub", "＋ 하위 줄", "마지막 줄에 하위 조건 추가") +
+      edBtn("up", "↑", "위로") + edBtn("down", "↓", "아래로") + edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
+  }
+  function edPartCtl() {
+    if (!EDIT) return "";
+    return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") + edBtn("delpart", "세부 삭제", "이 세부 항목 삭제") + "</div>";
+  }
   /* 정의 불렛(공통) — 근거는 사양과 분리한다. 구현자는 사양만, 검토자는 이유까지 (#24) */
   function defItemsHTML(defs) {
     let items = "";
-    (defs || []).forEach((d) => {
-      items += "<li>" + esc(d.t) + (d.why ? '<span class="ss-why" title="이유">' + esc(d.why) + "</span>" : "") + "</li>";
-      (d.subs || []).forEach((sub) => { items += '<li class="ss-sub">' + esc(sub) + "</li>"; });
+    (defs || []).forEach((d, di) => {
+      const t = EDIT ? '<span class="ss-dt"' + edMark("t", di) + ">" + esc(d.t) + "</span>" : esc(d.t);
+      const why = d.why ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + esc(d.why) + "</span>" : "";
+      items += "<li>" + t + why + edLineCtl(di, !!d.why) + "</li>";
+      (d.subs || []).forEach((sub, si) => {
+        const st = EDIT ? '<span class="ss-dt"' + edMark("sub", di, si) + ">" + esc(sub) + "</span>" : esc(sub);
+        items += '<li class="ss-sub">' + st + edSubCtl(di, si) + "</li>";
+      });
     });
     return items;
   }
@@ -593,15 +769,15 @@ ${HL_CSS}
       (s.parts || []).forEach((p, i) => {
         const key = String(s.n) + partSuffix(i);
         parts += `<div class="ss-part" data-part="${key}">
-          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t">${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
-          <ul class="ss-items">${defItemsHTML(p.defs)}</ul>${playBtnHTML(p, key)}${previewBtnHTML(p, key)}
+          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
+          <ul class="ss-items">${defItemsHTML(p.defs)}</ul>${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
         </div>`;
       });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t">${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
-          <ul class="ss-items">${defItemsHTML(s.defs)}</ul>${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
+          <ul class="ss-items">${defItemsHTML(s.defs)}</ul>${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
         </div></div>`;
     });
     return out;
@@ -1204,7 +1380,300 @@ ${HL_CSS}
     document.addEventListener("click", (e) => { if (!toc.contains(e.target)) closeToc(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToc(); });
 
-    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render };
+    /* ============================================================
+       편집 모드 (#37) — 정의서를 «읽는 것» 에서 «고치는 것» 으로.
+       기획자는 window.SCREENSPEC 이라는 JS 객체를 평생 보지 않는다.
+       고친 값은 설정 객체에 제자리로 들어가고(SCREENS 와 같은 배열을 가리킨다),
+       저장은 그 객체를 텍스트로 되돌려 파일의 설정 블록만 갈아끼운다.
+       ============================================================ */
+    const DRAFT_KEY = "screenspec:draft:" + (location.pathname || "/");
+    let edEl = null;        /* 지금 고치는 중인 요소 */
+    let edWas = "";         /* 고치기 전 값 — Esc 로 돌아갈 자리 */
+    let edDirty = false;    /* 저장 안 된 변경이 있는가 */
+    let edHandle = null;    /* 파일에 직접 저장할 때의 파일 손잡이 (세션 동안 기억) */
+    let edBar = null, edBtn2 = null, edWhen = null, edMsg = null, edDraftBar = null;
+
+    function edStore(fn) { try { return fn(); } catch (e) { return null; } } /* 사생활 보호 모드 등 localStorage 차단 대비 */
+    function edSay(msg) { if (edMsg) edMsg.textContent = msg || ""; }
+    let edSavedAt = "";
+    function edSync() {
+      if (edBtn2) edBtn2.classList.toggle("ss-dirty", edDirty);
+      if (edWhen) edWhen.textContent = edDirty ? "저장 안 됨" : (edSavedAt ? "마지막 저장 " + edSavedAt : "");
+    }
+    function edTouched() {
+      edDirty = true;
+      edStore(() => localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), cfg: RAW })));
+      edSync();
+    }
+    function edSavedNow() {
+      edDirty = false;
+      edSavedAt = new Date().toLocaleTimeString();
+      edStore(() => localStorage.removeItem(DRAFT_KEY));
+      edSync();
+    }
+
+    /* ---- 글자 고치기 — 자리를 안 옮기고 그 자리에서 (contenteditable) ---- */
+    function edKeyOf(el) {
+      const p = el.closest("[data-part]");
+      if (p) return p.dataset.part;
+      const r = el.closest("[data-defrow]");
+      return r ? r.dataset.defrow : null;
+    }
+    function edBegin(el) {
+      if (edEl === el) return;
+      if (edEl) edFinish(true);
+      edEl = el;
+      edWas = el.textContent;
+      el.contentEditable = "true";
+      el.classList.add("ss-ed-on");
+      el.focus();
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      r.collapse(false); /* 캐럿은 끝에 — 대개 뒤를 고친다 */
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    function edFinish(commit) {
+      const el = edEl;
+      if (!el) return;
+      edEl = null;
+      el.contentEditable = "false";
+      el.classList.remove("ss-ed-on");
+      const next = el.textContent.replace(/\s+/g, " ").trim();
+      if (!commit || next === edWas) { el.textContent = edWas; return; }
+      const it = itemOf(edKeyOf(el));
+      if (!it) { el.textContent = edWas; return; }
+      const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di), si = Number(el.dataset.si);
+      let redraw = false;
+      if (f === "title") s.title = next;
+      else if (f === "t") { if (s.defs && s.defs[di]) s.defs[di].t = next; }
+      else if (f === "why") {
+        if (!s.defs || !s.defs[di]) return;
+        if (next) s.defs[di].why = next;
+        else { delete s.defs[di].why; redraw = true; } /* 비우면 이유 자체가 사라진다 — 다시 그려야 보인다 */
+      } else if (f === "sub") {
+        const d = s.defs && s.defs[di];
+        if (!d || !d.subs) return;
+        if (next) d.subs[si] = next;
+        else { d.subs.splice(si, 1); if (!d.subs.length) delete d.subs; redraw = true; }
+      }
+      edTouched();
+      if (redraw) render();
+    }
+
+    /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
+    function edRenumber() { specs().forEach((s, i) => (s.n = i + 1)); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
+    function edCmd(btn) {
+      const key = edKeyOf(btn), c = btn.dataset.ec, di = Number(btn.dataset.di), si = Number(btn.dataset.si);
+      if (edEl) edFinish(true); /* 고치던 글자를 먼저 확정 — 재렌더에 날아가지 않게 */
+      const it = itemOf(key);
+      if (!it) return;
+      const s = it.spec;
+      const list = specs();
+      if (c === "addline") (s.defs || (s.defs = [])).push({ t: "새 줄" });
+      else if (c === "addsub") {
+        const d = (s.defs || (s.defs = []))[s.defs.length - 1] || (s.defs.push({ t: "새 줄" }), s.defs[0]);
+        (d.subs || (d.subs = [])).push("새 하위 줄");
+      } else if (c === "addwhy") { if (s.defs && s.defs[di]) s.defs[di].why = "이유"; }
+      else if (c === "delline") { if (s.defs) s.defs.splice(di, 1); }
+      else if (c === "delsub") {
+        const d = s.defs && s.defs[di];
+        if (d && d.subs) { d.subs.splice(si, 1); if (!d.subs.length) delete d.subs; }
+      } else if (c === "up" || c === "down") {
+        const i = list.indexOf(s), j = i + (c === "up" ? -1 : 1);
+        if (i < 0 || j < 0 || j >= list.length) return;
+        list.splice(j, 0, list.splice(i, 1)[0]);
+        edRenumber();
+      } else if (c === "delitem") {
+        if (!confirm("항목 " + it.label + " 「" + (s.title || "") + "」 을 통째로 지웁니다. 계속할까요?")) return;
+        const i = list.indexOf(s);
+        if (i < 0) return;
+        list.splice(i, 1);
+        edRenumber();
+      } else if (c === "delpart") {
+        const par = it.parent;
+        if (!par || !par.parts) return;
+        if (!confirm("세부 " + it.label + " 「" + (s.title || "") + "」 을 지웁니다. 계속할까요?")) return;
+        par.parts.splice(par.parts.indexOf(s), 1);
+      } else return;
+      edTouched();
+      render();
+    }
+
+    /* ---- 저장 — 세 경로를 겹친다. 어느 하나가 막혀도 고친 것을 잃지 않게 ---- */
+    function edBlockText() { return serializeConfig(RAW); }
+    /* 편집 중인 글자를 먼저 확정하고 나서 저장한다 — 안 그러면 방금 친 줄이 빠진다 */
+    function edFlush() { if (edEl) edFinish(true); }
+    async function edSourceHTML() {
+      /* 원본 HTML 이 필요하다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 그대로 쓰면 안 된다.
+         ① 주소에서 다시 받아 보고 ② 막히면(file:// 등) 부팅 직전에 떠 둔 사본을 쓴다 */
+      try {
+        const res = await fetch(location.href, { cache: "no-store" });
+        if (res.ok) {
+          const txt = await res.text();
+          if (findConfigBlock(txt)) return txt;
+        }
+      } catch (e) { /* file:// 은 fetch 가 막힌다 — 사본으로 간다 */ }
+      return SRC_SNAPSHOT;
+    }
+    async function edBuildHTML() {
+      const src = await edSourceHTML();
+      if (!src) return null;
+      return replaceConfigBlock(src, edBlockText());
+    }
+    async function edSaveFile() {
+      edFlush();
+      try {
+        if (!edHandle) {
+          const picked = await window.showOpenFilePicker({
+            types: [{ description: "프로토타입 HTML", accept: { "text/html": [".html", ".htm"] } }],
+          });
+          edHandle = picked[0];
+        }
+        let perm = await edHandle.queryPermission({ mode: "readwrite" });
+        if (perm !== "granted") perm = await edHandle.requestPermission({ mode: "readwrite" });
+        if (perm !== "granted") { edSay("파일에 쓸 권한을 받지 못했습니다. 「내려받기」로 저장하세요."); return; }
+        const html = await edHandle.getFile().then((file) => file.text());
+        const out = replaceConfigBlock(html, edBlockText());
+        if (out == null) {
+          edHandle = null;
+          edSay("그 파일에서 window.SCREENSPEC 설정 블록을 찾지 못했습니다 — 지금 보고 있는 프로토타입 HTML 을 골라 주세요.");
+          return;
+        }
+        const w = await edHandle.createWritable();
+        await w.write(out);
+        await w.close();
+        edSavedNow();
+        edSay("「" + edHandle.name + "」 에 저장했습니다.");
+      } catch (e) {
+        if (e && e.name === "AbortError") return; /* 사용자가 취소 — 알릴 것 없다 */
+        edSay("저장하지 못했습니다 — " + ((e && e.message) || e) + " · 「내려받기」로 저장하세요.");
+      }
+    }
+    async function edSaveDownload() {
+      edFlush();
+      const out = await edBuildHTML();
+      if (out == null) { edSay("이 페이지에서 window.SCREENSPEC 설정 블록을 찾지 못해 파일을 만들 수 없습니다."); return; }
+      const base = (location.pathname.split("/").pop() || "screenspec").replace(/\.html?$/i, "");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([out], { type: "text/html" }));
+      a.download = base + ".edited.html";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      edSavedNow();
+      edSay("「" + a.download + "」 을 내려받았습니다. 원본을 이 파일로 바꾸면 됩니다.");
+    }
+    async function edCopyBlock() {
+      edFlush();
+      const txt = edBlockText();
+      try { await navigator.clipboard.writeText(txt); edSay("설정을 복사했습니다. 원본의 window.SCREENSPEC 블록에 붙여넣거나, AI 에게 「이걸로 교체해줘」 하세요."); }
+      catch (e) { edSay("복사가 막혔습니다 — 콘솔에 출력했습니다."); console.log(txt); }
+    }
+
+    /* ---- 저장 안 된 초안 ---- */
+    function edDraftRead() {
+      const raw = edStore(() => localStorage.getItem(DRAFT_KEY));
+      if (!raw) return null;
+      try {
+        const d = JSON.parse(raw);
+        if (!d || !d.cfg) return null;
+        if (JSON.stringify(d.cfg) === JSON.stringify(RAW)) return null; /* 파일이 이미 그 내용이면 알릴 것 없다 */
+        return d;
+      } catch (e) { return null; }
+    }
+    function edDraftOffer() {
+      const d = edDraftRead();
+      if (!d || !edDraftBar) return;
+      edDraftBar.querySelector(".ss-draft-when").textContent = new Date(d.at).toLocaleString();
+      edDraftBar.classList.add("ss-show");
+      edDraftBar.querySelector('[data-dc="take"]').onclick = () => {
+        adoptInto(RAW, d.cfg);
+        edDraftBar.classList.remove("ss-show");
+        edDirty = true;
+        edSync();
+        setEdit(true);
+        render();
+        edSay("저장 안 된 초안을 되살렸습니다. 저장을 눌러 파일에 반영하세요.");
+      };
+      edDraftBar.querySelector('[data-dc="drop"]').onclick = () => {
+        edStore(() => localStorage.removeItem(DRAFT_KEY));
+        edDraftBar.classList.remove("ss-show");
+      };
+    }
+
+    /* ---- 켜고 끄기 ---- */
+    function setEdit(on) {
+      if (READONLY) return;
+      EDIT = !!on;
+      document.body.classList.toggle("ss-editing", EDIT);
+      if (edBtn2) edBtn2.setAttribute("aria-pressed", String(EDIT));
+      if (!EDIT) edFlush();
+      edSay("");
+      render();
+    }
+
+    /* ---- 패널에 편집 UI 를 심는다 — 새 고정 요소를 만들지 않는다 ---- */
+    function edMount() {
+      if (READONLY || !ctx.cntEl || !ctx.cntEl.parentNode) return;
+      const head = ctx.cntEl.parentNode;
+      edBtn2 = h("button", { class: "ss-editbtn ss-ui", type: "button", "aria-pressed": "false" }, "편집<span class=\"ss-dot\"></span>");
+      edBtn2.onclick = () => setEdit(!EDIT);
+      head.appendChild(edBtn2);
+
+      edDraftBar = h("div", { class: "ss-draft ss-ui" },
+        '저장 안 된 초안이 있습니다 (<span class="ss-draft-when"></span>) ' +
+        '<button type="button" data-dc="take">이어서</button><button type="button" data-dc="drop">버리기</button>');
+      edBar = h("div", { class: "ss-edbar ss-ui" },
+        '<button type="button" class="ss-edsave" data-sv="file">파일에 저장</button>' +
+        '<button type="button" data-sv="down">내려받기</button>' +
+        '<button type="button" data-sv="copy">설정 복사</button>' +
+        '<span class="ss-edwhen"></span><span class="ss-edmsg"></span>');
+      if (typeof window.showOpenFilePicker !== "function") edBar.querySelector('[data-sv="file"]').remove();
+      else edBar.querySelector('[data-sv="down"]').classList.remove("ss-edsave");
+      head.parentNode.insertBefore(edDraftBar, head.nextSibling);
+      head.parentNode.insertBefore(edBar, edDraftBar.nextSibling);
+      edWhen = edBar.querySelector(".ss-edwhen");
+      edMsg = edBar.querySelector(".ss-edmsg");
+      edBar.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-sv]");
+        if (!b) return;
+        if (b.dataset.sv === "file") edSaveFile();
+        else if (b.dataset.sv === "down") edSaveDownload();
+        else edCopyBlock();
+      });
+
+      /* 패널 안의 편집 상호작용 — 기존 클릭 위임(행 활성화·▶·스위치)보다 «먼저» 잡는다 */
+      ctx.listEl.addEventListener("click", (e) => {
+        if (!EDIT) return;
+        const cmd = e.target.closest("[data-ec]");
+        if (cmd) { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }
+        const t = e.target.closest("[data-ed]");
+        if (t) { e.stopPropagation(); edBegin(t); return; }
+        if (edEl && !edEl.contains(e.target)) edFinish(true); /* 바깥을 누르면 반영 */
+      }, true);
+      ctx.listEl.addEventListener("keydown", (e) => {
+        if (!edEl) return;
+        if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); edFinish(true); }
+        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); edFinish(false); }
+      }, true);
+      /* 붙여넣기는 글자만 — 서식이 딸려 오면 저장 텍스트가 더러워진다 */
+      ctx.listEl.addEventListener("paste", (e) => {
+        if (!edEl) return;
+        e.preventDefault();
+        const txt = (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ");
+        document.execCommand("insertText", false, txt);
+      });
+      addEventListener("beforeunload", (e) => {
+        if (!edDirty) return;
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      });
+      edDraftOffer();
+    }
+
+    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -1237,7 +1706,7 @@ ${HL_CSS}
        프로토타입이 setScreen()·refresh() 를 부르고 있을 수 있으므로 빈 껍데기만 남긴다(안 그러면 프로토타입이 깨진다). */
     if (SWITCH === "off") {
       const noop = function () {};
-      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true };
+      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, edit: noop, serialize: () => "", dirty: () => false };
       window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
       console.info("[ScreenSpec] off — 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
       return;
@@ -1261,6 +1730,8 @@ ${HL_CSS}
     }));
     /* 상태 점검이 켜져 있으면 그 사실을 알린다 — 설정을 직접 넣지 않은 사람도 «저 ⚠ 가 뭔지» 를 알 수 있게 */
     if (CHECKLIST) console.info("[ScreenSpec] 상태 점검 켜짐 — 화면마다 " + CHECKLIST.join(" · ") + " 를 적었는지 확인합니다. 화면의 covers 에 적거나 skip 에 사유를 적으면 ⚠ 가 사라집니다");
+    /* 아직 아무것도 안 건드린 지금이 원본을 뜰 수 있는 마지막 순간이다 (#37) */
+    if (!READONLY) SRC_SNAPSHOT = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
     const isFramework = !!(window.next || document.querySelector("#__next,[data-reactroot],script#__NEXT_DATA__"));
     const mode = RAW.mode || (isFramework ? "overlay" : "wrap");
@@ -1606,7 +2077,8 @@ ${HL_CSS}
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
 
     /* ---- 공개 API ---- */
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap" };
+    core.edMount();
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
@@ -1731,7 +2203,8 @@ ${HL_CSS}
     }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
 
     /* ---- 공개 API ---- */
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay" };
+    core.edMount();
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);

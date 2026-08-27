@@ -64,19 +64,54 @@
       "type": "feat",
       "release": "Phase 0-2",
       "title": "편집 모드 — 코드를 안 보고 정의서 수정",
-      "status": "todo",
+      "status": "done",
       "plan": {
-        "done": false
+        "done": true,
+        "cause": "정의서를 고치려면 지금은 window.SCREENSPEC 이라는 JS 객체를 직접 열어야 한다. 따옴표·쉼표를 한 글자 틀리면 정의서가 통째로 안 뜨므로 기획자는 사실상 개발자를 거쳐야 한다. 그런데 주 시나리오는 「AI 초안을 받아 손본다」이고, 손보기가 매번 남을 거치면 초안의 가치가 반감된다. 저장 경로도 없다 — 고친 결과를 파일로 되돌릴 방법이 라이브러리 안에 없다. Phase 0 의 심장인 이유는 같은 편집 UI 가 Phase 1 온라인 편집기의 몸통이 되기 때문이다(오프라인=파일 저장, 온라인=API 저장, 코드는 하나).",
+        "measured": "기획서가 「파일 접근 API 의 file:// 지원 범위를 구현 첫 주에 실측하라」고 요구 → 계획 전에 측정 완료. file:// 에서도 showOpenFilePicker·showSaveFilePicker 가 존재하고 isSecureContext=true 이며, 실제 창에서는 피커가 열린다(SecurityError 로 원본 거절되지 않음). 단 피커는 CDP 로도 자동 조작이 불가(이 크롬 빌드에 Page.handleFileChooser 없음) → 자동 검증 불가. 결론: 순수 로직(직렬화·블록 교체)과 브라우저 껍데기(피커·핸들)를 분리해 순수 로직만 e2e 로 두들기고, 피커 경로는 사용자 QA 항목으로 넘긴다.",
+        "change": "(1) screenspec.js — 편집 엔진(순수): serializeConfig(RAW) → 「window.SCREENSPEC = {…};」 텍스트(필드 순서 고정·들여쓰기 2칸·한글 이스케이프 없음), replaceConfigBlock(htmlText, block) → 설정 <script> 블록만 교체한 새 HTML. 둘 다 DOM 을 안 쓰는 순수 함수로 두고 window.ScreenSpec.serialize()·_replaceBlock 으로 노출해 e2e 가 직접 호출한다. (2) screenspec.js — 편집 UI: 툴바 「편집」 토글(화면정의서 모드에서만 보임, readonly:true 면 아예 안 만듦) · 패널 텍스트 클릭 → 그 자리 입력(Enter/바깥클릭=반영, Esc=취소) · 행 hover 컨트롤(+줄 · +이유 · ↑↓ · 삭제) · 항목 삭제는 확인 후. 편집 대상은 title · defs[].t · defs[].why · defs[].subs[] · parts 의 같은 필드로 한정. anno·target·play·preview·flowTo·screen 메타는 v1 제외. (3) screenspec.js — 저장 3경로: ①파일에 직접(File System Access, 있을 때만 노출·핸들은 세션 기억) ②다운로드 폴백(이름.edited.html) ③설정 블록 클립보드 복사. 어느 경로든 localStorage 초안이 항상 깔리고, 다시 열면 「저장 안 된 초안 — 이어서/버리기」 배너. 미저장이면 툴바에 ● 배지 + beforeunload 경고. (4) 편집은 SCREENS 가 RAW 와 같은 객체·배열을 참조한다는 성질을 이용해 spec 객체를 제자리 수정한다(단일화면은 RAW.specs 와 SCREENS[0].specs 가 동일 참조, 다중화면은 RAW.screens 자체). 삭제는 splice 로만 — 배열을 재대입하면 RAW 와 끊긴다. (5) docs/config.md — readonly 필드 행 + 「편집 모드」 절 + 공개 API 3개. (6) SKILL.md — 편집 모드 한 절(기획자가 코드를 안 보고 고친다). (7) README.md 기능 줄. (8) tests/e2e.js — 아래 qa 참조. 배치 제약: 「편집」 토글은 툴바(높이 50px) 안 기존 ss-modes 오른쪽에 넣고 새 고정 요소를 만들지 않는다. 초안 배너·저장바는 패널(폭 460px) 안쪽 상단에 흐름 배치로 넣어 마커 층·재현 중 띠(ss-pvbar, top:50px)와 겹치지 않게 한다. 기존 e2e 가 의존하는 ID·문구(#ss-mDoc·#ss-mProto·#ss-defsList·.ss-row·.ss-t·[data-play]·[data-preview]·.ss-cnt 문구)는 그대로 둔다.",
+        "accept": [
+          "편집 토글 ON → 패널의 항목명·정의 줄을 클릭해 고치고 Enter 로 반영되며, 화면정의서 표시가 즉시 바뀐다 (코드 한 줄도 안 본다)",
+          "serialize() 왕복 무손실 — 직렬화한 텍스트를 다시 평가하면 원래 설정과 값이 같다 (주석 제외)",
+          "replaceConfigBlock 산출물이 완전한 HTML 이며, 그 파일을 다시 열면 고친 내용이 그대로 뜬다",
+          "Esc 는 취소 — 고치던 값이 원래대로 돌아가고 미저장 표시도 안 생긴다",
+          "readonly: true 면 편집 토글이 아예 없다 (숨김이 아니라 미생성)",
+          "미저장 변경이 있으면 툴바에 ● 배지가 뜨고, 저장하면 사라지며 마지막 저장 시각이 보인다",
+          "저장 없이 닫았다 다시 열면 「저장 안 된 초안」 배너가 뜨고 「이어서」로 복원된다",
+          "편집 모드에서도 마커·▶ 재생·상태 재현 스위치가 그대로 동작한다 (기존 e2e 154건 전부 유지)",
+          "편집 UI 가 ScreenSpec 자체 고정 UI 와 겹치지 않는다 — 툴바 50px 안에 토글이 들어가고, 배너·저장바는 패널 460px 안쪽 흐름 배치라 재현 중 띠(top:50px)·마커 층을 가리지 않는다",
+          "node tests/lint.js 통과 — readonly 가 docs/config.md 에 문서화되어 필드 커버리지를 만족"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과 (필드 커버리지에 readonly 포함)",
+          "node tests/e2e.js — 기존 154 케이스 전부 유지 + 편집 신규 케이스 통과",
+          "신규 e2e (엔진·순수): 왕복 무손실(단일화면·다중화면·parts·subs·why 포함) / 특수문자(따옴표·역슬래시·줄바꿈·한글) 안전 / replaceConfigBlock 이 설정 블록만 바꾸고 나머지 HTML 은 바이트 그대로 / 설정 블록이 없는 HTML 이면 경고하고 안 쓴다",
+          "신규 e2e (UI): 토글로 편집 켜짐 / 항목명 수정 → 패널 반영 / Esc 취소 / +줄·삭제 / readonly 면 토글 미생성 / 미저장 배지 / 초안 저장·복원 / 편집 중 ▶ 재생 정상",
+          "신규 e2e (통합): 편집 → serialize → replaceConfigBlock → 그 HTML 을 새 페이지로 열기 → 고친 문구가 뜬다 (파일 저장을 뺀 전 경로를 브라우저 안에서 재현)",
+          "node tests/smoke.js — demo.html 외부 이미지 차단 1건만 허용 (변경 전에도 동일)",
+          "사용자 QA(자동화 불가): 실제 브라우저에서 프로토타입 HTML 을 열고 편집→「파일에 저장」→파일 선택→다시 열기 로 반영 확인. 피커는 자동 조작이 불가능해 e2e 로 못 덮는다"
+        ],
+        "docs": [
+          "docs/config.md — readonly 필드 표 행 + 「편집 모드」 절 + 공개 API(edit·serialize·dirty)",
+          "SKILL.md — 편집 모드 안내 (AI 초안 뒤 사람이 고치는 자리)",
+          "README.md — 기능 줄"
+        ],
+        "amend": "(G1 보정) 편집 토글을 툴바가 아니라 «패널 머리»(ctx.cntEl 의 부모)에 둔다. 이유: ① 툴바는 wrap 에만 있고 overlay 에는 없다 — 패널 머리는 둘 다 있어 구현이 하나로 끝난다 ② 패널 자체가 화면정의서 모드에서만 보이므로 기획서가 요구한 「프로토타입 모드에서는 숨김」이 저절로 만족된다 ③ 툴바(50px)를 안 건드리니 높이·겹침 위험이 0 이다. 기획서 원문의 의도(정의서 모드에서만 보이는 편집 진입점)는 그대로 지킨다."
       },
       "dev": {
-        "done": false,
-        "model": null
+        "done": true,
+        "model": "main",
+        "routing": "프로토콜 v1.1 기준으로는 >40줄이라 opus 서브에이전트지만, 이번 세션은 서브에이전트 사용이 막혀 메인이 직접 한다. 프로토콜이 든 근거(서브에이전트는 컨텍스트를 처음부터 다시 읽어 비싸다)는 이미 전 맥락을 쥔 메인에는 반대로 작용한다 — log.md 에 회고 항목으로 적었다.",
+        "evidence": "screenspec.js +494줄 — ①편집 엔진(순수): serializeConfig·replaceConfigBlock·findConfigBlock·adoptInto, DOM 을 안 쓴다 ②편집 UI: 패널 머리 편집 토글·저장바·초안 배너, 글자는 contenteditable 로 제자리 수정(Enter 반영·Esc 취소), 구조는 ＋줄/＋하위 줄/＋이유/×/↑↓/삭제 ③저장 3경로(파일 접근 API·내려받기·설정 복사) + localStorage 초안 + beforeunload ④READONLY·SRC_SNAPSHOT·공개 API 3개(edit·serialize·dirty). 편집 손잡이는 EDIT 가 켜져야만 렌더돼 «꺼진 상태의 DOM 은 예전과 한 글자도 다르지 않다» — 기존 154 케이스가 그대로 통과하는 근거. docs/config.md +42(readonly 필드·편집 모드 절·API 3개) · SKILL.md +17(§3-G) · README.md +1 · tests/e2e.js +189(44 케이스). 계획 밖 변경 1건: scripts/inline.js +3 — 라이브러리에 HTML 주석 여는 표시가 들어가 인라인 산출물이 깨져 e2e 가 죽었다. 종료 태그는 이미 막고 있던 자리라 같은 종류의 가드를 한 줄 더 넣었다(원인이 이 이슈의 작업이고 기존 검사와 동종이라 되돌리지 않고 기록으로 남긴다)."
       },
       "qa": {
-        "done": false
+        "done": true,
+        "evidence": "lint 전부 통과(readonly 필드 커버리지 + 공개 API 3개 문서화 포함 — 셋 다 처음엔 FAIL 이었고 문서를 채워 통과시켰다). e2e PASS 198 / FAIL 0 — 기존 154 전부 유지 + 편집 44건 신규. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단, git stash -u 로 변경 전부 제거 후 재실행해도 동일하게 실패함을 다시 확인 — 회귀 아님. 범위 검사: 계획한 5개 파일 + 사유를 적은 inline.js + 프로토콜 기록 파일(tasks.json·log.md) 뿐. accept 10개 항목 중 9개는 e2e 로 자동 확인, 1개(파일 접근 API 로 원본 파일에 직접 저장)는 피커를 자동 조작할 수 없어 사용자 QA 로 넘긴다.",
+        "user_qa": "실제 브라우저(크롬·엣지)에서 프로토타입 HTML 을 로컬 서버로 열고 → 화면정의서 → 「편집」 → 문구 하나 수정 → 「파일에 저장」 → 그 HTML 파일 선택 → 페이지 새로고침. 고친 문구가 그대로 떠야 정상. 파일 선택 창은 자동 테스트가 조작할 수 없어 e2e 로 못 덮는 유일한 경로다."
       },
       "commit": {
-        "done": false
+        "done": true,
+        "evidence": "feat: 편집 모드 — 코드를 안 보고 정의서 수정 (fix #37)"
       }
     },
     {

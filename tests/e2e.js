@@ -1090,6 +1090,195 @@ function check(name, ok, detail) {
       JSON.stringify(badVocab));
   }
 
+  /* ============ 편집 모드 — 코드를 안 보고 정의서를 고친다 (#37) ============
+     http 로 띄운다: localStorage(초안)·fetch(원본)·다운로드가 file:// 나 about:blank 에서는 막힌다.
+     기획자가 실제로 쓰는 자리(로컬 서버·공유 링크)와 같은 조건이다. */
+  console.log("[edit] 편집 모드");
+  {
+    const PROTO = '<!DOCTYPE html>\n<html lang="ko"><head><meta charset="utf-8"><title>편집 대상</title></head>\n' +
+      '<body>\n<div id="a" data-spec="1">가</div>\n<div id="b" data-spec="2">나</div>\n' +
+      "<script>\nwindow.SCREENSPEC = {\n  screen: { id: \"S-A\", name: \"화면\" },\n  specs: [\n" +
+      '    { n:1, target:"1", title:"머리", defs:[{ t:"첫 줄", why:"근거" },{ t:"둘째 줄", subs:["하위"] }] },\n' +
+      '    { n:2, target:"2", anno:"action", title:"몸통", defs:[{ t:"한 줄" }], play:{ selector:"#b", label:"눌러 보기" } }\n' +
+      "  ]\n};\n<" + '/script>\n<script src="/screenspec.js"><' + "/script>\n<p id=\"tail\">꼬리</p>\n</body></html>\n";
+    const srv = http.createServer((rq, rs) => {
+      if (rq.url.indexOf("/screenspec.js") === 0) { rs.writeHead(200, { "Content-Type": "text/javascript" }); return rs.end(LIB); }
+      if (rq.url.indexOf("/ro") === 0) { rs.writeHead(200, { "Content-Type": "text/html" }); return rs.end(PROTO.replace("window.SCREENSPEC = {", "window.SCREENSPEC = {\n  readonly: true,")); }
+      rs.writeHead(200, { "Content-Type": "text/html" });
+      rs.end(PROTO);
+    });
+    await new Promise((r) => srv.listen(4197, r));
+    const open = async (p) => {
+      await page.goto("http://localhost:4197" + (p || "/"));
+      await page.waitForTimeout(500);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+    };
+
+    /* --- 진입 --- */
+    await open();
+    check("편집: 정의서 패널에 편집 버튼", (await page.locator(".ss-editbtn").count()) === 1);
+    check("편집: 끄면 정의서 DOM 이 예전과 같다 (편집 표식 0개)", (await page.locator("[data-ed]").count()) === 0);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+    check("편집: 켜면 body 에 표시", await page.evaluate(() => document.body.classList.contains("ss-editing")));
+    check("편집: 고칠 수 있는 글자에 표식이 붙는다", (await page.locator("[data-ed]").count()) >= 6);
+    check("편집: 저장바가 보인다", await page.evaluate(() => getComputedStyle(document.querySelector(".ss-edbar")).display === "flex"));
+    check("편집: 저장 경로 안내 (내려받기·설정 복사는 늘 있다)", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-edbar [data-sv]")].map((x) => x.dataset.sv).join(",").includes("down,copy")));
+    check("편집: 새 고정 요소를 만들지 않는다 (마커·띠를 가릴 일이 없다)", await page.evaluate(() =>
+      [".ss-edbar", ".ss-draft", ".ss-editbtn"].every((s) => {
+        const el = document.querySelector(s);
+        return !el || getComputedStyle(el).position !== "fixed";
+      })));
+
+    /* --- 글자 고치기 --- */
+    await page.click('[data-defrow="1"] .ss-t');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("고친 머리");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    check("편집: 항목명이 설정에 들어간다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "고친 머리"));
+    check("편집: 화면에도 그대로", await page.evaluate(() => document.querySelector('[data-defrow="1"] .ss-t').textContent === "고친 머리"));
+    check("편집: 미저장 표시가 뜬다", await page.evaluate(() => document.querySelector(".ss-editbtn").classList.contains("ss-dirty") && window.ScreenSpec.dirty()));
+
+    await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("고친 첫 줄");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    check("편집: 설명 줄도 고쳐진다", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t === "고친 첫 줄"));
+
+    /* --- Esc 는 취소 --- */
+    await page.click('[data-defrow="2"] .ss-t');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("버릴 값");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    check("편집: Esc 는 설정을 안 바꾼다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"));
+    check("편집: Esc 는 화면도 되돌린다", await page.evaluate(() => document.querySelector('[data-defrow="2"] .ss-t').textContent === "몸통"));
+
+    /* --- 구조 --- */
+    await page.click('[data-defrow="2"] [data-ec="addline"]');
+    await page.waitForTimeout(200);
+    check("편집: 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
+    await page.click('[data-defrow="1"] [data-ec="delline"][data-di="0"]');
+    await page.waitForTimeout(200);
+    check("편집: 줄 삭제", await page.evaluate(() => window.SCREENSPEC.specs[0].defs.length === 1 && window.SCREENSPEC.specs[0].defs[0].t === "둘째 줄"));
+    await page.click('[data-defrow="1"] [data-ec="addwhy"][data-di="0"]');
+    await page.waitForTimeout(200);
+    check("편집: 이유 붙이기", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].why === "이유"));
+    await page.click('[data-defrow="2"] [data-ec="up"]');
+    await page.waitForTimeout(250);
+    check("편집: 순서 바꾸기", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "몸통"));
+    check("편집: 순서를 바꾸면 번호를 1부터 다시 매긴다", await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n).join() === "1,2"));
+    check("편집: 마커 번호도 따라온다", await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((x) => x.textContent).join() === "1,2"));
+
+    /* --- 편집 중에도 문서는 살아 있다 --- */
+    await page.click('.ss-defs-list [data-play="1"]');
+    await page.waitForTimeout(250);
+    check("편집 중에도 ▶ 재생이 동작한다", (await page.locator(".ss-marker").count()) === 2 && await page.evaluate(() => document.body.classList.contains("ss-editing")));
+
+    /* --- 직렬화 (공개 API) --- */
+    const ser = await page.evaluate(() => {
+      const txt = window.ScreenSpec.serialize();
+      const w = {};
+      new Function("window", txt)(w);
+      /* 키 순서는 «일부러» 정규화한다(필드 순서 고정) — 그래서 왕복은 값으로 본다 */
+      const norm = (v) => Array.isArray(v) ? v.map(norm)
+        : (v && typeof v === "object") ? Object.keys(v).sort().reduce((o, k) => (o[k] = norm(v[k]), o), {})
+        : v;
+      return {
+        same: JSON.stringify(norm(w.SCREENSPEC)) === JSON.stringify(norm(window.SCREENSPEC)),
+        ordered: txt.indexOf("screen:") < txt.indexOf("specs:") && txt.indexOf("n: 1") < txt.indexOf("title:"),
+        twice: txt === window.ScreenSpec.serialize(),
+        head: txt.slice(0, 20),
+        got: JSON.stringify(norm(w.SCREENSPEC)).slice(0, 300),
+        want: JSON.stringify(norm(window.SCREENSPEC)).slice(0, 300),
+      };
+    });
+    check("편집: serialize 왕복 무손실 (값 기준)", ser.same, { got: ser.got, want: ser.want });
+    check("편집: 필드 순서를 고정한다 (고친 줄만 바뀐 파일이 나오게)", ser.ordered);
+    check("편집: 같은 설정이면 늘 같은 텍스트 (저장이 결정적)", ser.twice);
+    check("편집: serialize 는 window.SCREENSPEC 대입문", ser.head.indexOf("window.SCREENSPEC") === 0, ser.head);
+
+    /* 스크립트를 깨뜨리려는 글자를 넣어도 블록이 안 깨져야 한다 */
+    await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("종료 시도 <" + "/script><" + "script>alert(1)");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    const esc = await page.evaluate(() => {
+      const txt = window.ScreenSpec.serialize();
+      const w = {};
+      new Function("window", txt)(w);
+      return { leaks: /<\/script/i.test(txt), back: w.SCREENSPEC.specs[0].defs[0].t };
+    });
+    check("편집: 스크립트 종료 태그가 그대로 새어 나가지 않는다", !esc.leaks);
+    check("편집: 그래도 값은 원래 글자 그대로 복원된다", esc.back.indexOf("종료 시도") === 0, esc.back);
+
+    /* --- 내려받기: replaceConfigBlock 을 실제 경로로 검증 --- */
+    const dl = await Promise.all([page.waitForEvent("download"), page.click('.ss-edbar [data-sv="down"]')]);
+    const saved = path.join(require("os").tmpdir(), "ss-edited.html");
+    await dl[0].saveAs(saved);
+    const outHtml = fs.readFileSync(saved, "utf8");
+    check("내려받기: 파일 이름이 .edited.html", /\.edited\.html$/.test(dl[0].suggestedFilename()), dl[0].suggestedFilename());
+    check("내려받기: 고친 내용이 들어 있다", outHtml.includes("고친 머리"));
+    check("내려받기: 프로토타입 코드는 그대로 남는다", outHtml.includes('id="tail"') && outHtml.includes('data-spec="2"'));
+    check("내려받기: 라이브러리 스크립트 태그도 그대로", /<script[^>]+src=[^>]*screenspec\.js/.test(outHtml));
+    check("내려받기: 미저장 표시가 사라진다", await page.evaluate(() => !window.ScreenSpec.dirty()));
+
+    /* 산출물을 다시 열면 고친 내용이 뜬다 — 저장의 목적 그 자체 */
+    const srv2 = http.createServer((rq, rs) => {
+      if (rq.url.indexOf("/screenspec.js") === 0) { rs.writeHead(200, { "Content-Type": "text/javascript" }); return rs.end(LIB); }
+      rs.writeHead(200, { "Content-Type": "text/html" });
+      rs.end(outHtml);
+    });
+    await new Promise((r) => srv2.listen(4196, r));
+    await page.goto("http://localhost:4196/");
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("내려받기: 산출물을 열면 고친 내용이 뜬다", await page.evaluate(() => document.body.innerText.includes("고친 머리")));
+    check("내려받기: 산출물도 정상 부팅 (마커 2개)", (await page.locator(".ss-marker").count()) === 2);
+    srv2.close();
+
+    /* --- 저장 안 된 초안 --- */
+    await open();
+    await page.click(".ss-editbtn");
+    await page.click('[data-defrow="1"] .ss-t');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("초안만 고침");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(250);
+    check("초안: 고치면 브라우저에 자동으로 깔린다", await page.evaluate(() =>
+      Object.keys(localStorage).some((k) => k.indexOf("screenspec:draft") === 0)));
+    await open(); /* 저장 없이 떠났다가 다시 온다 */
+    check("초안: 다시 열면 배너가 뜬다", await page.evaluate(() => document.querySelector(".ss-draft").classList.contains("ss-show")));
+    check("초안: 배너가 뜨기만 하고 설정을 멋대로 바꾸지는 않는다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "머리"));
+    await page.click('.ss-draft [data-dc="take"]');
+    await page.waitForTimeout(250);
+    check("초안: 「이어서」 를 누르면 되살아난다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "초안만 고침"));
+    check("초안: 되살리면 화면에도 뜬다", await page.evaluate(() => document.body.innerText.includes("초안만 고침")));
+    check("초안: 되살리면 편집 모드로 들어간다", await page.evaluate(() => document.body.classList.contains("ss-editing")));
+    await open();
+    await page.click('.ss-draft [data-dc="drop"]');
+    await page.waitForTimeout(200);
+    check("초안: 「버리기」 를 누르면 지워진다", await page.evaluate(() =>
+      !Object.keys(localStorage).some((k) => k.indexOf("screenspec:draft") === 0)));
+
+    /* --- readonly: 숨김이 아니라 미생성 --- */
+    await open("/ro");
+    check("readonly: 편집 버튼을 아예 만들지 않는다", (await page.locator(".ss-editbtn").count()) === 0);
+    check("readonly: 저장바도 없다", (await page.locator(".ss-edbar").count()) === 0);
+    check("readonly: edit() 를 불러도 편집이 안 켜진다", await page.evaluate(() => {
+      window.ScreenSpec.edit(true);
+      return !document.body.classList.contains("ss-editing");
+    }));
+    check("readonly: 정의서 자체는 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    srv.close();
+  }
+
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
      클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */
   console.log("[inline] 자체 완결 파일");
