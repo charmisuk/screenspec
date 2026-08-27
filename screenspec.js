@@ -147,6 +147,27 @@
     }
     return c.map((v) => v.trim());
   })();
+  /* style — AI 가 읽는 «이 프로젝트의 쓰는 법»(온보딩 인터뷰의 답).
+     라이브러리는 이 값으로 렌더를 바꾸지 않는다. 여기서는 형식만 보고 어긋나면 1회 알린다 —
+     설정이 조용히 무시되면 AI 가 왜 그 톤으로 안 쓰는지 알 수 없기 때문이다. 규격은 docs/config.md */
+  (function () {
+    const st = RAW.style;
+    if (st == null) return;
+    if (typeof st !== "object" || Array.isArray(st)) {
+      console.warn("[ScreenSpec] style 은 객체여야 합니다 — 무시 (규격: docs/config.md)");
+      return;
+    }
+    const bad = [];
+    const v = st.vocab;
+    if (v != null) {
+      if (typeof v !== "object" || Array.isArray(v)) bad.push("vocab(객체)");
+      else ["prefixes", "endings"].forEach((k) => {
+        if (v[k] != null && !(Array.isArray(v[k]) && v[k].every((x) => typeof x === "string"))) bad.push("vocab." + k + "(문자열 배열)");
+      });
+    }
+    ["idScheme", "notes"].forEach((k) => { if (st[k] != null && typeof st[k] !== "string") bad.push(k + "(문자열)"); });
+    if (bad.length) console.warn("[ScreenSpec] style 의 형식이 어긋납니다 — " + bad.join(", ") + " (해당 항목만 무시, 규격: docs/config.md)");
+  })();
   const COV_CACHE = new WeakMap(); /* 화면당 1회만 계산 — 렌더마다 같은 경고가 쌓이지 않게 */
   /* → { done:[축], skipped:[{axis,reason}], missing:[축] } · checklist 가 없으면 null */
   function coverage(s) {

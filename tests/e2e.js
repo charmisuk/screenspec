@@ -1054,6 +1054,42 @@ function check(name, ok, detail) {
     srv2.close();
   }
 
+  /* ============ style — AI 가 읽는 계약. 라이브러리는 형식만 보고 렌더는 바꾸지 않는다 (#36) ============ */
+  console.log("[docs] style 설정");
+  {
+    const base = (styleLine) => '<div id="a" data-spec="1">본문</div><script>window.SCREENSPEC={' + styleLine +
+      'screen:{id:"S-A",name:"a"},specs:[{n:1,target:"1",title:"본문",defs:[{t:"한 줄"}]}]};</script>';
+    const boot = async (html) => {
+      const warns = [];
+      const on = (m) => { if (m.type() === "warning") warns.push(m.text()); };
+      page.on("console", on);
+      await page.goto("about:blank");
+      await page.setContent(html);
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(400);
+      const rows = await page.locator(".ss-defs-list .ss-row").count();
+      page.off("console", on);
+      return { st: warns.filter((x) => x.includes("style")), rows };
+    };
+
+    const none = await boot(base(""));
+    check("style: 없으면 경고 0 · 정상 렌더", none.st.length === 0 && none.rows === 1, JSON.stringify(none));
+
+    const okStyle = await boot(base('style:{vocab:{prefixes:["기본값 :"],endings:["~가능"]},idScheme:"SCR-{n}",notes:"존댓말 금지"},'));
+    check("style: 올바르면 경고 0 · 렌더는 없을 때와 동일", okStyle.st.length === 0 && okStyle.rows === none.rows, JSON.stringify(okStyle));
+
+    const notObj = await boot(base('style:"문자열",'));
+    check("style: 객체가 아니면 경고 1회 · 그래도 정상 렌더",
+      notObj.st.length === 1 && notObj.st[0].includes("객체") && notObj.rows === 1, JSON.stringify(notObj));
+
+    const badVocab = await boot(base('style:{vocab:{prefixes:"문자열"},idScheme:12},'));
+    check("style: 하위 필드 타입이 틀리면 어긋난 항목을 짚어 경고 1회",
+      badVocab.st.length === 1 && badVocab.st[0].includes("vocab.prefixes") && badVocab.st[0].includes("idScheme") && badVocab.rows === 1,
+      JSON.stringify(badVocab));
+  }
+
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
      클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */
   console.log("[inline] 자체 완결 파일");

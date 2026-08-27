@@ -15,6 +15,7 @@ window.SCREENSPEC = {
   baseViewport?: "mobile" | "pc",  // wrap·frame 시작 폭 = 이 문서가 서술하는 기준 폭. 기본 mobile
   devices?: { mobile?: Device, pc?: Device },  // wrap·frame. 기기 프리셋 덮어쓰기
   checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
+  style?:   Style,                // 이 프로젝트의 «쓰는 법» — AI 가 읽는 계약. 라이브러리 렌더는 바뀌지 않는다
   off?:     boolean,              // true = 완전 정지. 원본 프로토타입 그대로 (주소에 ?screenspec=1 이면 켜진다)
 
   // 화면이 하나면 screen + specs
@@ -63,6 +64,11 @@ type Part = {           // 라벨은 적지 않는다 — parts[0] → "1a", par
   arrowTo?: string,
 }
 
+type Style  = {           // 온보딩 인터뷰(SKILL §0)의 답이 남는 자리
+  vocab?:    { prefixes?: string[], endings?: string[] },  // 생략 = SKILL §4 기본 한 벌
+  idScheme?: string,      // 화면 ID 체계. 예: "SCR-{영역}-{번호}"
+  notes?:    string,      // 자유 서술 — 「존댓말 금지」 같은 프로젝트 규칙
+}
 type Def    = { t: string, subs?: string[], why?: string }  // why = 그 줄의 근거 (「↳ 이유:」로 분리 렌더)
 type Device = { w: number, h: number }
 ```
@@ -76,6 +82,7 @@ type Device = { w: number, h: number }
 | `baseViewport` | `"mobile"` \| `"pc"` | `"mobile"` | wrap·frame 의 시작 폭 = 이 문서가 서술하는 기준 폭. PC 앞에서 쓰는 어드민은 `"pc"`, 앱은 기본값. 반응형 차이는 화면을 늘리지 말고 같은 화면의 `anno:"state"` 항목으로 적는다 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap·frame 전용. 기기 프리셋 크기 덮어쓰기 |
 | `checklist` | string[] | — | 프로젝트가 정한 상태 축. 있으면 화면마다 `covers`/`skip` 로 커버리지를 표시한다. 없거나 문자열 배열이 아니면 기능이 꺼지고 콘솔 경고. 아래 [상태 커버리지](#상태-커버리지) 참조 |
+| `style` | `Style` | — | 이 프로젝트의 문구·ID 체계를 적어 두는 자리. **AI 가 읽는 계약이며 라이브러리 동작은 바뀌지 않는다** — 정의서 렌더·마커·경고 어디에도 영향이 없다. [SKILL §0 적용 전 인터뷰](../SKILL.md)의 답이 여기 남아, 다음에 AI 가 다시 쓸 때도 같은 톤이 유지된다. 형식이 어긋나면 해당 항목만 무시하고 콘솔 경고 1회. 아래 [쓰는 법 고정](#쓰는-법-고정-style) 참조 |
 | `off` | boolean | `false` | `true`면 라이브러리가 **아무것도 하지 않는다** — CSS·UI·DOM 어디에도 손대지 않고 원본 프로토타입 그대로. 정의는 코드에 남아 있고, 주소에 `?screenspec=1`을 붙이면 그때만 켜진다. 아래 [정의서 끄기](#정의서-끄기-off) 참조 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
 | `specs` | `Spec[]` | `[]` | 화면이 하나일 때의 기능 설명 |
@@ -90,6 +97,31 @@ overlay 는 앱과 뷰어가 한 창에 살기 때문에 (1) 설명 패널이 �
 frame 은 앱을 액자 안에 가두므로 **설명 패널이 앱을 덮지 않고**, 툴바의 **모바일/PC 로 실제 미디어쿼리가 발화**한다(폭 시뮬레이터가 그대로 동작).
 화면 추적은 overlay 와 같은 규칙(`route`·`root`)이고, 액자 안 경로는 바깥 주소에 미러링돼 새로고침해도 보던 화면으로 돌아온다.
 조건: **앱이 주소(URL)로 열리고 same-origin** 일 것 (cross-origin 이면 액자 안을 조종할 수 없다). 명시해야만 켜진다.
+
+### 쓰는 법 고정 (style)
+
+프로젝트마다 문구 어휘도, 화면 ID 체계도 다르다. 그걸 적어 두지 않으면 AI 가 정의서를 다시 쓸 때마다 톤이 갈리고, 기획자가 매번 손으로 맞춰야 한다.
+
+```js
+window.SCREENSPEC = {
+  style: {
+    vocab: { prefixes: ["기본값 :", "선택값 :", "클릭 :"], endings: ["~가능", "~불가"] },
+    idScheme: "SCR-{영역}-{번호}",
+    notes: "존댓말 금지 · 숫자는 반각",
+  },
+  screens: [ /* … */ ],
+};
+```
+
+| 필드 | 무엇 |
+|---|---|
+| `vocab.prefixes` | 정의 줄 앞에 붙이는 어휘 한 벌. 생략하면 [SKILL §4](../SKILL.md)의 기본 한 벌 |
+| `vocab.endings` | 종결 어휘 |
+| `idScheme` | 화면 ID 를 짓는 규칙. AI 가 새 화면을 추가할 때 따른다 |
+| `notes` | 표로 안 잡히는 프로젝트 규칙을 문장으로 |
+
+- **라이브러리는 이 값을 쓰지 않는다.** 읽는 것은 AI(SKILL.md)이며, 라이브러리는 형식만 검사해 어긋나면 콘솔로 1회 알린다. 그래서 `style` 을 넣거나 빼도 화면은 한 픽셀도 달라지지 않는다.
+- 설정에 `vocab` 이 있으면 AI 는 **그것만 쓰고 기본 어휘와 섞지 않는다**.
 
 ### 정의서 끄기 (off)
 
