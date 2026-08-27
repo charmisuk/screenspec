@@ -177,19 +177,51 @@
       "type": "feat",
       "release": "Phase 0-4",
       "title": "개발 정의 레이어 형식",
-      "status": "todo",
+      "status": "done",
       "plan": {
-        "done": false
+        "done": true,
+        "cause": "화면정의서는 기획자 혼자 쓰는 문서가 아니다. 개발 PM 이 같은 화면·같은 항목 옆에 개발 정의(정책·API·이벤트)를 적는데, 지금 설정에는 그걸 적을 자리가 없다. 그래서 개발 정의는 컨플루언스 다른 페이지로 흩어지고 기획 정의와 따로 논다. 결정 D2 가 「탭이 아니라 인라인 레이어」로 못박아 뒀다 — 개발 정의는 기획 정의를 «보면서» 쓰는 글이기 때문이다.",
+        "change": "(1) 데이터 — Def 에 layer?:\"dev\" (줄 단위. 생략 = 기획), Screen 에 dev?:Def[] (항목에 안 붙는 화면 공통). 줄 단위로 두는 이유는 한 항목 안에 기획·개발이 섞이는 게 실무의 실제 모습이라서다. (2) 렌더 — defItemsHTML(defs, want) 에 레이어 인자를 넣되 «원래 배열 인덱스(di)를 그대로 실어» 편집 모드가 옳은 줄에 쓰게 한다. 기획 줄은 ul.ss-items.ss-plan, 개발 줄은 div.ss-dev(다른 보더 색 + DEV 태그) 안의 ul 로. parts 도 동일. (3) 화면 공통 — screen.dev 는 정의 목록 «맨 위»에 「화면 공통 · 개발」 블록 하나. (기획서 원문은 「화면 헤더 아래」인데 그 헤더는 ID·화면명·경로가 가로로 늘어선 좁은 띠라 블록이 안 들어간다. 정의 목록 맨 위가 같은 뜻이면서 읽는 순서에 맞다.) (4) 필터 — 패널 머리에 칩 전체|기획|개발. 구현은 «CSS 전용»이다: 패널에 data-layer 를 걸고 .ss-dev / .ss-items.ss-plan 을 숨긴다. 모델을 안 건드리므로 마커·누락 경고·커버리지에 부작용이 원천적으로 없다(수용 기준이 요구하는 바). 행 자체는 숨기지 않는다 — 번호와 마커의 대응이 깨지면 안 된다. (5) 개발 정의가 문서에 하나도 없으면 칩을 만들지 않는다 — layer 없는 기존 문서는 화면이 한 픽셀도 안 바뀐다. (6) 편집(0-2) — 개발 줄도 같은 방식으로 고쳐진다(di 를 그대로 실었으므로 자동). 「＋ 개발 줄」 명령 추가(layer:\"dev\" 를 붙여 push). 직렬화 KEY_RANK 에 layer·dev 를 넣어 순서 고정. (7) 인쇄(0-3) — 대화상자에 레이어 선택을 더하고 prRows 가 같은 축으로 거른다. 개발 정의가 없으면 그 줄도 안 만든다. (8) docs/config.md(Def·Screen 타입 + 개발 레이어 절) · SKILL.md · README.md. (9) tests/e2e.js. 배치 제약: 칩은 패널 머리(.ss-headtools 옆) 안, 새 fixed 요소 없음. 기존 e2e 가 쓰는 .ss-items·.ss-row·.ss-marker·[data-play]·[data-ed] 는 그대로 둔다.",
+        "accept": [
+          "layer:\"dev\" 줄이 항목 행 안의 「개발」 블록(DEV 태그)으로 렌더된다",
+          "screen.dev 가 정의 목록 맨 위의 「화면 공통 · 개발」 블록으로 렌더된다",
+          "필터 칩 전체|기획|개발 이 동작한다 — 기획을 고르면 개발 블록이, 개발을 고르면 기획 줄이 안 보인다",
+          "필터는 마커 수·누락 경고·상태 커버리지에 아무 영향이 없다 (CSS 전용이라는 것이 e2e 로 확인된다)",
+          "필터를 걸어도 행과 마커의 번호 대응이 유지된다 (행 자체는 숨기지 않는다)",
+          "layer 가 하나도 없는 문서는 칩도 개발 블록도 안 생기고 기존과 완전히 동일하다 (하위 호환)",
+          "편집 모드에서 개발 줄의 글자를 고치면 그 줄(원래 인덱스)에 정확히 반영된다",
+          "편집 모드의 「＋ 개발 줄」 이 layer:\"dev\" 인 줄을 추가한다",
+          "직렬화가 layer·screen.dev 를 잃지 않는다 (왕복 무손실)",
+          "인쇄 대화상자에서 레이어를 고르면 항목 표가 그 축으로 걸러진다",
+          "개발 레이어 UI 가 ScreenSpec 자체 고정 UI 와 겹치지 않는다 — 칩은 패널 머리(460px) 안 흐름 배치",
+          "node tests/lint.js 통과 — layer·dev 가 docs/config.md 에 문서화 (Part 표 정합 포함)"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과 (Def·Screen·Part 타입 정합 검사 포함)",
+          "node tests/e2e.js — 기존 224 케이스 전부 유지 + 개발 레이어 신규 케이스 통과",
+          "신규 e2e: ①dev 블록·DEV 태그 렌더 ②화면 공통 블록 ③칩 3종 동작(computed display 로 실측) ④필터 전후 마커 수·경고 수 동일 ⑤layer 없는 문서에 칩·블록 0개 ⑥개발 줄 편집이 옳은 인덱스에 ⑦＋개발 줄 ⑧serialize 왕복에 layer·dev 보존 ⑨인쇄 레이어 필터",
+          "node tests/smoke.js — demo.html 외부 이미지 차단 1건만 허용 (변경 전에도 동일)"
+        ],
+        "docs": [
+          "docs/config.md — Def.layer · Screen.dev 타입 + Part 표 정합 + 「개발 정의 레이어」 절 + 인쇄 절에 레이어 한 줄",
+          "SKILL.md — 개발 정의는 개발 PM 이 쓴다 · AI 는 layer 를 함부로 붙이지 않는다",
+          "README.md — 기능 줄"
+        ],
+        "open": "기획서의 열린 결정(개발 정의에 API 경로·이벤트명 같은 구조 필드를 줄지)은 기획서 제안대로 «자유 텍스트로 시작»한다. 형식은 실제로 쓰는 걸 본 뒤에 정한다."
       },
       "dev": {
-        "done": false,
-        "model": null
+        "done": true,
+        "model": "main",
+        "routing": "#37·#34 와 같은 사유 — 서브에이전트 사용이 막힌 세션이라 메인이 직접.",
+        "evidence": "screenspec.js — Def.layer·Screen.dev 렌더(defItemsHTML 에 레이어 인자, devBlockHTML·devCommonHTML·hasDev·anyDev), 필터 칩 lyMount, 편집의 ＋개발 줄, KEY_RANK 에 layer·dev, 인쇄 prRows(layer)+대화상자 레이어 선택. 두 가지가 이 건의 핵심: ①필터를 CSS 전용으로 짰다(.ss-defs-list[data-layer] 두 줄) — 모델을 안 건드리므로 마커·누락 경고·커버리지 부작용이 «설계상» 불가능하고, e2e 가 필터 전후 마커·행·항목 수 동일을 실측해 못박는다 ②걸러도 di 를 원래 배열 인덱스 그대로 실어 편집이 옳은 줄에 쓴다 — 배열 가운데(index 1)의 개발 줄을 고쳐 앞뒤 기획 줄이 그대로인지 e2e 가 확인한다. docs/config.md(Def·Screen 타입·개발 레이어 절·인쇄 표 한 줄) · SKILL.md · README.md · tests/e2e.js +24. 계획 밖 파일 변경 0건."
       },
       "qa": {
-        "done": false
+        "done": true,
+        "evidence": "lint 전부 통과 — 도중 1건 FAIL: 칩 코드의 x.setAttribute 를 Screen·Spec 필드 추출기가 설정 필드로 오인. 이번 사이클 세 번째 같은 유형이라 변수명을 chip 으로 바꿔 통과시키고 log.md 회고 항목에 적었다. e2e PASS 248 / FAIL 0 — 기존 224 유지 + 레이어 24 신규. 하위 호환은 별도 문서(layer 없음)로 칩·블록 0개와 정상 렌더를 확인. 인쇄 레이어 필터는 인쇄 미디어를 켜고 표 내용으로 확인. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단(회귀 아님). accept 12개 전부 자동 확인 — 사용자 QA 로 넘긴 항목 없음."
       },
       "commit": {
-        "done": false
+        "done": true,
+        "evidence": "feat: 개발 정의 레이어 (fix #38)"
       }
     }
   ],

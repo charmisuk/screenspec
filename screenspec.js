@@ -241,7 +241,7 @@
   const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "style", "off", "readonly",
     "vocab", "prefixes", "endings", "idScheme", "notes",
     "screen", "screens", "id", "name", "path", "route", "root", "viewports", "covers", "skip",
-    "n", "target", "anno", "title", "optional", "t", "why", "subs", "defs", "parts",
+    "n", "target", "anno", "title", "optional", "t", "why", "subs", "layer", "defs", "dev", "parts",
     "play", "preview", "flowTo", "arrowTo", "selector", "label", "w", "h", "specs"];
   function ssStr(s) {
     /* JSON.stringify 가 따옴표·역슬래시·줄바꿈을 맡고, 우리는 «스크립트 블록을 깨뜨리는» 것만 더 막는다.
@@ -377,6 +377,32 @@
   /* 편집 모드 (#37) — 기획자가 코드를 안 보고 정의서를 고치는 자리.
      읽는 화면을 그대로 두고 «고칠 수 있음» 만 얹는다: 편집을 켜야 손잡이가 보인다.
      새 고정(fixed) 요소를 만들지 않는다 — 전부 패널 안쪽 흐름 배치라 마커·재현 중 띠를 가리지 않는다 */
+  /* 개발 정의 레이어 (#38) — 탭으로 가르지 않고 같은 항목 안에 한 단 들여쓴 블록으로.
+     보더 색과 DEV 태그로 «누가 쓴 줄인지» 가 한눈에 갈린다 (결정 D2) */
+  .ss-dev{margin:7px 0 2px;padding:5px 0 3px 10px;border-left:2.5px solid #8E4EC6}
+  .ss-devtag{display:inline-block;font-family:var(--ss-mono);font-size:9.5px;font-weight:800;color:#8E4EC6;
+    border:1px solid #D9C3EE;border-radius:4px;padding:0 4px;line-height:1.7;margin-bottom:3px}
+  .ss-dev-ttl{font-size:11px;font-weight:700;color:var(--ss-ink3);margin-left:5px}
+  .ss-dev-common{margin:12px 14px 2px;padding:7px 0 5px 10px}
+  .ss-dev .ss-items li::before{background:#8E4EC6}
+  .ss-dev .ss-items li.ss-sub::before{background:#fff;border-color:#8E4EC6}
+  /* 필터는 «CSS 전용» 이다 — 모델을 안 건드리므로 마커·누락 경고·커버리지에 부작용이 원천적으로 없다.
+     행 자체는 숨기지 않는다: 번호와 마커의 대응이 깨지면 안 된다 */
+  .ss-defs-list[data-layer="plan"] .ss-dev{display:none}
+  .ss-defs-list[data-layer="dev"] .ss-items.ss-plan{display:none}
+  .ss-layerbar{display:flex;align-items:center;gap:7px;padding:7px 18px;border-bottom:1px solid var(--ss-line);
+    background:#fff;font-size:11px;color:var(--ss-ink3)}
+  .ss-chips{display:flex;border:1px solid var(--ss-line2);border-radius:7px;overflow:hidden}
+  .ss-chips button{border:0;background:#fff;color:var(--ss-ink3);font-size:11px;font-weight:700;
+    padding:3px 9px;cursor:pointer;font-family:inherit;border-right:1px solid var(--ss-line2)}
+  .ss-chips button:last-child{border-right:0}
+  .ss-chips button:hover{color:var(--ss-ink)}
+  .ss-chips button[aria-pressed="true"]{background:var(--ss-accent);color:#fff}
+  @media print{
+    .ss-pr-table tr.ss-pr-dev .ss-pr-no,.ss-pr-table tr.ss-pr-dev .ss-pr-tag{color:#8E4EC6}
+    .ss-pr-table .ss-pr-devtag{font-family:var(--ss-mono);font-size:7.5pt;font-weight:800;color:#8E4EC6;
+      border:1px solid #D9C3EE;border-radius:3px;padding:0 3px;margin-right:4px}
+  }
   .ss-headtools{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0}
   .ss-headbtn{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);
     font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap}
@@ -762,6 +788,7 @@ ${HL_CSS}
     if (!EDIT) return "";
     return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") +
       edBtn("addsub", "＋ 하위 줄", "마지막 줄에 하위 조건 추가") +
+      edBtn("adddev", "＋ 개발 줄", "개발 정의 한 줄 추가 (DEV)") +
       edBtn("up", "↑", "위로") + edBtn("down", "↓", "아래로") + edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
   }
   function edPartCtl() {
@@ -769,9 +796,13 @@ ${HL_CSS}
     return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") + edBtn("delpart", "세부 삭제", "이 세부 항목 삭제") + "</div>";
   }
   /* 정의 불렛(공통) — 근거는 사양과 분리한다. 구현자는 사양만, 검토자는 이유까지 (#24) */
-  function defItemsHTML(defs) {
+  function defItemsHTML(defs, want) {
     let items = "";
     (defs || []).forEach((d, di) => {
+      /* want: 생략 = 전부 · "plan" = 기획(layer 없음) · "dev" = 개발.
+         걸러도 di 는 «원래 배열 인덱스» 그대로다 — 편집 모드가 이 값으로 설정에 쓴다 */
+      if (want === "plan" && d.layer) return;
+      if (want === "dev" && d.layer !== "dev") return;
       const t = EDIT ? '<span class="ss-dt"' + edMark("t", di) + ">" + esc(d.t) + "</span>" : esc(d.t);
       const why = d.why ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + esc(d.why) + "</span>" : "";
       items += "<li>" + t + why + edLineCtl(di, !!d.why) + "</li>";
@@ -781,6 +812,26 @@ ${HL_CSS}
       });
     });
     return items;
+  }
+  /* 개발 정의 (#38) — 탭으로 가르지 않는다. 개발 정의는 기획 정의를 «보면서» 쓰는 글이라
+     같은 항목 안에 한 단 들여쓴 블록으로 붙인다 (결정 D2) */
+  function hasDev(defs) { return (defs || []).some((d) => d.layer === "dev"); }
+  function devBlockHTML(defs) {
+    if (!hasDev(defs)) return "";
+    return '<div class="ss-dev"><span class="ss-devtag">DEV</span><ul class="ss-items">' + defItemsHTML(defs, "dev") + "</ul></div>";
+  }
+  /* 항목에 안 붙는 화면 공통 개발 정의 — 정의 목록 맨 위에 하나 */
+  function devCommonHTML(screen) {
+    if (!screen || !(screen.dev || []).length) return "";
+    return '<div class="ss-dev ss-dev-common"><span class="ss-devtag">DEV</span>' +
+      '<span class="ss-dev-ttl">화면 공통</span><ul class="ss-items">' +
+      defItemsHTML((screen.dev || []).map((d) => Object.assign({}, d, { layer: "dev" })), "dev") + "</ul></div>";
+  }
+  /* 이 문서에 개발 정의가 하나라도 있는가 — 없으면 필터 칩을 만들지 않는다.
+     layer 를 안 쓰는 기존 문서의 화면이 한 픽셀도 안 바뀌게 하려는 것이다 */
+  function anyDev() {
+    return SCREENS.some((sc) => (sc.dev || []).length ||
+      (sc.specs || []).some((sp) => hasDev(sp.defs) || (sp.parts || []).some((p) => hasDev(p.defs))));
   }
   /* ▶ 버튼(공통) — key 는 상위 "1" · 하위 "1a" */
   function playBtnHTML(sp, key) {
@@ -820,14 +871,14 @@ ${HL_CSS}
         const key = String(s.n) + partSuffix(i);
         parts += `<div class="ss-part" data-part="${key}">
           <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
-          <ul class="ss-items">${defItemsHTML(p.defs)}</ul>${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
+          <ul class="ss-items ss-plan">${defItemsHTML(p.defs, "plan")}</ul>${devBlockHTML(p.defs)}${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
         </div>`;
       });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
           <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
-          <ul class="ss-items">${defItemsHTML(s.defs)}</ul>${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
+          <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
         </div></div>`;
     });
     return out;
@@ -969,7 +1020,7 @@ ${HL_CSS}
         ctx.afterRender();
         return;
       }
-      ctx.listEl.innerHTML = defsRowsHTML(specs()) + covBlockHTML(current);
+      ctx.listEl.innerHTML = devCommonHTML(current) + defsRowsHTML(specs()) + covBlockHTML(current);
       if (previewKey != null) pvSetBtn(pvBtn(previewKey), true); /* 재렌더돼도 켜진 스위치는 켜진 채로 — 라벨(원래대로)까지 (#27·#29) */
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
@@ -1437,13 +1488,28 @@ ${HL_CSS}
        ============================================================ */
     const A4_W = 703; /* A4 세로 본문 폭 ≈ 210mm − 12mm×2 = 186mm ≈ 703px(96dpi) */
     let prBox = null, prDlg = null;
-    function prRows() {
+    function prLine(d) {
+      return "<li>" + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + esc(d.t) +
+        (d.why ? '<span class="ss-pr-why">' + esc(d.why) + "</span>" : "") + "</li>" +
+        (d.subs || []).map((sb) => '<li class="ss-pr-sub">' + esc(sb) + "</li>").join("");
+    }
+    function prKeep(d, layer) {
+      if (layer === "plan") return d.layer !== "dev";
+      if (layer === "dev") return d.layer === "dev";
+      return true;
+    }
+    function prRows(layer) {
       let out = "";
+      /* 화면 공통 개발 정의도 표의 한 행으로 — 종이에서는 블록보다 행이 읽기 쉽다 */
+      const common = (current && current.dev) || [];
+      if (common.length && layer !== "plan") {
+        out += '<tr class="ss-pr-dev"><td class="ss-pr-no">—</td><td class="ss-pr-ttl">화면 공통</td>' +
+          '<td class="ss-pr-tag">개발</td><td><ul>' + common.map((d) => prLine(Object.assign({}, d, { layer: "dev" }))).join("") + "</ul></td></tr>";
+      }
       items().forEach((it) => {
         let li = "";
-        (it.spec.defs || []).forEach((d) => {
-          li += "<li>" + esc(d.t) + (d.why ? '<span class="ss-pr-why">' + esc(d.why) + "</span>" : "") + "</li>";
-          (d.subs || []).forEach((sb) => (li += '<li class="ss-pr-sub">' + esc(sb) + "</li>"));
+        (it.spec.defs || []).filter((d) => prKeep(d, layer)).forEach((d) => {
+          li += prLine(d);
         });
         out += '<tr class="' + (it.isPart ? "ss-pr-part" : "") + '"><td class="ss-pr-no">' + esc(it.label) + "</td>" +
           '<td class="ss-pr-ttl">' + esc(it.spec.title || "") + "</td>" +
@@ -1466,7 +1532,7 @@ ${HL_CSS}
         (path ? '<div class="ss-pr-path">' + path + "</div>" : "") + "</div>" +
         '<div class="ss-pr-stage"><div class="ss-pr-holder"></div></div>' +
         (showTable ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
-          prRows() + "</tbody></table>" : "") +
+          prRows(pr.layer || LAYER) + "</tbody></table>" : "") +
         '<div class="ss-pr-foot"><span>' + esc(sc.id || "") + " · " + new Date().toLocaleString() +
         "</span><span>Made with ScreenSpec</span></div>");
       document.body.appendChild(prBox);
@@ -1511,6 +1577,8 @@ ${HL_CSS}
           '<p class="ss-prdlg-sub">지금 보는 화면 하나를 종이 문서 형태로 뽑습니다. 브라우저 인쇄 창에서 «대상 → PDF 로 저장» 을 고르세요.</p>' +
           '<label><input type="checkbox" id="ss-prMark" checked> 마커(번호) 표시</label>' +
           '<label><input type="checkbox" id="ss-prTable" checked> 항목 표 포함</label>' +
+          (anyDev() ? '<label>레이어 <select id="ss-prLayer"><option value="all">전체</option>' +
+            '<option value="plan">기획만</option><option value="dev">개발만</option></select></label>' : "") +
           '<div class="ss-prdlg-btns"><button type="button" data-pr="cancel">취소</button>' +
           '<button type="button" data-pr="go" class="ss-prdlg-go">인쇄</button></div>');
         document.body.appendChild(prDlg);
@@ -1520,9 +1588,11 @@ ${HL_CSS}
           const go = b.dataset.pr === "go";
           const mk = prDlg.querySelector("#ss-prMark").checked;
           const tb = prDlg.querySelector("#ss-prTable").checked;
+          const lySel = prDlg.querySelector("#ss-prLayer");
+          const ly = lySel ? lySel.value : "all";
           prDlg.close();
           /* 대화상자를 닫고 나서 인쇄한다 — 최상위 레이어라 열려 있으면 종이에 같이 찍힌다 */
-          if (go) setTimeout(() => printRun({ markers: mk, table: tb }), 0);
+          if (go) setTimeout(() => printRun({ markers: mk, table: tb, layer: ly }), 0);
         });
       }
       if (prDlg.showModal) prDlg.showModal();
@@ -1538,6 +1608,27 @@ ${HL_CSS}
         ctx.cntEl.parentNode.appendChild(box);
       }
       return box;
+    }
+    /* 레이어 필터 (#38) — 리뷰어는 기획만, 개발자는 개발만. 기본은 전체 */
+    let LAYER = "all";
+    function lyMount() {
+      if (!anyDev() || !ctx.cntEl || !ctx.cntEl.parentNode) return; /* 개발 정의가 없는 문서는 예전 그대로 */
+      const head = ctx.cntEl.parentNode;
+      const bar = h("div", { class: "ss-layerbar ss-ui" },
+        "<span>레이어</span>" +
+        '<span class="ss-chips">' +
+        '<button type="button" data-ly="all" aria-pressed="true">전체</button>' +
+        '<button type="button" data-ly="plan" aria-pressed="false">기획</button>' +
+        '<button type="button" data-ly="dev" aria-pressed="false">개발</button></span>');
+      bar.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-ly]");
+        if (!b) return;
+        LAYER = b.dataset.ly;
+        bar.querySelectorAll("[data-ly]").forEach((chip) => chip.setAttribute("aria-pressed", String(chip.dataset.ly === LAYER)));
+        if (LAYER === "all") ctx.listEl.removeAttribute("data-layer");
+        else ctx.listEl.setAttribute("data-layer", LAYER);
+      });
+      head.parentNode.insertBefore(bar, head.nextSibling);
     }
     function prMount() {
       const box = headTools();
@@ -1639,6 +1730,7 @@ ${HL_CSS}
       const s = it.spec;
       const list = specs();
       if (c === "addline") (s.defs || (s.defs = [])).push({ t: "새 줄" });
+      else if (c === "adddev") (s.defs || (s.defs = [])).push({ t: "새 개발 줄", layer: "dev" });
       else if (c === "addsub") {
         const d = (s.defs || (s.defs = []))[s.defs.length - 1] || (s.defs.push({ t: "새 줄" }), s.defs[0]);
         (d.subs || (d.subs = [])).push("새 하위 줄");
@@ -1840,7 +1932,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, print: printRun };
+    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, print: printRun };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -2249,6 +2341,7 @@ ${HL_CSS}
     /* ---- 공개 API ---- */
     core.prMount();
     core.edMount();
+    core.lyMount();
     window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", print: core.print, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
@@ -2376,6 +2469,7 @@ ${HL_CSS}
     /* ---- 공개 API ---- */
     core.prMount();
     core.edMount();
+    core.lyMount();
     window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", print: core.print, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 

@@ -1403,6 +1403,135 @@ function check(name, ok, detail) {
       document.querySelectorAll(".ss-print").length === 0 && document.querySelectorAll(".ss-ov-row,.ss-row").length > 0));
   }
 
+  /* ============ 개발 정의 레이어 (#38) ============
+     개발 정의는 기획 정의를 «보면서» 쓰는 글이라 탭으로 가르지 않고 같은 항목 안에 넣는다 (결정 D2).
+     필터는 CSS 전용이어야 한다 — 모델을 건드리면 마커·경고가 따라 흔들린다. 그걸 실측으로 못박는다. */
+  console.log("[layer] 개발 정의 레이어");
+  {
+    const withDev = '<div data-spec="1">가</div><div data-spec="2">나</div><script>window.SCREENSPEC={' +
+      'screen:{id:"S-A",name:"화면",dev:[{t:"인증 : Bearer 토큰"},{t:"에러코드 4xx 는 토스트"}]},specs:[' +
+      '{n:1,target:"1",title:"머리",defs:[{t:"기획 한 줄"},{t:"GET /api/items", layer:"dev"},{t:"기획 둘째 줄"}]},' +
+      '{n:2,target:"2",title:"몸통",defs:[{t:"기획만 있는 항목"}]}]};<' + "/script>";
+    const plain = '<div data-spec="1">가</div><div data-spec="2">나</div><script>window.SCREENSPEC={' +
+      'screen:{id:"S-B",name:"옛 문서"},specs:[{n:1,target:"1",title:"머리",defs:[{t:"한 줄"}]},' +
+      '{n:2,target:"2",title:"몸통",defs:[{t:"한 줄"}]}]};<' + "/script>";
+    const boot = async (html) => {
+      await page.goto("about:blank");
+      await page.setContent(html);
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+    };
+    const disp = (sel) => page.evaluate((s) => {
+      const el = document.querySelector(s);
+      return el ? getComputedStyle(el).display : "(없음)";
+    }, sel);
+
+    await boot(withDev);
+    check("레이어: 개발 줄이 항목 안 개발 블록으로", await page.evaluate(() =>
+      [...document.querySelectorAll('[data-defrow="1"] .ss-dev li')].map((x) => x.textContent).join() === "GET /api/items"));
+    check("레이어: 기획 줄은 개발 블록 밖에 그대로", await page.evaluate(() =>
+      [...document.querySelectorAll('[data-defrow="1"] .ss-items.ss-plan li')].map((x) => x.textContent).join() === "기획 한 줄,기획 둘째 줄"));
+    check("레이어: DEV 태그가 붙는다", (await page.locator('[data-defrow="1"] .ss-devtag').count()) === 1);
+    check("레이어: 개발 줄이 없는 항목엔 개발 블록도 없다", (await page.locator('[data-defrow="2"] .ss-dev').count()) === 0);
+    check("레이어: 화면 공통 개발 정의가 목록 맨 위 블록으로", await page.evaluate(() => {
+      const c = document.querySelector(".ss-dev-common");
+      return !!c && c.innerText.includes("화면 공통") && c.innerText.includes("Bearer") &&
+        c.parentElement.firstElementChild === c;
+    }));
+    check("레이어: 필터 칩 3종", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-chips [data-ly]")].map((x) => x.dataset.ly).join() === "all,plan,dev"));
+
+    const base = await page.evaluate(() => ({
+      markers: document.querySelectorAll(".ss-marker").length,
+      rows: document.querySelectorAll(".ss-row").length,
+      cnt: document.querySelector(".ss-cnt").textContent,
+    }));
+
+    await page.click('[data-ly="plan"]');
+    await page.waitForTimeout(150);
+    check("레이어: 「기획」 을 고르면 개발 블록이 안 보인다", (await disp('[data-defrow="1"] .ss-dev')) === "none");
+    check("레이어: 「기획」 이어도 기획 줄은 그대로", (await disp('[data-defrow="1"] .ss-items.ss-plan')) !== "none");
+    check("레이어: 「기획」 이면 화면 공통(개발)도 숨는다", (await disp(".ss-dev-common")) === "none");
+
+    await page.click('[data-ly="dev"]');
+    await page.waitForTimeout(150);
+    check("레이어: 「개발」 을 고르면 기획 줄이 안 보인다", (await disp('[data-defrow="1"] .ss-items.ss-plan')) === "none");
+    check("레이어: 「개발」 이면 개발 블록이 보인다", (await disp('[data-defrow="1"] .ss-dev')) !== "none");
+    check("레이어: 필터가 마커·행·항목 수에 영향이 없다 (CSS 전용)", await page.evaluate((b) =>
+      document.querySelectorAll(".ss-marker").length === b.markers &&
+      document.querySelectorAll(".ss-row").length === b.rows &&
+      document.querySelector(".ss-cnt").textContent === b.cnt, base), JSON.stringify(base));
+    check("레이어: 필터를 걸어도 행은 안 숨긴다 (번호·마커 대응 유지)", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-row")].every((r) => getComputedStyle(r).display !== "none")));
+
+    await page.click('[data-ly="all"]');
+    await page.waitForTimeout(150);
+    check("레이어: 「전체」 로 돌아온다", await page.evaluate(() =>
+      !document.querySelector(".ss-defs-list").hasAttribute("data-layer")));
+
+    /* 편집 — 걸러도 원래 인덱스에 쓴다 */
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+    await page.click('[data-defrow="1"] .ss-dev [data-ed="t"]');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("POST /api/items");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    check("레이어: 개발 줄 편집이 «원래 인덱스» 에 정확히 들어간다", await page.evaluate(() =>
+      window.SCREENSPEC.specs[0].defs.map((d) => (d.layer || "plan") + ":" + d.t).join("|") ===
+      "plan:기획 한 줄|dev:POST /api/items|plan:기획 둘째 줄"),
+      await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
+    await page.click('[data-defrow="2"] [data-ec="adddev"]');
+    await page.waitForTimeout(200);
+    check("레이어: 「＋ 개발 줄」 이 layer:dev 로 붙는다", await page.evaluate(() => {
+      const d = window.SCREENSPEC.specs[1].defs;
+      return d.length === 2 && d[1].layer === "dev";
+    }));
+    check("레이어: 직렬화가 layer·screen.dev 를 잃지 않는다", await page.evaluate(() => {
+      const w = {};
+      new Function("window", window.ScreenSpec.serialize())(w);
+      return w.SCREENSPEC.specs[0].defs[1].layer === "dev" && (w.SCREENSPEC.screen.dev || []).length === 2;
+    }));
+
+    /* 인쇄가 같은 축을 쓴다 */
+    await page.evaluate(() => { window.__prRestore = window.ScreenSpec.print({ prepareOnly: true, layer: "dev" }); });
+    await page.emulateMedia({ media: "print" });
+    await page.waitForTimeout(150);
+    check("레이어: 인쇄 「개발만」 이면 표에 기획 줄이 없다", await page.evaluate(() => {
+      const t = document.querySelector(".ss-pr-table").innerText;
+      return t.includes("POST /api/items") && !t.includes("기획 한 줄");
+    }));
+    check("레이어: 인쇄 「개발만」 에 화면 공통도 들어간다", await page.evaluate(() =>
+      document.querySelector(".ss-pr-table").innerText.includes("Bearer")));
+    await page.emulateMedia({ media: "screen" });
+    await page.evaluate(() => window.__prRestore());
+    await page.waitForTimeout(200);
+    await page.evaluate(() => { window.__prRestore = window.ScreenSpec.print({ prepareOnly: true, layer: "plan" }); });
+    await page.emulateMedia({ media: "print" });
+    await page.waitForTimeout(150);
+    check("레이어: 인쇄 「기획만」 이면 표에 개발 줄이 없다", await page.evaluate(() => {
+      const t = document.querySelector(".ss-pr-table").innerText;
+      return t.includes("기획 한 줄") && !t.includes("POST /api/items") && !t.includes("Bearer");
+    }));
+    await page.emulateMedia({ media: "screen" });
+    await page.evaluate(() => window.__prRestore());
+    await page.waitForTimeout(200);
+
+    /* 하위 호환 — layer 를 안 쓰는 문서는 예전 그대로 */
+    await boot(plain);
+    check("레이어: 개발 정의가 없으면 칩을 만들지 않는다", (await page.locator(".ss-layerbar").count()) === 0);
+    check("레이어: 개발 정의가 없으면 개발 블록도 0개", (await page.locator(".ss-dev").count()) === 0);
+    check("레이어: 옛 문서는 정의서가 그대로 뜬다", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    check("레이어: 옛 문서의 인쇄 대화상자엔 레이어 선택이 없다", await page.evaluate(() => {
+      document.querySelector(".ss-prbtn").click();
+      const has = !!document.querySelector("#ss-prLayer");
+      document.querySelector(".ss-prdlg").close();
+      return !has;
+    }));
+  }
+
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
      클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */
   console.log("[inline] 자체 완결 파일");
