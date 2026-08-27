@@ -265,7 +265,10 @@ addEventListener("screenspec:preview", (e) => {
   기획자가 그 줄만 눌러 고치면 끝난다.
 - 넘겨주기만 할 사본이면 설정에 `readonly: true` 를 넣는다 — 편집 버튼 자체가 생기지 않는다.
 
-규격: [docs/config.md](docs/config.md#편집-모드-readonly)
+**뽑아서 넘기기** — 정의서 패널의 «인쇄» 로 화면 한 장을 A4 문서(마커·항목 표 선택 가능)로 뽑는다.
+컨플·노션·결재에 붙일 산출물이 여기서 나오므로, 항목 제목은 표의 한 칸에 들어갈 길이로 짧게 쓴다.
+
+규격: [docs/config.md](docs/config.md#편집-모드-readonly) · [인쇄](docs/config.md#인쇄--pdf)
 
 ### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 

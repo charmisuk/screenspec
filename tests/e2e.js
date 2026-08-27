@@ -1279,6 +1279,130 @@ function check(name, ok, detail) {
     srv.close();
   }
 
+  /* ============ 인쇄 · 화면별 PDF (#34) ============
+     실제로 인쇄 미디어를 켜고(emulateMedia) 본다 — @media print 를 안 켜고 클래스만 세는 것은
+     「종이에 뭐가 나오는가」를 검증하지 못한다. 마지막에 page.pdf() 로 진짜 산출물까지 만든다. */
+  console.log("[print] 인쇄 · PDF");
+  {
+    const os = require("os");
+    const prep = async (opts) => {
+      await page.evaluate((o) => { window.__prRestore = window.ScreenSpec.print(Object.assign({ prepareOnly: true }, o)); }, opts || {});
+      await page.emulateMedia({ media: "print" });
+      await page.waitForTimeout(150);
+    };
+    const undo = async () => {
+      await page.emulateMedia({ media: "screen" });
+      await page.evaluate(() => window.__prRestore && window.__prRestore());
+      await page.waitForTimeout(200);
+    };
+    const shown = (sel) => page.evaluate((s) => {
+      const el = document.querySelector(s);
+      return el ? getComputedStyle(el).display : "(없음)";
+    }, sel);
+
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
+    await page.waitForTimeout(1000);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("인쇄: 정의서 패널에 인쇄 버튼", (await page.locator(".ss-prbtn").count()) === 1);
+    check("인쇄: 편집 버튼과 같은 도구 자리", (await page.locator(".ss-headtools .ss-editbtn").count()) === 1);
+    check("인쇄: 대화상자를 연다", await page.evaluate(() => {
+      document.querySelector(".ss-prbtn").click();
+      const d = document.querySelector(".ss-prdlg");
+      return !!d && d.open === true && !!d.querySelector("#ss-prMark") && !!d.querySelector("#ss-prTable");
+    }));
+    await page.evaluate(() => document.querySelector(".ss-prdlg").close());
+
+    const before = await page.evaluate(() => ({
+      rows: document.querySelectorAll(".ss-defs-list .ss-row").length,
+      markers: document.querySelectorAll(".ss-marker").length,
+      parent: document.querySelector(".ss-frame").parentElement.id,
+    }));
+
+    await prep();
+    check("인쇄: 뷰어(툴바)는 종이에 안 나온다", (await shown(".ss-toolbar")) === "none");
+    check("인쇄: 정의서 패널도 안 나온다", (await shown(".ss-docmode")) === "none");
+    check("인쇄: 인쇄 블록만 나온다", (await shown(".ss-print")) === "block");
+    check("인쇄: 화면 ID·화면명·경로가 머리에", await page.evaluate(() => {
+      const t = document.querySelector(".ss-pr-head").innerText;
+      return t.includes("SCR-MOA-HOME-001") && t.includes("홈");
+    }));
+    check("인쇄: 항목 표에 하위(1a·1b)까지 나온다", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-pr-table .ss-pr-no")].map((x) => x.textContent).join(",").indexOf("1,1a,1b,2") === 0));
+    check("인쇄: 표에 유형·기능 설명이 있다", await page.evaluate(() => {
+      const r = document.querySelector(".ss-pr-table tbody tr");
+      return r.children.length === 4 && r.querySelectorAll("li").length > 0;
+    }));
+    check("인쇄: 프로토타입이 인쇄 블록 안으로 옮겨진다 (복제가 아니라)", await page.evaluate(() =>
+      document.querySelectorAll(".ss-frame").length === 1 && !!document.querySelector(".ss-print .ss-frame")));
+    check("인쇄: 표 행이 페이지 중간에서 안 잘린다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-pr-table tbody tr")).breakInside === "avoid"));
+    check("인쇄: 꼬리에 생성 일시 + Made with ScreenSpec", await page.evaluate(() =>
+      document.querySelector(".ss-pr-foot").innerText.includes("Made with ScreenSpec")));
+    check("인쇄: 마커는 기본으로 나온다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-print .ss-markers")).display !== "none"));
+
+    /* 진짜 산출물 — 브라우저의 「PDF 로 저장」과 같은 경로 */
+    const pdfPath = path.join(os.tmpdir(), "ss-print-test.pdf");
+    await page.pdf({ path: pdfPath, format: "A4", printBackground: true });
+    const pdfBuf = fs.readFileSync(pdfPath);
+    check("인쇄: PDF 가 실제로 만들어진다", pdfBuf.length > 1000, pdfBuf.length);
+    check("인쇄: PDF 가 여러 장으로 나뉜다", (pdfBuf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length >= 1);
+    await undo();
+
+    check("인쇄: 끝나면 화면이 원상 복귀한다", await page.evaluate((b) => {
+      const now = {
+        rows: document.querySelectorAll(".ss-defs-list .ss-row").length,
+        markers: document.querySelectorAll(".ss-marker").length,
+        parent: document.querySelector(".ss-frame").parentElement.id,
+      };
+      return now.rows === b.rows && now.markers === b.markers && now.parent === b.parent;
+    }, before), JSON.stringify(before));
+    check("인쇄: 인쇄 블록·클래스가 남지 않는다", await page.evaluate(() =>
+      document.querySelectorAll(".ss-print").length === 0 && !document.body.classList.contains("ss-printing")));
+
+    /* 옵션 — 마커 숨김 / 표 제외 */
+    await prep({ markers: false });
+    check("인쇄: 마커 숨김이면 번호가 안 나온다", (await shown(".ss-print .ss-markers")) === "none");
+    check("인쇄: 마커 숨김이어도 표는 그대로", (await page.locator(".ss-pr-table").count()) === 1);
+    await undo();
+    await prep({ table: false });
+    check("인쇄: 표 제외면 표가 없다", (await page.locator(".ss-pr-table").count()) === 0);
+    check("인쇄: 표 제외여도 프로토타입은 나온다", (await page.locator(".ss-print .ss-frame").count()) === 1);
+    await undo();
+
+    /* A4 보다 넓은 PC 폭은 잘라내지 않고 줄인다 */
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">넓은 화면</div><script>window.SCREENSPEC={baseViewport:"pc",' +
+      'screen:{id:"S-PC",name:"어드민"},specs:[{n:1,target:"1",title:"표",defs:[{t:"한 줄"}]}]};<' + "/script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    await prep();
+    const k = await page.evaluate(() => {
+      const m = (document.querySelector(".ss-print .ss-frame").style.transform || "").match(/scale\(([\d.]+)\)/);
+      const h = document.querySelector(".ss-pr-holder");
+      return { k: m ? Number(m[1]) : null, w: parseFloat(h.style.width) };
+    });
+    check("인쇄: A4 보다 넓은 PC 화면은 축소해서 넣는다", k.k !== null && k.k < 1 && k.w <= 703, JSON.stringify(k));
+    await undo();
+
+    /* overlay — 옮길 시트가 없다 */
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/overlay-spa.html");
+    await page.waitForTimeout(1000);
+    await page.click("#ss-ovDoc");
+    await page.waitForTimeout(400);
+    await prep();
+    check("인쇄(overlay): 헤더·표·꼬리가 나온다", await page.evaluate(() =>
+      !!document.querySelector(".ss-pr-head") && !!document.querySelector(".ss-pr-table") && !!document.querySelector(".ss-pr-foot")));
+    check("인쇄(overlay): 옮길 시트가 없으므로 프로토타입 칸은 생략한다", (await page.locator(".ss-pr-stage").count()) === 0);
+    check("인쇄(overlay): 뷰어 패널은 종이에 안 나온다", (await shown(".ss-ov-panel")) === "none");
+    await undo();
+    check("인쇄(overlay): 원상 복귀", await page.evaluate(() =>
+      document.querySelectorAll(".ss-print").length === 0 && document.querySelectorAll(".ss-ov-row,.ss-row").length > 0));
+  }
+
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
      클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */
   console.log("[inline] 자체 완결 파일");

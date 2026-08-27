@@ -122,19 +122,51 @@
       "type": "feat",
       "release": "Phase 0-3",
       "title": "인쇄·화면별 PDF",
-      "status": "todo",
+      "status": "done",
       "plan": {
-        "done": false
+        "done": true,
+        "cause": "고친 정의서를 남에게 보여줄 방법이 화면 공유뿐이다. 실무에서는 화면 하나를 종이 문서 형태로 뽑아 컨플·노션·결재에 붙이는데, 지금 Ctrl+P 를 누르면 툴바·패널·시트가 뒤섞여 아무 것도 못 쓴다. 브라우저의 「PDF 로 저장」이 곧 산출물이 되게 하면 서버도 계정도 없이 내보내기가 끝난다 — 로드맵 D6 이 「오프라인은 인쇄(PDF)가 담당한다」로 정해 둔 자리다.",
+        "change": "(1) screenspec.js — 인쇄 준비/복원: 인쇄 전용 컨테이너 .ss-print 를 body 끝에 만들고 «살아 있는 .ss-frame 을 그 안으로 옮긴다». 복제하지 않는다 — 앱 DOM 복제는 상태·스크립트를 잃는다. 옮기는 것은 이미 setMode 가 쓰는 검증된 동작이다. afterprint(+타임아웃 폴백)에서 원래 홀더로 되돌리고 컨테이너를 지운 뒤 layout() 으로 배치를 복구한다. (2) 인쇄 컨테이너 내용: ①화면 헤더(ID·화면명·경로) ②프로토타입(축소 배율을 A4 폭 기준으로 다시 계산) ③항목 표(번호·영역명·유형·기능 설명, flatItems 로 하위 1a·1b 포함, 「↳ 이유」 포함) ④꼬리(생성 일시 · Made with ScreenSpec). (3) CSS — @media print 에서 body.ss-printing 일 때 툴바·정의서 모드·프로토타입 래퍼·목차·툴팁·재현 중 띠를 감추고 .ss-print 만 보인다. @page{size:A4 portrait;margin:12mm}. 표 행과 프로토타입 블록에 break-inside:avoid. 화면에서는 .ss-print{display:none} 이라 깜빡임이 없다. (4) 대화상자 — <dialog>.showModal() 을 쓴다. 브라우저 최상위 레이어라 z-index 다툼도 겹침도 원천적으로 없다. 항목: 마커 표시/숨김 · 항목 표 포함/제외. 범위는 「현재 화면」 고정(일괄은 로드맵대로 유료 후보). 인쇄 직전에 닫는다. (5) 진입점 — 패널 머리(ctx.cntEl 의 부모)에 「인쇄」 버튼. #37 의 편집 버튼 옆이고 wrap·overlay 공용이며 화면정의서 모드에서만 보인다. (6) overlay 는 시트가 없다(앱이 페이지 그 자체) — 프로토타입 블록 없이 헤더+표+꼬리만 낸다. (7) 공개 API window.ScreenSpec.print(opts). (8) docs/config.md 인쇄 절 + API, SKILL.md 한 줄, README 기능 줄. (9) tests/e2e.js — 아래 qa. 배치 제약: 새 fixed 요소를 만들지 않는다(<dialog> 는 top layer 라 해당 없음). 기존 e2e 가 쓰는 ID·문구(#ss-mDoc·#ss-defsList·.ss-row·.ss-marker·.ss-editbtn)는 그대로 둔다.",
+        "accept": [
+          "정의서 패널에 「인쇄」 버튼이 있고, 누르면 마커·항목 표 선택 대화상자가 뜬다",
+          "인쇄 미디어에서 툴바·정의서 패널·목차·툴팁이 전부 사라지고 인쇄 블록만 남는다",
+          "인쇄 블록에 화면 ID·화면명·경로, 프로토타입, 항목 표(하위 1a·1b·이유 포함), 생성 일시가 있다",
+          "마커 숨김을 고르면 프로토타입만 깨끗하게 나온다 (마커·주석선 0개)",
+          "항목 표 제외를 고르면 표가 안 나온다",
+          "A4 세로 폭(약 703px)보다 넓은 PC 폭 프로토타입은 잘리지 않고 축소돼 들어간다",
+          "표 행이 페이지 중간에서 잘리지 않는다 (break-inside: avoid)",
+          "인쇄가 끝나면 화면이 원상 복귀한다 — 인쇄 전후 정의서 DOM 이 같고 마커도 제자리다",
+          "overlay 모드에서도 헤더+표+꼬리가 나온다 (시트가 없으므로 프로토타입 블록은 생략)",
+          "인쇄 UI 가 ScreenSpec 자체 고정 UI 와 겹치지 않는다 — 버튼은 패널 머리(460px) 안, 대화상자는 브라우저 최상위 레이어",
+          "node tests/lint.js 통과 — 새 공개 API 가 docs/config.md 에 문서화"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과",
+          "node tests/e2e.js — 기존 198 케이스 전부 유지 + 인쇄 신규 케이스 통과",
+          "신규 e2e: page.emulateMedia({media:\"print\"}) 로 인쇄 미디어를 실제로 켜고 ①툴바·패널이 안 보인다 ②인쇄 블록이 보인다 ③헤더·표·꼬리 내용 ④마커 숨김 옵션 ⑤표 제외 옵션 ⑥break-inside 계산값 ⑦PC 폭 축소 배율 ⑧인쇄 전후 DOM·마커 동일 ⑨overlay 경로",
+          "page.pdf() 로 실제 PDF 를 만들어 ①파일이 생성되고 ②페이지 수가 1 이상 ③본문 텍스트가 들어 있는지 확인 — 브라우저의 「PDF 로 저장」과 같은 경로다",
+          "node tests/smoke.js — demo.html 외부 이미지 차단 1건만 허용 (변경 전에도 동일)"
+        ],
+        "docs": [
+          "docs/config.md — 「인쇄·PDF」 절 + 공개 API print()",
+          "SKILL.md — 인쇄로 뽑는다 한 줄",
+          "README.md — 기능 줄"
+        ],
+        "open": "기획서의 열린 결정(A4 보다 넓은 PC 화면: 축소 vs 가로 용지 안내)은 기획서 제안대로 «축소»로 간다. 가로 용지는 사용자가 인쇄 대화상자에서 직접 고를 수 있으므로 우리가 강제할 이유가 없다."
       },
       "dev": {
-        "done": false,
-        "model": null
+        "done": true,
+        "model": "main",
+        "routing": "#37 과 같은 사유 — 서브에이전트 사용이 막힌 세션이라 메인이 직접.",
+        "evidence": "screenspec.js — printPrepare/printRun/printOpen/prRows/headTools/prMount + @media print CSS + <dialog>. 핵심 선택: 살아 있는 .ss-frame 을 인쇄 컨테이너로 «옮긴다»(복제 아님) — e2e 가 .ss-frame 개수 1 을 확인해 못박는다. ctx.printTake/printGive 로 wrap 만 시트를 넘기고 overlay 는 안 넘겨 프로토타입 칸이 저절로 생략된다. printRun({prepareOnly:true}) 는 준비만 하고 되돌리기 함수를 준다 — 테스트 뒷문이 아니라 문서에 적은 공개 동작이다(인쇄 전 확인 용도). 인쇄 버튼은 #37 의 편집 버튼과 같은 .ss-headtools 자리(패널 머리)로 모았다. docs/config.md 인쇄 절 + API · SKILL.md · README.md · tests/e2e.js +26 케이스. 계획 밖 파일 변경 0건."
       },
       "qa": {
-        "done": false
+        "done": true,
+        "evidence": "lint 전부 통과 — 도중 1건 FAIL 이 났다: 인쇄 옵션 지역변수 o.markers·o.table 을 lint 의 Screen·Spec 필드 추출기가 설정 필드로 오인. 검사를 느슨하게 하는 대신 변수명을 pr 로 바꿔 통과시켰다. e2e PASS 224 / FAIL 0 — 기존 198 유지 + 인쇄 26 신규. 인쇄 케이스는 page.emulateMedia({media:\"print\"}) 로 «실제 인쇄 미디어» 를 켜고 검증했고, page.pdf() 로 진짜 PDF(566KB·4페이지)까지 만들어 확인했다. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단(회귀 아님, 앞선 두 이슈에서 stash 로 확인). accept 11개 전부 자동 확인 — 이번 이슈는 사용자 QA 로 넘긴 항목이 없다."
       },
       "commit": {
-        "done": false
+        "done": true,
+        "evidence": "feat: 인쇄 · 화면별 PDF (fix #34)"
       }
     },
     {

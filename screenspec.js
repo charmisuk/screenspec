@@ -377,9 +377,10 @@
   /* 편집 모드 (#37) — 기획자가 코드를 안 보고 정의서를 고치는 자리.
      읽는 화면을 그대로 두고 «고칠 수 있음» 만 얹는다: 편집을 켜야 손잡이가 보인다.
      새 고정(fixed) 요소를 만들지 않는다 — 전부 패널 안쪽 흐름 배치라 마커·재현 중 띠를 가리지 않는다 */
-  .ss-editbtn{margin-left:auto;border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);
-    font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:inherit}
-  .ss-editbtn:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  .ss-headtools{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .ss-headbtn{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);
+    font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .ss-headbtn:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
   .ss-editbtn[aria-pressed="true"]{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
   .ss-editbtn .ss-dot{display:none;width:6px;height:6px;border-radius:50%;background:#E5484D;margin-left:5px}
   .ss-editbtn.ss-dirty .ss-dot{display:inline-block;vertical-align:middle}
@@ -413,6 +414,55 @@
   .ss-draft.ss-show{display:flex}
   .ss-draft button{border:1px solid #E0CE96;background:#fff;color:#7A5B00;font-size:11px;font-weight:700;
     padding:3px 9px;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  /* 인쇄 · 화면별 PDF (#34) — 브라우저의 「PDF 로 저장」이 곧 산출물이다.
+     화면에서는 숨어 있다가 인쇄 미디어에서만 나타난다 — 그래야 누를 때 깜빡이지 않는다 */
+  .ss-prdlg{border:0;border-radius:14px;padding:20px 22px 18px;max-width:340px;color:var(--ss-ink);
+    box-shadow:0 18px 50px rgba(17,24,39,.22);font:13px/1.6 var(--ss-font)}
+  .ss-prdlg::backdrop{background:rgba(17,24,39,.35)}
+  .ss-prdlg h3{margin:0 0 6px;font-size:14px;font-weight:800}
+  .ss-prdlg .ss-prdlg-sub{margin:0 0 14px;font-size:11.5px;color:var(--ss-ink3);line-height:1.6}
+  .ss-prdlg label{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:7px 0;cursor:pointer}
+  .ss-prdlg .ss-prdlg-btns{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
+  .ss-prdlg button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);font-size:12px;
+    font-weight:700;padding:6px 13px;border-radius:8px;cursor:pointer;font-family:inherit}
+  .ss-prdlg .ss-prdlg-go{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
+  .ss-print{display:none}
+  .ss-pr-head{border-bottom:2px solid #191919;padding-bottom:8px;margin-bottom:14px}
+  .ss-pr-id{font-family:var(--ss-mono);font-size:11pt;font-weight:700;color:#191919}
+  .ss-pr-name{font-size:15pt;font-weight:800;color:#191919;margin:3px 0 2px}
+  .ss-pr-path{font-size:9pt;color:#50524E}
+  .ss-pr-stage{margin:0 0 16px;text-align:center;overflow:hidden}
+  .ss-pr-holder{display:inline-block;transform-origin:top left}
+  .ss-pr-table{width:100%;border-collapse:collapse;font-size:9pt;color:#191919}
+  .ss-pr-table th{background:#F1F1F0;border:1px solid #D3D1CB;padding:5px 7px;text-align:left;font-weight:800;font-size:8.5pt}
+  .ss-pr-table td{border:1px solid #D3D1CB;padding:5px 7px;vertical-align:top;line-height:1.55}
+  .ss-pr-table .ss-pr-no{font-family:var(--ss-mono);font-weight:700;white-space:nowrap;width:44px}
+  .ss-pr-table .ss-pr-tag{white-space:nowrap;width:52px;color:#50524E}
+  .ss-pr-table .ss-pr-ttl{width:22%;font-weight:700}
+  .ss-pr-table tr.ss-pr-part .ss-pr-no{padding-left:16px;color:#50524E}
+  .ss-pr-table ul{margin:0;padding-left:14px}
+  .ss-pr-table li{margin:1px 0}
+  .ss-pr-table .ss-pr-why{display:block;color:#50524E;font-size:8pt}
+  .ss-pr-table .ss-pr-why::before{content:"↳ 이유: "}
+  .ss-pr-table li.ss-pr-sub{list-style:circle;color:#37352F}
+  .ss-pr-foot{margin-top:12px;padding-top:6px;border-top:1px solid #D3D1CB;font-size:8pt;color:#787774;
+    display:flex;justify-content:space-between}
+  @media print{
+    /* 인쇄에는 «문서» 만 남는다 — 뷰어(툴바·패널·목차·툴팁·띠)는 전부 뺀다 */
+    body.ss-printing .ss-toolbar,body.ss-printing .ss-docmode,body.ss-printing .ss-proto-wrap,
+    body.ss-printing .ss-toc,body.ss-printing .ss-tip,body.ss-printing .ss-pvbar,
+    body.ss-printing .ss-nav-toast,body.ss-printing .ss-ov-panel,body.ss-printing .ss-ov-pill,
+    body.ss-printing .ss-ov-markers,body.ss-printing .ss-ov-anno{display:none !important}
+    body.ss-printing .ss-print{display:block}
+    /* 마커 숨김 = 프로토타입만 깨끗하게 (?screenspec=0 과 같은 모습) */
+    body.ss-pr-nomark .ss-print .ss-markers,body.ss-pr-nomark .ss-print .ss-anno{display:none !important}
+    /* 행이 페이지 중간에서 잘리면 읽는 사람이 항목을 잃는다 */
+    .ss-pr-table tr,.ss-pr-head,.ss-pr-stage{break-inside:avoid;page-break-inside:avoid}
+    .ss-pr-table thead{display:table-header-group} /* 여러 장이면 장마다 머리행 */
+    .ss-print .ss-sheet{box-shadow:none;border-radius:0;overflow:visible}
+    .ss-print .ss-edge-r,.ss-print .ss-edge-b{display:none}
+  }
+  @page{size:A4 portrait;margin:12mm}
   .ss-defs-list{flex:1;overflow-y:auto}
   .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
   .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
@@ -1381,6 +1431,123 @@ ${HL_CSS}
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToc(); });
 
     /* ============================================================
+       인쇄 · 화면별 PDF (#34) — 브라우저의 「PDF 로 저장」이 곧 산출물이다.
+       살아 있는 시트를 «옮긴다» — 복제하면 앱의 상태와 스크립트를 잃는다.
+       옮기기는 모드 전환이 이미 쓰는 동작이라 새 위험이 아니다. 끝나면 제자리로 돌린다.
+       ============================================================ */
+    const A4_W = 703; /* A4 세로 본문 폭 ≈ 210mm − 12mm×2 = 186mm ≈ 703px(96dpi) */
+    let prBox = null, prDlg = null;
+    function prRows() {
+      let out = "";
+      items().forEach((it) => {
+        let li = "";
+        (it.spec.defs || []).forEach((d) => {
+          li += "<li>" + esc(d.t) + (d.why ? '<span class="ss-pr-why">' + esc(d.why) + "</span>" : "") + "</li>";
+          (d.subs || []).forEach((sb) => (li += '<li class="ss-pr-sub">' + esc(sb) + "</li>"));
+        });
+        out += '<tr class="' + (it.isPart ? "ss-pr-part" : "") + '"><td class="ss-pr-no">' + esc(it.label) + "</td>" +
+          '<td class="ss-pr-ttl">' + esc(it.spec.title || "") + "</td>" +
+          '<td class="ss-pr-tag">' + esc(annoOf(it.spec).label) + "</td>" +
+          "<td>" + (li ? "<ul>" + li + "</ul>" : "—") + "</td></tr>";
+      });
+      return out;
+    }
+    /* 준비만 하고 되돌리는 함수를 돌려준다. 인쇄 전 모습을 그대로 들여다볼 수 있어야
+       (e2e 든 사람이든) 「뽑기 전에 확인」 이 가능하다 */
+    function printPrepare(opts) {
+      if (prBox) return function () {};
+      const pr = opts || {};
+      const showMarkers = pr.markers !== false, showTable = pr.table !== false;
+      const sc = current || {};
+      const path = (sc.path || []).map(esc).join(" › ");
+      prBox = h("div", { class: "ss-print ss-ui" },
+        '<div class="ss-pr-head"><div class="ss-pr-id">' + esc(sc.id || "") + "</div>" +
+        '<div class="ss-pr-name">' + esc(sc.name || "") + "</div>" +
+        (path ? '<div class="ss-pr-path">' + path + "</div>" : "") + "</div>" +
+        '<div class="ss-pr-stage"><div class="ss-pr-holder"></div></div>' +
+        (showTable ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
+          prRows() + "</tbody></table>" : "") +
+        '<div class="ss-pr-foot"><span>' + esc(sc.id || "") + " · " + new Date().toLocaleString() +
+        "</span><span>Made with ScreenSpec</span></div>");
+      document.body.appendChild(prBox);
+      const stage = prBox.querySelector(".ss-pr-stage");
+      const taken = ctx.printTake ? ctx.printTake() : null;
+      if (taken && taken.node) {
+        /* 넓은 PC 화면은 잘라내지 않고 줄인다 — 잘린 그림은 문서로 못 쓴다 */
+        const k = Math.min(1, A4_W / (taken.w || A4_W));
+        const holder = prBox.querySelector(".ss-pr-holder");
+        taken.node.style.transformOrigin = "top left";
+        taken.node.style.transform = "scale(" + k + ")";
+        holder.style.width = Math.round((taken.w || 0) * k) + "px";
+        holder.style.height = Math.round((taken.h || 0) * k) + "px";
+        holder.appendChild(taken.node);
+      } else stage.remove(); /* overlay: 앱이 페이지 그 자체라 옮길 시트가 없다 */
+      document.body.classList.add("ss-printing");
+      document.body.classList.toggle("ss-pr-nomark", !showMarkers);
+      let restored = false;
+      return function restore() {
+        if (restored) return;
+        restored = true;
+        if (taken && taken.node && ctx.printGive) ctx.printGive(taken.node);
+        if (prBox) { prBox.remove(); prBox = null; }
+        document.body.classList.remove("ss-printing");
+        document.body.classList.remove("ss-pr-nomark");
+      };
+    }
+    function printRun(opts) {
+      const restore = printPrepare(opts);
+      if (opts && opts.prepareOnly) return restore;
+      const done = () => { removeEventListener("afterprint", done); clearTimeout(timer); restore(); };
+      /* afterprint 를 안 주는 환경도 있다 — 되돌리기를 브라우저 신호에만 맡기지 않는다 */
+      const timer = setTimeout(done, 60000);
+      addEventListener("afterprint", done);
+      try { window.print(); } catch (e) { done(); }
+      return restore;
+    }
+    function printOpen() {
+      if (!prDlg) {
+        prDlg = h("dialog", { class: "ss-prdlg ss-ui" },
+          "<h3>인쇄 · PDF 로 저장</h3>" +
+          '<p class="ss-prdlg-sub">지금 보는 화면 하나를 종이 문서 형태로 뽑습니다. 브라우저 인쇄 창에서 «대상 → PDF 로 저장» 을 고르세요.</p>' +
+          '<label><input type="checkbox" id="ss-prMark" checked> 마커(번호) 표시</label>' +
+          '<label><input type="checkbox" id="ss-prTable" checked> 항목 표 포함</label>' +
+          '<div class="ss-prdlg-btns"><button type="button" data-pr="cancel">취소</button>' +
+          '<button type="button" data-pr="go" class="ss-prdlg-go">인쇄</button></div>');
+        document.body.appendChild(prDlg);
+        prDlg.addEventListener("click", (e) => {
+          const b = e.target.closest("[data-pr]");
+          if (!b) return;
+          const go = b.dataset.pr === "go";
+          const mk = prDlg.querySelector("#ss-prMark").checked;
+          const tb = prDlg.querySelector("#ss-prTable").checked;
+          prDlg.close();
+          /* 대화상자를 닫고 나서 인쇄한다 — 최상위 레이어라 열려 있으면 종이에 같이 찍힌다 */
+          if (go) setTimeout(() => printRun({ markers: mk, table: tb }), 0);
+        });
+      }
+      if (prDlg.showModal) prDlg.showModal();
+      else printRun({});
+    }
+
+    /* 패널 머리의 도구 자리 — 인쇄·편집이 여기 나란히 산다 (wrap·overlay 공용) */
+    function headTools() {
+      if (!ctx.cntEl || !ctx.cntEl.parentNode) return null;
+      let box = ctx.cntEl.parentNode.querySelector(".ss-headtools");
+      if (!box) {
+        box = h("span", { class: "ss-headtools ss-ui" }, "");
+        ctx.cntEl.parentNode.appendChild(box);
+      }
+      return box;
+    }
+    function prMount() {
+      const box = headTools();
+      if (!box) return;
+      const b = h("button", { class: "ss-headbtn ss-prbtn ss-ui", type: "button" }, "인쇄");
+      b.onclick = printOpen;
+      box.appendChild(b);
+    }
+
+    /* ============================================================
        편집 모드 (#37) — 정의서를 «읽는 것» 에서 «고치는 것» 으로.
        기획자는 window.SCREENSPEC 이라는 JS 객체를 평생 보지 않는다.
        고친 값은 설정 객체에 제자리로 들어가고(SCREENS 와 같은 배열을 가리킨다),
@@ -1617,9 +1784,9 @@ ${HL_CSS}
     function edMount() {
       if (READONLY || !ctx.cntEl || !ctx.cntEl.parentNode) return;
       const head = ctx.cntEl.parentNode;
-      edBtn2 = h("button", { class: "ss-editbtn ss-ui", type: "button", "aria-pressed": "false" }, "편집<span class=\"ss-dot\"></span>");
+      edBtn2 = h("button", { class: "ss-headbtn ss-editbtn ss-ui", type: "button", "aria-pressed": "false" }, "편집<span class=\"ss-dot\"></span>");
       edBtn2.onclick = () => setEdit(!EDIT);
-      head.appendChild(edBtn2);
+      (headTools() || head).appendChild(edBtn2);
 
       edDraftBar = h("div", { class: "ss-draft ss-ui" },
         '저장 안 된 초안이 있습니다 (<span class="ss-draft-when"></span>) ' +
@@ -1673,7 +1840,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText };
+    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, print: printRun };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -1706,7 +1873,7 @@ ${HL_CSS}
        프로토타입이 setScreen()·refresh() 를 부르고 있을 수 있으므로 빈 껍데기만 남긴다(안 그러면 프로토타입이 깨진다). */
     if (SWITCH === "off") {
       const noop = function () {};
-      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, edit: noop, serialize: () => "", dirty: () => false };
+      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, print: noop, edit: noop, serialize: () => "", dirty: () => false };
       window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
       console.info("[ScreenSpec] off — 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
       return;
@@ -1971,6 +2138,9 @@ ${HL_CSS}
         return { l: r.left / scale + ox, t: r.top / scale + oy, r: r.right / scale + ox, b: r.bottom / scale + oy };
       },
       ensureDoc: () => { if (document.body.classList.contains("ss-mode-proto")) setMode("doc"); },
+      /* 인쇄는 시트를 «옮겨» 간다 — 크기는 축소 전 원본 기준이어야 A4 배율을 다시 잴 수 있다 (#34) */
+      printTake: () => ({ node: frame, w: sheetW, h: sheetH }),
+      printGive: (node) => { docHolder.appendChild(node); layout(); },
       isDoc: () => document.body.classList.contains("ss-mode-doc"),
       afterRender: () => requestAnimationFrame(layout),
       toggleRoot: true /* wrap은 앱 DOM을 소유한다 — setScreen이 root 표시/숨김도 함께 전환 */
@@ -2077,8 +2247,9 @@ ${HL_CSS}
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
 
     /* ---- 공개 API ---- */
+    core.prMount();
     core.edMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", print: core.print, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
@@ -2203,8 +2374,9 @@ ${HL_CSS}
     }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
 
     /* ---- 공개 API ---- */
+    core.prMount();
     core.edMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", print: core.print, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
