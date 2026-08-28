@@ -1,0 +1,2 @@
+# 푸시 훅은 셸 스크립트다 — CRLF 로 체크아웃되면 ": command not found" 로 죽는다
+.githooks/* text eol=lf
