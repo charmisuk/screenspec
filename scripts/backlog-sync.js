@@ -171,6 +171,7 @@ async function main() {
 main().then(async (code) => {
   if (code !== null) process.exit(code);
   console.log("\n실행 후 재검증...");
-  const r = execSync(`node "${__filename}"`, { cwd: REPO }).toString();
+  /* 재검증도 «곧 닫힐 이슈» 를 같이 알아야 한다 — 모르면 방금 옮긴 카드를 어긋난 것으로 본다 (2026-08-28 실측) */
+  const r = execSync(`node "${__filename}"` + (FROM_PUSH ? " --from-push" : ""), { cwd: REPO }).toString();
   console.log(r.split("\n").slice(-3).join("\n"));
 }).catch((e) => fail(String(e.message || e)));
