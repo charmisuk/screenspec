@@ -82,7 +82,7 @@ window.SCREENSPEC = {
   devices: { mobile:{ w:360, h:800 }, pc:{ w:1920, h:1080 } },   // 생략 가능(이 값이 기본). 바꿀 것만 적는다
   specs: [
     { n:1, target:"1", anno:"box", title:"영역명", defs:[
-      { t:"기능 설명 한 줄", subs:["하위 조건 한 줄"] }
+      { t:"기능 설명 한 줄", subs:["하위 조건 한 줄"] }   // 한 단 더 필요하면 { t:"하위 조건", subs:["더 아래 한 줄"] }
     ]},
   ]
 };
@@ -124,7 +124,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.20.1/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.21.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)

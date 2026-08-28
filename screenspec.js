@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.20 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.21 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -116,6 +116,13 @@
     flow:   { label: "이동",   mech: "flow" }
   };
   function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
+  /* 유형 고르기 (0-6) — 새 필드가 아니라 이미 있는 anno 8종을 그 자리에서 바꾼다.
+     마커 모양·▶ 버튼이 이 값으로 갈리므로 고르면 바로 다시 그린다 */
+  function annoPick(sp) {
+    let o = "";
+    for (const k in ANNO) o += '<option value="' + k + '"' + (sp.anno === k ? " selected" : "") + ">" + ANNO[k].label + "</option>";
+    return '<select class="ss-tag ss-annopick ss-ui" data-ec="anno" title="이 항목의 유형">' + o + "</select>";
+  }
 
   /* 하이라이트·마커·버튼 등 포인트 컬러 — accent: 프리셋명 또는 hex
      window.SCREENSPEC = { accent: "orange" } 또는 { accent: "#7C3AED" } */
@@ -523,6 +530,15 @@
   .ss-items li .ss-why::before{content:"↳ 이유: "}
   .ss-items li.ss-sub{margin-left:18px}
   .ss-items li.ss-sub::before{background:#fff;border:1.3px solid var(--ss-ink2);left:2px}
+  .ss-annopick{font:inherit;padding:1px 4px;cursor:pointer}
+  .ss-defs-list [data-ed]:empty:not(.ss-ed-on)::after{content:"빈 줄 — 눌러서 쓰기";color:var(--ss-ink3);font-style:italic}
+  .ss-defs-list [data-ed].ss-ed-on:empty{min-width:120px;display:inline-block}
+  .ss-slash{position:fixed;z-index:2147483000;background:var(--ss-bg,#fff);border:1px solid var(--ss-line,#dcdce3);
+    border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column;min-width:132px}
+  .ss-slash button{all:unset;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--ss-ink,#22232a)}
+  .ss-slash button:hover{background:var(--ss-soft,#f2f2f6)}
+  .ss-items li.ss-sub3{margin-left:34px}
+  .ss-items li.ss-sub3::before{width:4px;height:4px;background:var(--ss-ink2);border:0;left:4px;top:9px}
   .ss-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
     color:#fff;border-radius:8px;padding:7px 14px;background:var(--ss-accent);
     box-shadow:0 2px 8px color-mix(in srgb,var(--ss-accent) 35%,transparent);transition:background .12s}
@@ -766,13 +782,15 @@ ${HL_CSS}
   /* 편집 모드는 «켜야 보이는» 것이다 (#37) — 꺼져 있으면 아래 함수들이 빈 문자열을 내므로
      정의서 DOM 은 편집 기능이 없던 때와 한 글자도 다르지 않다. 회귀 위험을 0 으로 두려는 배치다 */
   let EDIT = false;
-  function edMark(field, di, si) {
+  function edMark(field, di, si, ti) {
     if (!EDIT) return "";
-    return ' data-ed="' + field + '"' + (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"');
+    return ' data-ed="' + field + '"' + (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
+      (ti == null ? "" : ' data-ti="' + ti + '"');
   }
-  function edBtn(cmd, label, title, di, si) {
+  function edBtn(cmd, label, title, di, si, ti) {
     return '<button type="button" data-ec="' + cmd + '"' + (di == null ? "" : ' data-di="' + di + '"') +
-      (si == null ? "" : ' data-si="' + si + '"') + (title ? ' title="' + title + '"' : "") + ">" + label + "</button>";
+      (si == null ? "" : ' data-si="' + si + '"') + (ti == null ? "" : ' data-ti="' + ti + '"') +
+      (title ? ' title="' + title + '"' : "") + ">" + label + "</button>";
   }
   /* 줄 하나의 손잡이 — 이유가 이미 있으면 「＋ 이유」는 내지 않는다 */
   function edLineCtl(di, hasWhy) {
@@ -780,9 +798,9 @@ ${HL_CSS}
     return '<span class="ss-edline ss-ui">' + (hasWhy ? "" : edBtn("addwhy", "＋ 이유", "이 줄에 근거 붙이기", di)) +
       edBtn("delline", "×", "이 줄 삭제", di) + "</span>";
   }
-  function edSubCtl(di, si) {
+  function edSubCtl(di, si, ti) {
     if (!EDIT) return "";
-    return '<span class="ss-edline ss-ui">' + edBtn("delsub", "×", "이 하위 줄 삭제", di, si) + "</span>";
+    return '<span class="ss-edline ss-ui">' + edBtn(ti == null ? "delsub" : "delsub3", "×", "이 줄 삭제", di, si, ti) + "</span>";
   }
   /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
   function edRowCtl() {
@@ -797,6 +815,10 @@ ${HL_CSS}
     return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") + edBtn("delpart", "세부 삭제", "이 세부 항목 삭제") + "</div>";
   }
   /* 정의 불렛(공통) — 근거는 사양과 분리한다. 구현자는 사양만, 검토자는 이유까지 (#24) */
+  /* 하위 줄 한 개의 글자 — 예전 문서는 문자열, 3단을 쓰면 객체다. 둘 다 그대로 유효하다 */
+  function subT(x) { return typeof x === "string" ? x : (x && x.t) || ""; }
+  function subSet(arr, i, text) { const x = arr[i]; if (typeof x === "string" || !x) arr[i] = text; else x.t = text; }
+  function subObj(arr, i) { if (typeof arr[i] === "string") arr[i] = { t: arr[i] }; return arr[i]; }
   function defItemsHTML(defs, want) {
     let items = "";
     (defs || []).forEach((d, di) => {
@@ -805,11 +827,20 @@ ${HL_CSS}
       if (want === "plan" && d.layer) return;
       if (want === "dev" && d.layer !== "dev") return;
       const t = EDIT ? '<span class="ss-dt"' + edMark("t", di) + ">" + esc(d.t) + "</span>" : esc(d.t);
-      const why = d.why ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + esc(d.why) + "</span>" : "";
+      /* 이유는 «비어 있어도» 편집 중에는 자리를 내준다 — 방금 만든 빈 이유에 이어 써야 하기 때문이다.
+         읽는 화면에서는 내용이 있을 때만 보인다 (비운 이유는 저장 때 사라진다) */
+      const why = d.why || (EDIT && d.why != null)
+        ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + esc(d.why) + "</span>" : "";
       items += "<li>" + t + why + edLineCtl(di, !!d.why) + "</li>";
       (d.subs || []).forEach((sub, si) => {
-        const st = EDIT ? '<span class="ss-dt"' + edMark("sub", di, si) + ">" + esc(sub) + "</span>" : esc(sub);
+        /* 하위 줄은 «글자» 이거나 «글자 + 그 아래 한 단» 이다 (0-6).
+           번호는 2단(1a)까지만 붙인다 — 3단까지 번호를 매기면 화면 위 마커와 어긋난다 (PM 결정 2026-08-28) */
+        const st = EDIT ? '<span class="ss-dt"' + edMark("sub", di, si) + ">" + esc(subT(sub)) + "</span>" : esc(subT(sub));
         items += '<li class="ss-sub">' + st + edSubCtl(di, si) + "</li>";
+        ((sub && sub.subs) || []).forEach((s3, ti) => {
+          const t3 = EDIT ? '<span class="ss-dt"' + edMark("sub3", di, si, ti) + ">" + esc(s3) + "</span>" : esc(s3);
+          items += '<li class="ss-sub ss-sub3">' + t3 + edSubCtl(di, si, ti) + "</li>";
+        });
       });
     });
     return items;
@@ -871,14 +902,14 @@ ${HL_CSS}
       (s.parts || []).forEach((p, i) => {
         const key = String(s.n) + partSuffix(i);
         parts += `<div class="ss-part" data-part="${key}">
-          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
+          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span>${EDIT ? annoPick(p) : '<span class="ss-tag">' + esc(annoOf(p).label) + "</span>"}</div>
           <ul class="ss-items ss-plan">${defItemsHTML(p.defs, "plan")}</ul>${devBlockHTML(p.defs)}${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
         </div>`;
       });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span>${EDIT ? annoPick(s) : '<span class="ss-tag">' + esc(type.label) + "</span>"}<span class="ss-nowtag">현재 미표시</span></div>
           <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
         </div></div>`;
     });
@@ -1881,13 +1912,25 @@ ${HL_CSS}
       el.contentEditable = "false";
       el.classList.remove("ss-ed-on");
       const next = el.textContent.replace(/\s+/g, " ").trim();
-      if (!commit || next === edWas) { el.textContent = edWas; return; }
+      if (!commit || next === edWas) {
+        el.textContent = edWas;
+        /* 갓 만든 빈 줄에서 그냥 빠져나오면 «안 쓰기로 한 것» 이다 — 빈 껍데기를 남기지 않는다 (0-6).
+           el.isConnected 를 보는 이유: 다시 그리면 옛 요소가 떨어져 나간 채 여기로 오는데,
+           그건 사용자가 그만둔 게 아니라 우리가 화면을 갈아 끼운 것이다 (그걸 «취소» 로 읽으면 방금 만든 줄을 지운다) */
+        if (!commit && !edWas && el.isConnected && /^(t|sub|sub3)$/.test(el.dataset.ed || "")) { edEl = el; edKillLine(); edEl = null; }
+        return;
+      }
       const it = itemOf(edKeyOf(el));
       if (!it) { el.textContent = edWas; return; }
-      const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di), si = Number(el.dataset.si);
+      const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di), si = Number(el.dataset.si), ti = Number(el.dataset.ti);
       let redraw = false;
+      edSnap();
       if (f === "title") s.title = next;
-      else if (f === "t") { if (s.defs && s.defs[di]) s.defs[di].t = next; }
+      else if (f === "t") {
+        if (!s.defs || !s.defs[di]) return;
+        if (next) s.defs[di].t = next;
+        else { s.defs.splice(di, 1); redraw = true; } /* 빈 줄은 남기지 않는다 — 지운 것과 같은 뜻이다 */
+      }
       else if (f === "why") {
         if (!s.defs || !s.defs[di]) return;
         if (next) s.defs[di].why = next;
@@ -1895,11 +1938,208 @@ ${HL_CSS}
       } else if (f === "sub") {
         const d = s.defs && s.defs[di];
         if (!d || !d.subs) return;
-        if (next) d.subs[si] = next;
+        if (next) subSet(d.subs, si, next);
         else { d.subs.splice(si, 1); if (!d.subs.length) delete d.subs; redraw = true; }
+      } else if (f === "sub3") {
+        const d = s.defs && s.defs[di], x = d && d.subs && d.subs[si];
+        if (!x || typeof x === "string" || !x.subs) return;
+        if (next) x.subs[ti] = next;
+        else { x.subs.splice(ti, 1); if (!x.subs.length) delete x.subs; redraw = true; }
       }
       edTouched();
       if (redraw) render();
+    }
+
+    /* ---- 되돌리기 (0-6) ----
+       설정 전체를 글자로 찍어 두고 제자리로 되돌린다. adoptInto 가 참조를 살려 복원하므로
+       화면 목록·마커가 계속 같은 것을 가리킨다. 편집 동작마다 «무엇을 어떻게 되돌릴지» 를
+       따로 적지 않아도 되는 대신 스냅샷을 든다 — 설정은 작고 편집은 사람 속도다 */
+    const ED_UNDO_MAX = 60;
+    let edUndoS = [], edRedoS = [];
+    function edSnap() {
+      edUndoS.push(JSON.stringify(RAW));
+      if (edUndoS.length > ED_UNDO_MAX) edUndoS.shift();
+      edRedoS.length = 0;
+    }
+    function edStep(back) {
+      if (edEl) edFinish(true);
+      const from = back ? edUndoS : edRedoS, to = back ? edRedoS : edUndoS;
+      if (!from.length) { edSay(back ? "되돌릴 것이 없습니다" : "다시 할 것이 없습니다"); return; }
+      to.push(JSON.stringify(RAW));
+      adoptInto(RAW, JSON.parse(from.pop()));
+      edTouched();
+      render();
+      edSay(back ? "되돌렸습니다" : "다시 했습니다");
+    }
+
+    /* ---- 글 쓰듯 고치기 (0-6) ----
+       Enter 는 «새 줄», Tab 은 «한 단 들어감». 편집 엔진은 넣지 않는다 —
+       우리 데이터(defs → subs → subs)가 이미 블록 목록이라 키를 그 구조로 옮기면 그만이다 */
+    function edPos() {
+      if (!edEl) return null;
+      const key = edKeyOf(edEl), it = itemOf(key);
+      if (!it) return null;
+      const d = edEl.dataset;
+      return { key: key, it: it, s: it.spec, f: d.ed, di: Number(d.di), si: Number(d.si), ti: Number(d.ti) };
+    }
+    /* 다시 그린 뒤 «그 자리» 로 커서를 돌려놓는다 — 구조를 바꿔도 손이 멈추지 않게 */
+    function edGo(key, f, di, si, ti) {
+      render();
+      const box = ctx.listEl.querySelector('[data-defrow="' + key + '"]') || ctx.listEl.querySelector('[data-part="' + key + '"]');
+      if (!box) return;
+      let q = '[data-ed="' + f + '"]';
+      if (di >= 0) q += '[data-di="' + di + '"]';
+      if (si >= 0) q += '[data-si="' + si + '"]';
+      if (ti >= 0) q += '[data-ti="' + ti + '"]';
+      const el = box.querySelector(q);
+      if (el) edBegin(el);
+    }
+    function edLines(p) { return p.s.defs || (p.s.defs = []); }
+    /* Enter — 같은 층에 새 줄 */
+    function edNewLine() {
+      const p = edPos();
+      if (!p) return;
+      edFinish(true);
+      edSnap();
+      const defs = edLines(p);
+      if (p.f === "sub" || p.f === "sub3") {
+        const d = defs[p.di];
+        if (!d || !d.subs) return;
+        if (p.f === "sub") { d.subs.splice(p.si + 1, 0, ""); edGo(p.key, "sub", p.di, p.si + 1); return; }
+        const x = d.subs[p.si];
+        if (!x || typeof x === "string" || !x.subs) return;
+        x.subs.splice(p.ti + 1, 0, "");
+        edGo(p.key, "sub3", p.di, p.si, p.ti + 1);
+        return;
+      }
+      /* 제목·이유에서 Enter 를 치면 그 항목의 다음 설명 줄로 간다 */
+      const at = p.f === "t" || p.f === "why" ? p.di + 1 : defs.length;
+      const layer = p.f === "t" && defs[p.di] ? defs[p.di].layer : null;
+      const line = { t: "" };
+      if (layer) line.layer = layer;
+      defs.splice(at, 0, line);
+      edGo(p.key, "t", at);
+    }
+    /* Tab / Shift+Tab — 한 단 들어가고 나온다. 3단이 바닥이다 (번호는 2단까지) */
+    function edIndent(deeper) {
+      const p = edPos();
+      if (!p) return;
+      edFinish(true);
+      const defs = edLines(p), d = defs[p.di];
+      if (deeper) {
+        if (p.f === "t") {
+          const prev = defs[p.di - 1];
+          if (!prev || !d) { edSay("맨 위 줄은 더 들어갈 수 없습니다"); return; }
+          edSnap();
+          const kid = d.subs && d.subs.length ? { t: d.t, subs: d.subs.map(subT) } : d.t;
+          (prev.subs || (prev.subs = [])).push(kid);
+          defs.splice(p.di, 1);
+          edGo(p.key, "sub", p.di - 1, prev.subs.length - 1);
+        } else if (p.f === "sub") {
+          if (!d || !d.subs || p.si < 1) { edSay("바로 위에 붙일 줄이 없습니다"); return; }
+          const cur = d.subs[p.si];
+          if (cur && cur.subs && cur.subs.length) { edSay("아래 단이 있는 줄은 더 들어갈 수 없습니다"); return; }
+          edSnap();
+          const prev = subObj(d.subs, p.si - 1);
+          (prev.subs || (prev.subs = [])).push(subT(cur));
+          d.subs.splice(p.si, 1);
+          edGo(p.key, "sub3", p.di, p.si - 1, prev.subs.length - 1);
+        } else edSay("여기서는 더 들어갈 수 없습니다");
+        return;
+      }
+      if (p.f === "sub") {
+        if (!d || !d.subs) return;
+        edSnap();
+        const cur = d.subs[p.si];
+        const line = { t: subT(cur) };
+        if (d.layer) line.layer = d.layer;
+        if (cur && cur.subs && cur.subs.length) line.subs = cur.subs.slice();
+        d.subs.splice(p.si, 1);
+        if (!d.subs.length) delete d.subs;
+        defs.splice(p.di + 1, 0, line);
+        edGo(p.key, "t", p.di + 1);
+      } else if (p.f === "sub3") {
+        const x = d && d.subs && d.subs[p.si];
+        if (!x || typeof x === "string" || !x.subs) return;
+        edSnap();
+        const txt = x.subs[p.ti];
+        x.subs.splice(p.ti, 1);
+        if (!x.subs.length) delete x.subs;
+        d.subs.splice(p.si + 1, 0, txt);
+        edGo(p.key, "sub", p.di, p.si + 1);
+      } else edSay("여기서는 더 나올 수 없습니다");
+    }
+    /* 빈 줄에서 Backspace — 그 줄을 지우고 바로 앞 줄로 */
+    function edKillLine() {
+      const p = edPos();
+      if (!p) return;
+      const defs = edLines(p), d = defs[p.di];
+      edSnap();
+      if (p.f === "t") {
+        if (!d) return;
+        defs.splice(p.di, 1);
+        if (p.di > 0) edGo(p.key, "t", p.di - 1); else render();
+      } else if (p.f === "sub") {
+        if (!d || !d.subs) return;
+        d.subs.splice(p.si, 1);
+        if (!d.subs.length) delete d.subs;
+        if (p.si > 0) edGo(p.key, "sub", p.di, p.si - 1); else edGo(p.key, "t", p.di);
+      } else if (p.f === "sub3") {
+        const x = d && d.subs && d.subs[p.si];
+        if (!x || typeof x === "string" || !x.subs) return;
+        x.subs.splice(p.ti, 1);
+        if (!x.subs.length) delete x.subs;
+        if (p.ti > 0) edGo(p.key, "sub3", p.di, p.si, p.ti - 1); else edGo(p.key, "sub", p.di, p.si);
+      } else if (p.f === "why") {
+        if (d) delete d.why;
+        edGo(p.key, "t", p.di);
+      }
+      edTouched();
+    }
+    /* 슬래시 메뉴 — 빈 줄에서 «/» 를 치면 «여기에 무엇을 넣을까» 를 고른다.
+       정해진 스키마에 항목을 꽂는 것뿐이라 편집 엔진이 필요 없다 (0-6) */
+    let edMenu = null;
+    function edSlashClose() { if (edMenu) { edMenu.remove(); edMenu = null; } }
+    function edSlash() {
+      const p = edPos();
+      if (!p) return;
+      edSlashClose();
+      edMenu = h("div", { class: "ss-slash ss-ui" },
+        '<button type="button" data-sl="line">설명 줄</button>' +
+        '<button type="button" data-sl="sub">하위 줄</button>' +
+        '<button type="button" data-sl="why">이유</button>' +
+        '<button type="button" data-sl="dev">개발 줄</button>');
+      document.body.appendChild(edMenu);
+      const r = edEl.getBoundingClientRect();
+      edMenu.style.left = Math.round(Math.min(r.left, innerWidth - 150)) + "px";
+      edMenu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - 160)) + "px";
+      edMenu.addEventListener("mousedown", (e) => {
+        const b = e.target.closest("[data-sl]");
+        if (!b) return;
+        e.preventDefault(); /* 커서를 뺏지 않는다 — 고치던 줄이 그대로 살아 있어야 한다 */
+        edPick(b.dataset.sl, p);
+      });
+    }
+    function edPick(kind, p) {
+      edSlashClose();
+      if (kind === "sub") { edIndent(true); return; }
+      if (kind === "line") { if (p.f !== "t") edIndent(false); return; }
+      const d = edLines(p)[p.di];
+      if (!d) return;
+      if (kind === "dev") {
+        if (p.f !== "t") { edIndent(false); return; }
+        edSnap();
+        d.layer = "dev";
+        edTouched();
+        edGo(p.key, "t", p.di);
+        return;
+      }
+      if (kind === "why") {
+        edSnap();
+        if (d.why == null) d.why = "";
+        edTouched();
+        edGo(p.key, "why", p.di);
+      }
     }
 
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
@@ -1907,6 +2147,7 @@ ${HL_CSS}
     function edCmd(btn) {
       const key = edKeyOf(btn), c = btn.dataset.ec, di = Number(btn.dataset.di), si = Number(btn.dataset.si);
       if (edEl) edFinish(true); /* 고치던 글자를 먼저 확정 — 재렌더에 날아가지 않게 */
+      edSnap();
       const it = itemOf(key);
       if (!it) return;
       const s = it.spec;
@@ -1921,6 +2162,9 @@ ${HL_CSS}
       else if (c === "delsub") {
         const d = s.defs && s.defs[di];
         if (d && d.subs) { d.subs.splice(si, 1); if (!d.subs.length) delete d.subs; }
+      } else if (c === "delsub3") {
+        const x = s.defs && s.defs[di] && s.defs[di].subs && s.defs[di].subs[si];
+        if (x && typeof x !== "string" && x.subs) { x.subs.splice(Number(btn.dataset.ti), 1); if (!x.subs.length) delete x.subs; }
       } else if (c === "up" || c === "down") {
         const i = list.indexOf(s), j = i + (c === "up" ? -1 : 1);
         if (i < 0 || j < 0 || j >= list.length) return;
@@ -1943,7 +2187,38 @@ ${HL_CSS}
     }
 
     /* ---- 저장 — 세 경로를 겹친다. 어느 하나가 막혀도 고친 것을 잃지 않게 ---- */
-    function edBlockText() { return serializeConfig(RAW); }
+    /* 빈 줄 청소 — 만들다 만 줄은 저장에 실려 나가지 않는다.
+       고치는 «도중» 에 지우지 않는 이유: 그때 지우면 화면이 다시 그려지며 사용자의 다음 클릭을 삼킨다.
+       화면에서는 「빈 줄 — 눌러서 쓰기」로 보이다가, 저장할 때 조용히 사라진다 */
+    function edCut(arr, keep) { for (let i = arr.length - 1; i >= 0; i--) if (!keep(arr[i])) arr.splice(i, 1); }
+    function edPrune() {
+      let before = JSON.stringify(RAW);
+      const one = (sp) => {
+        (sp.defs || []).forEach((d) => {
+          if (d.why != null && !String(d.why).trim()) delete d.why;
+          if (d.subs) {
+            d.subs.forEach((x) => {
+              if (x && typeof x !== "string" && x.subs) {
+                edCut(x.subs, (y) => String(y).trim());
+                if (!x.subs.length) delete x.subs;
+              }
+            });
+            edCut(d.subs, (x) => subT(x).trim() || (x && x.subs && x.subs.length));
+            if (!d.subs.length) delete d.subs;
+          }
+        });
+        if (sp.defs) {
+          edCut(sp.defs, (d) => String(d.t || "").trim() || (d.subs && d.subs.length));
+          if (!sp.defs.length) delete sp.defs;
+        }
+      };
+      SCREENS.forEach((sc) => {
+        (sc.specs || []).forEach((sp) => { one(sp); (sp.parts || []).forEach(one); });
+        if (sc.dev) one({ defs: sc.dev });
+      });
+      if (JSON.stringify(RAW) !== before) render();
+    }
+    function edBlockText() { edPrune(); return serializeConfig(RAW); }
     /* 편집 중인 글자를 먼저 확정하고 나서 저장한다 — 안 그러면 방금 친 줄이 빠진다 */
     function edFlush() { if (edEl) edFinish(true); }
     async function edSourceHTML() {
@@ -2087,17 +2362,46 @@ ${HL_CSS}
       /* 패널 안의 편집 상호작용 — 기존 클릭 위임(행 활성화·▶·스위치)보다 «먼저» 잡는다 */
       ctx.listEl.addEventListener("click", (e) => {
         if (!EDIT) return;
+        edSlashClose();
         const cmd = e.target.closest("[data-ec]");
-        if (cmd) { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }
+        if (cmd && cmd.tagName !== "SELECT") { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }
+        if (cmd) return; /* 드롭다운은 change 에서 받는다 */
         const t = e.target.closest("[data-ed]");
         if (t) { e.stopPropagation(); edBegin(t); return; }
         if (edEl && !edEl.contains(e.target)) edFinish(true); /* 바깥을 누르면 반영 */
       }, true);
+      /* 글 쓰듯 고치는 키 (0-6) — Enter 가 «반영» 이 아니라 «새 줄» 이다.
+         반영은 치는 즉시 일어나고, 파일로 남기는 것은 위의 「저장」 이다 (PM 결정 2026-08-28) */
       ctx.listEl.addEventListener("keydown", (e) => {
         if (!edEl) return;
-        if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); edFinish(true); }
-        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); edFinish(false); }
+        const k = e.key, empty = !edEl.textContent.trim();
+        const eat = () => { e.preventDefault(); e.stopPropagation(); };
+        if (k === "Enter" && !e.shiftKey) { eat(); edNewLine(); }
+        else if (k === "Enter") { eat(); edFinish(true); } /* Shift+Enter = 여기서 그만 */
+        else if (k === "Escape") { eat(); edSlashClose(); edFinish(false); }
+        else if (k === "Tab") { eat(); edIndent(!e.shiftKey); }
+        else if (k === "Backspace" && empty) { eat(); edKillLine(); }
+        else if (k === "/" && empty) { eat(); edSlash(); }
       }, true);
+      /* 되돌리기는 문서 전체에서 받는다 — 커서가 어느 줄에 있든 같은 손짓이어야 한다 */
+      document.addEventListener("keydown", (e) => {
+        if (!EDIT || !(e.ctrlKey || e.metaKey)) return;
+        const k = (e.key || "").toLowerCase();
+        if (k === "z") { e.preventDefault(); edStep(!e.shiftKey); }
+        else if (k === "y") { e.preventDefault(); edStep(false); }
+      }, true);
+      /* 유형 드롭다운 — 고르면 마커 모양·▶ 버튼까지 따라 바뀐다 */
+      ctx.listEl.addEventListener("change", (e) => {
+        if (!EDIT) return;
+        const sel = e.target.closest('select[data-ec="anno"]');
+        if (!sel) return;
+        const it = itemOf(edKeyOf(sel));
+        if (!it) return;
+        edSnap();
+        it.spec.anno = sel.value;
+        edTouched();
+        render();
+      });
       /* 붙여넣기는 글자만 — 서식이 딸려 오면 저장 텍스트가 더러워진다 */
       ctx.listEl.addEventListener("paste", (e) => {
         if (!edEl) return;
@@ -2256,7 +2560,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.20</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.21</div>
         </aside>
       </div>`);
 
@@ -2542,7 +2846,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.20] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.21] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -2573,7 +2877,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.20</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.21</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -2677,7 +2981,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.20] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.21] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

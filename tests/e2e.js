@@ -1146,7 +1146,7 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="1"] .ss-t');
     await page.keyboard.press("Control+a");
     await page.keyboard.type("고친 머리");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Shift+Enter"); /* 0-6: 제목에서 Enter 를 치면 아래에 새 설명 줄이 생긴다 */
     await page.waitForTimeout(200);
     check("편집: 항목명이 설정에 들어간다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "고친 머리"));
     check("편집: 화면에도 그대로", await page.evaluate(() => document.querySelector('[data-defrow="1"] .ss-t').textContent === "고친 머리"));
@@ -1155,7 +1155,7 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
     await page.keyboard.press("Control+a");
     await page.keyboard.type("고친 첫 줄");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 가 «여기서 그만» */
     await page.waitForTimeout(200);
     check("편집: 설명 줄도 고쳐진다", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t === "고친 첫 줄"));
 
@@ -1469,7 +1469,7 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="1"] .ss-dev [data-ed="t"]');
     await page.keyboard.press("Control+a");
     await page.keyboard.type("POST /api/items");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 는 여기서 그만 */
     await page.waitForTimeout(200);
     check("레이어: 개발 줄 편집이 «원래 인덱스» 에 정확히 들어간다", await page.evaluate(() =>
       window.SCREENSPEC.specs[0].defs.map((d) => (d.layer || "plan") + ":" + d.t).join("|") ===
@@ -1537,6 +1537,107 @@ function check(name, ok, detail) {
       return !has;
     }));
   }
+  /* ============ 최소 에디터 — 글 쓰듯 고치기 (0-6) ============
+     Enter 는 «새 줄», Tab 은 «한 단». 편집 엔진을 넣지 않고 우리 스키마 위에 직접 짰다.
+     여기서 확인하는 것은 «키가 데이터 구조를 옳게 옮기는가» 다 — 화면이 아니라 설정이 근거다. */
+  console.log("[edit2] 최소 에디터 (0-6)");
+  {
+    const HTML2 = '<div id="a" data-spec="1">본문</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-A',name:'a'}," +
+      "specs:[{n:1,target:'1',anno:'box',title:'영역',defs:[{t:'첫 줄'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(HTML2);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+    const defs = () => page.evaluate(() => JSON.parse(JSON.stringify(window.SCREENSPEC.specs[0].defs)));
+
+    await page.click('.ss-dt[data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.type("둘째 줄");
+    await page.click("#ss-mDoc"); /* 바깥을 누르면 반영 */
+    await page.waitForTimeout(150);
+    check("에디터: Enter 로 같은 층에 새 줄", (await defs()).length === 2, await defs());
+
+    await page.click('.ss-dt[data-ed="t"][data-di="1"]');
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(200);
+    let c = await defs();
+    check("에디터: Tab 으로 앞 줄의 하위가 된다", c.length === 1 && !!c[0].subs && c[0].subs.length === 1, c);
+
+    await page.keyboard.type("셋째");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.type("넷째");
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(200);
+    c = await defs();
+    check("에디터: 3단까지 들어간다", !!(c[0].subs && c[0].subs[0] && c[0].subs[0].subs && c[0].subs[0].subs.length === 1), c);
+    check("에디터: 3단은 번호 없이 글머리표로 그린다 (번호는 2단까지)",
+      (await page.locator(".ss-items li.ss-sub3").count()) === 1 && (await page.locator(".ss-no").count()) >= 1);
+
+    await page.keyboard.press("Shift+Tab");
+    await page.waitForTimeout(200);
+    c = await defs();
+    check("에디터: Shift+Tab 으로 한 단 나온다", !(c[0].subs[0].subs || []).length, c);
+
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Delete");
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(200);
+    c = await defs();
+    check("에디터: 빈 줄에서 Backspace 면 그 줄이 사라진다", (c[0].subs || []).length === 1, c);
+
+    await page.keyboard.press("Control+z");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("Control+z");
+    await page.waitForTimeout(150);
+    const undone = await defs();
+    check("에디터: Ctrl+Z 는 여러 걸음 돌아간다", JSON.stringify(undone) !== JSON.stringify(c), undone);
+    await page.keyboard.press("Control+Shift+z");
+    await page.waitForTimeout(150);
+    check("에디터: Ctrl+Shift+Z 로 다시 앞으로", JSON.stringify(await defs()) !== JSON.stringify(undone), await defs());
+
+    await page.click('.ss-dt[data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("/");
+    await page.waitForTimeout(200);
+    check("에디터: 빈 줄에서 / 를 치면 넣을 것을 고른다", (await page.locator(".ss-slash button").count()) === 4);
+    await page.click('.ss-slash [data-sl="why"]');
+    await page.waitForTimeout(250);
+    check("에디터: / 메뉴의 «이유» 가 이유 칸을 만든다", (await page.locator('[data-ed="why"]').count()) > 0);
+
+    check("에디터: 유형 드롭다운이 anno 8종", (await page.locator(".ss-annopick option").count()) === 8);
+    await page.selectOption(".ss-annopick", "input");
+    await page.waitForTimeout(250);
+    check("에디터: 유형을 고르면 설정이 바뀐다", (await page.evaluate(() => window.SCREENSPEC.specs[0].anno)) === "input");
+
+    /* 편집을 끄면 정의서 DOM 이 편집 기능 없던 때와 같아야 한다 — 회귀 위험 0 이 이 기능의 전제다 */
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+    check("에디터: 끄면 드롭다운·손잡이가 남지 않는다",
+      (await page.locator(".ss-annopick").count()) === 0 && (await page.locator("[data-ed]").count()) === 0);
+
+    /* 하위 호환 — subs 가 문자열뿐인 옛 문서 */
+    await page.goto("about:blank");
+    await page.setContent('<div id="a" data-spec="1">본문</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-B',name:'b'}," +
+      "specs:[{n:1,target:'1',title:'영역',defs:[{t:'줄',subs:['가','나']}]}]};<" + "/script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("에디터: 문자열 subs 만 쓰는 옛 문서가 그대로 그려진다",
+      (await page.locator(".ss-items li.ss-sub").count()) === 2 && (await page.locator(".ss-items li.ss-sub3").count()) === 0);
+  }
+
   /* ============ 움직이는 요소 추적 (#8) ============
      캐러셀처럼 transform 으로 미끄러지는 요소 «안쪽» 에 마커를 달면, 예전엔 번호만 제자리에 남았다.
      재배치 계기가 창 크기·DOM 변경뿐이었기 때문이다. 이제 움직이는 동안 따라가고 멈추면 스스로 멎는다. */

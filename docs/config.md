@@ -71,7 +71,8 @@ type Style  = {           // 온보딩 인터뷰(SKILL §0)의 답이 남는 자
   idScheme?: string,      // 화면 ID 체계. 예: "SCR-{영역}-{번호}"
   notes?:    string,      // 자유 서술 — 「존댓말 금지」 같은 프로젝트 규칙
 }
-type Def    = { t: string, subs?: string[], why?: string, layer?: "dev" }  // why = 그 줄의 근거 (「↳ 이유:」로 분리 렌더) · layer 생략 = 기획
+type Def    = { t: string, subs?: Sub[], why?: string, layer?: "dev" }  // why = 그 줄의 근거 (「↳ 이유:」로 분리 렌더) · layer 생략 = 기획
+type Sub    = string | { t: string, subs?: string[] }  // 글자만 쓰면 2단, 객체로 쓰면 그 아래 한 단 더 (총 3단)
 type Device = { w: number, h: number }
 ```
 
@@ -419,7 +420,7 @@ useEffect(() => {
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `t` | string | 설명 한 줄. 명사형 종결 권장 |
-| `subs` | string[] | 조건·분기를 하위 불렛으로. 항목당 0~3줄 |
+| `subs` | Sub[] | 조건·분기를 하위 불렛으로. 항목당 0~3줄. **글자**(2단) 또는 **`{t, subs}`**(3단) — 3단은 번호 없이 글머리표로 그린다 |
 | `why` | string | 그 줄의 근거. 본문에 대시로 이어 붙이지 말고 여기에 — 패널에서 「↳ 이유:」로 작게 따라붙는다. 구현자는 `t`만 읽고 검토자는 `why`까지 읽는다 |
 
 ## HTML 속성
