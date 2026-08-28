@@ -1140,6 +1140,8 @@ ${HL_CSS}
       return vert === "중앙" && horz === "중앙" ? "중앙" : vert + " · " + horz;
     }
     function placeMarkers() {
+      let moved = false;
+      wireMoves();
       items().forEach((it) => {
         if (it.isPart && !it.spec.target) return;
         const t = targetOf(it.spec), m = markerEls[it.key];
@@ -1157,11 +1159,43 @@ ${HL_CSS}
         if (hidden) { m.style.display = "none"; return; }
         m.style.display = "";
         const pos = ctx.posOf(t);
-        m.style.left = pos.left + "px";
-        m.style.top = pos.top + "px";
-        m.style.transform = pos.transform;
+        /* 값이 그대로면 쓰지 않는다 — 스타일 쓰기는 그 자체로 DOM 변경 신호라 감시자들을 깨운다.
+           그리고 «움직였는가» 판정의 근거가 된다 (#8) */
+        const L_ = pos.left + "px", T_ = pos.top + "px";
+        if (m.style.left !== L_) { m.style.left = L_; moved = true; }
+        if (m.style.top !== T_) { m.style.top = T_; moved = true; }
+        if (m.style.transform !== pos.transform) m.style.transform = pos.transform;
       });
       drawArrow();
+      return moved;
+    }
+    /* 움직이는 요소 추적 (#8) — 마커를 다시 놓는 계기가 창 크기·DOM 변경뿐이라,
+       transform 으로 미끄러지는 캐러셀 «안쪽» 에 마커를 달면 번호만 제자리에 남았다.
+       전환·애니메이션이 시작되면 따라가기 시작하고, 더 움직이지 않으면 스스로 멎는다.
+       멈추는 조건을 이벤트 짝맞추기(시작 N번·끝 N번)로 세지 않는 이유: 요소가 도중에 사라지면
+       끝 이벤트가 오지 않아 루프가 영원히 남는다. «움직였는가» 를 매 프레임 실제로 보는 편이 스스로 낫는다. */
+    const MOVE_IDLE = 20; /* 이만큼(약 0.3초) 한 픽셀도 안 움직이면 추적을 끈다 */
+    let moveWired = false, moveIdle = 0, moveRaf = null;
+    function movesMarker(el) {
+      if (!el || !el.contains) return false;
+      return items().some((it) => { const t = targetOf(it.spec); return t && (el === t || el.contains(t)); });
+    }
+    function moveTick() {
+      moveRaf = null;
+      if (placeMarkers()) moveIdle = 0; else moveIdle++;
+      if (moveIdle < MOVE_IDLE) moveRaf = requestAnimationFrame(moveTick);
+    }
+    function moveStart(e) {
+      if (!movesMarker(e.target)) return; /* 마커와 무관한 장식 애니메이션까지 따라다닐 이유가 없다 */
+      moveIdle = 0;
+      if (!moveRaf) moveRaf = requestAnimationFrame(moveTick);
+    }
+    function wireMoves() {
+      if (moveWired) return;
+      const d = appDoc();
+      if (!d || !d.addEventListener) return;
+      moveWired = true;
+      ["transitionrun", "animationstart"].forEach((n) => d.addEventListener(n, moveStart, true));
     }
     /* 화살표 규칙 (유저가 좌표를 정하지 않는다 — 위치는 항상 자동)
        - 기본(지시선): 요소 밖 56px 지점에서 요소 가장자리로. 시작 방향은 화면 중심 쪽(= 빈 공간 쪽)이라

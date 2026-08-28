@@ -4,6 +4,11 @@
  *   node scripts/backlog-sync.js            드리프트만 보고 (기본 = dry-run). 어긋나면 exit 1
  *   node scripts/backlog-sync.js --apply    노션 쪽을 실제로 맞춤 + 실행 후 재검증
  *
+ * 보드는 3칸 컨베이어다: 백로그 → 완료. «안 한다» 로 뺀 것만 보류.
+ *   백로그에 넣는 규칙 = GitHub 이슈를 연다. 이슈가 원본이고 카드는 이 스크립트가 만든다.
+ *   완료로 보내는 규칙 = 이슈가 닫힌다(= 커밋 메시지의 fix #N). 사람이 옮기지 않는다.
+ *   보류는 사람 영역 — 이 스크립트가 건드리지 않는다.
+ *
  * 잡는 드리프트 4종:
  *   1) 열린 이슈인데 노션 카드가 없음        → 우선순위 판단에서 누락된다
  *   2) 닫힌 이슈인데 카드가 '완료'가 아님     → 보드가 실제보다 밀린 것처럼 보인다
@@ -21,6 +26,7 @@ const REPO = path.resolve(__dirname, "..");
 const DB_ID = "3c5fe613-00de-81ae-8e72-ccd89658ba7e"; /* ScreenSpec 백로그 보드 */
 const GH_REPO = "charmisuk/screenspec";
 const APPLY = process.argv.includes("--apply");
+const FROM_PUSH = process.argv.includes("--from-push"); /* 푸시 훅에서: 곧 닫힐 이슈를 미리 완료로 */
 
 /* ---- 자격증명 ---- */
 function notionKey() {
@@ -38,12 +44,24 @@ function ghToken() {
 }
 function fail(msg) { console.error("✗ " + msg); process.exit(2); }
 
+/* 푸시 훅 자동 설치 — .git/hooks 는 저장소에 따라오지 않는다. 새 컴퓨터에서 «훅 켜는 법» 을
+   문서로 알려 주면 반드시 빠뜨리므로, 보드를 만지는 이 스크립트가 스스로 켠다. */
+function ensureHook() {
+  const hook = path.join(REPO, ".githooks", "pre-push");
+  if (!fs.existsSync(hook)) return;
+  let cur = '';
+  try { cur = execSync("git config --get core.hooksPath", { cwd: REPO, stdio: ["pipe", "pipe", "ignore"] }).toString().trim(); } catch { cur = ""; }
+  if (cur === ".githooks") return;
+  try { execSync("git config core.hooksPath .githooks", { cwd: REPO }); console.log("· 푸시 훅을 켰다 (core.hooksPath = .githooks)"); } catch { /* 훅 없이도 동작한다 */ }
+}
+
 const NH = { "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
 const rt = (t) => [{ type: "text", text: { content: t } }];
 const txt = (arr) => (arr || []).map((x) => x.plain_text).join("");
 const issueNo = (url) => { const m = (url || "").match(/\/issues\/(\d+)/); return m ? Number(m[1]) : null; };
 
 async function main() {
+  ensureHook();
   const NK = notionKey(), GT = ghToken();
   const nApi = async (m, p, body) => {
     const r = await fetch("https://api.notion.com/v1" + p, {
@@ -88,13 +106,26 @@ async function main() {
   issues.filter((i) => i.state === "open").forEach((i) => {
     if (!linked.has(i.number)) drift.push({ kind: "카드 없음", issue: i, msg: `#${i.number} ${i.title}` });
   });
+  /* 푸시될 커밋이 «fix #N» 으로 닫을 이슈들 — GitHub 이 닫기 전이라 아직 open 으로 보인다.
+     푸시 훅은 push 직전에 도는데 GitHub 은 push 직후에 닫으므로, 여기서 미리 같은 결론을 낸다. */
+  const closing = new Set();
+  if (FROM_PUSH) {
+    let log = '';
+    try { log = execSync('git log --format=%B origin/main..HEAD', { cwd: REPO }).toString(); } catch { log = ''; }
+    const re = new RegExp('(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*#(\d+)', 'gi');
+    let m;
+    while ((m = re.exec(log))) closing.add(Number(m[1]));
+    if (closing.size) console.log('푸시가 닫을 이슈: ' + [...closing].map((n) => '#' + n).join(' '));
+  }
   parsed.forEach((c) => {
     const n = issueNo(c.url);
     if (n === null) return;
     const i = byNo.get(n);
     if (!i) { drift.push({ kind: "죽은 링크", card: c, msg: `${c.name} → #${n} 없음` }); return; }
-    if (i.state === "closed" && c.status !== "완료") drift.push({ kind: "완료 반영 안 됨", card: c, msg: `${c.name} (#${n} 닫힘 · 카드 ${c.status})` });
-    if (i.state === "open" && c.status === "완료") drift.push({ kind: "완료인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
+    if (c.status === "보류") return; /* 보류는 사람이 «안 한다» 고 정한 칸 — 기계가 되돌리지 않는다 */
+    const done = i.state === "closed" || closing.has(n);
+    if (done && c.status !== "완료") drift.push({ kind: "완료 반영 안 됨", card: c, msg: `${c.name} (#${n} ${i.state === 'closed' ? '닫힘' : '곧 닫힘'} · 카드 ${c.status})` });
+    if (!done && c.status === "완료") drift.push({ kind: "완료인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
   });
 
   console.log(`이슈 ${issues.length}건(열림 ${issues.filter((i) => i.state === "open").length}) · 카드 ${parsed.length}장`);
@@ -118,7 +149,7 @@ async function main() {
         parent: { database_id: DB_ID },
         properties: {
           "이름": { title: rt(i.title.replace(/^\[[^\]]+\]\s*/, "")) },
-          "상태": { select: { name: "대기" } },
+          "상태": { select: { name: "백로그" } },
           "유형": { select: { name: /버그|bug/i.test(i.title + label(i)) ? "버그" : "기능" } },
           "근거": { select: { name: "내부 발견" } },
           "우선순위": { select: { name: "P2" } }, /* 들어온 직후는 P2. 전체 재비교에서 올린다 */

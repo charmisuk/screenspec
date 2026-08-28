@@ -1537,6 +1537,52 @@ function check(name, ok, detail) {
       return !has;
     }));
   }
+  /* ============ 움직이는 요소 추적 (#8) ============
+     캐러셀처럼 transform 으로 미끄러지는 요소 «안쪽» 에 마커를 달면, 예전엔 번호만 제자리에 남았다.
+     재배치 계기가 창 크기·DOM 변경뿐이었기 때문이다. 이제 움직이는 동안 따라가고 멈추면 스스로 멎는다. */
+  console.log("[move] 움직이는 요소 안의 마커");
+  {
+    const MOVE_HTML =
+      "<style>.win{width:200px;overflow:hidden}.track{display:flex;width:400px;transition:transform .4s linear}" +
+      ".s{width:200px;height:80px;background:#eee}</style>" +
+      '<div class="win"><div class="track" id="track">' +
+      '<div class="s">1</div><div class="s" data-spec="two">2</div></div></div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-M',name:'캐러셀'}," +
+      "specs:[{n:1,target:'two',title:'둘째 슬라이드',defs:[{t:'한 줄'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(MOVE_HTML);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+    const spot = () => page.evaluate(() => {
+      const m = document.querySelector(".ss-marker");
+      const t = document.querySelector('[data-spec="two"]');
+      if (!m || !t) return null;
+      return { m: m.getBoundingClientRect().left, t: t.getBoundingClientRect().left };
+    });
+    const a = await spot();
+    check("추적: 처음엔 마커가 대상 위에 있다", !!a && Math.abs(a.m - a.t) < 30, a);
+    await page.evaluate(() => { document.getElementById("track").style.transform = "translateX(-200px)"; });
+    await page.waitForTimeout(180); /* 0.4초 전환의 한가운데 */
+    const mid = await spot();
+    check("추적: 전환 «도중에도» 마커가 붙어 있다 (끝에서 한 번 튀는 게 아니라)",
+      !!mid && Math.abs(mid.m - mid.t) < 30 && Math.abs(mid.m - a.m) > 20, { a: a, mid: mid });
+    await page.waitForTimeout(700);
+    const end = await spot();
+    check("추적: 끝난 자리에서도 마커와 대상이 맞는다", !!end && Math.abs(end.m - end.t) < 30, end);
+    check("추적: 실제로 슬라이드만큼 이동했다", !!end && Math.abs(end.m - a.m) > 100, { a: a, end: end });
+    /* 멈춘 뒤에도 매 프레임 돌면 배터리를 태운다 — 스스로 멎는지 본다 */
+    const frames = await page.evaluate(() => new Promise((done) => {
+      let n = 0;
+      const raf = window.requestAnimationFrame;
+      window.requestAnimationFrame = function (cb) { n++; return raf.call(window, cb); };
+      setTimeout(() => { window.requestAnimationFrame = raf; done(n); }, 500);
+    }));
+    check("추적: 멈추면 스스로 멎는다 (500ms 동안 rAF 5회 미만)", frames < 5, frames);
+  }
+
+
 
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
      클로드 아티팩트처럼 외부 주소를 막는 환경을 흉내 내, 자체 완결 파일이 정말 자립하는지 본다. */

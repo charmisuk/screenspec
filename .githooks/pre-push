@@ -1,0 +1,8 @@
+#!/bin/sh
+# 푸시하면 보드가 따라온다 — 커밋 메시지의 "fix #N" 을 읽어 그 카드를 완료로 보낸다.
+# 사람이 기억해서 옮기는 단계를 없애는 것이 목적이다 (2026-08-28 PM 결정: 3상태 컨베이어).
+# 토큰이 없거나 네트워크가 막힌 환경도 있으므로 실패해도 푸시는 막지 않는다.
+node scripts/backlog-sync.js --apply --from-push || {
+  echo "  ↑ 보드 반영을 못 했다 — 나중에: node scripts/backlog-sync.js --apply"
+}
+exit 0
