@@ -1,6 +1,6 @@
 Read and execute `.agents/workflows/issue-cycle.md`.
 
-Cycle: $ARGUMENTS (없으면 `docs/sprint/` 의 가장 최근 폴더)
+Cycle: $ARGUMENTS (없으면 `_private/sprint/` 의 가장 최근 폴더)
 
 1. tasks.json 로드 → 현황 보고
 2. `status != done` 인 첫 이슈부터 plan→dev→qa→commit 게이트를 순서대로, 1건씩

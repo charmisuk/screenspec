@@ -16,6 +16,10 @@ jobs:
           node-version: 20
       - name: lint (문법·오염·버전 정합·예제 정합·문서 드리프트)
         run: node tests/lint.js
+      - name: 릴리스 게이트 (문서가 가리키는 태그가 실재하는가 — main 만)
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/release.js --tag-gate
+
       - name: playwright 설치
         run: |
           npm init -y > /dev/null

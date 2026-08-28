@@ -5,6 +5,7 @@
  *   node scripts/release.js --apply          로컬에서 실제로 태그·푸시·퍼지하고 결과를 확인
  *   node scripts/release.js --notes          CHANGELOG 최상단 절만 출력 (릴리스 본문용)
  *   node scripts/release.js --pre            버전 정합만 확인 (태그 없어도 통과 — 릴리스 직전 CI 용)
+ *   node scripts/release.js --tag-gate      문서가 가리키는 태그가 원격에 실재하는지만 (CI 상시 게이트)
  *   node scripts/release.js --verify         실물만 확인 (git 상태 검사 없음 — CI 용)
  *   node scripts/release.js --expect v0.19.3 넘긴 버전이 CHANGELOG·문서와 같은지 확인 (다른 모드와 겸용)
  *
@@ -33,6 +34,7 @@ const APPLY = has("--apply");
 const VERIFY = has("--verify"); /* CI: 체크아웃이 detached 라 git 상태 검사를 건너뛴다 */
 const NOTES = has("--notes");
 const PRE = has("--pre"); /* 릴리스 직전: 버전 정합만. 태그는 아직 없는 게 정상이다 */
+const GATE = has("--tag-gate"); /* 상시 게이트: 문서 버전의 태그가 원격에 있는가. CDN 은 안 본다(전파 지연으로 깜빡임) */
 const EXPECT = argv[argv.indexOf("--expect") + 1] && has("--expect") ? argv[argv.indexOf("--expect") + 1] : null;
 
 let bad = 0;
@@ -76,10 +78,10 @@ for (const f of ["README.md", "SKILL.md"]) {
 }
 
 (async () => {
-  console.log("[릴리스] " + (APPLY ? "실행 (--apply)" : VERIFY ? "실물 확인 (--verify)" : PRE ? "버전 정합 (--pre)" : "검사만 — 실제로 내보내려면 --apply"));
+  console.log("[릴리스] " + (APPLY ? "실행 (--apply)" : VERIFY ? "실물 확인 (--verify)" : GATE ? "태그 게이트 (--tag-gate)" : PRE ? "버전 정합 (--pre)" : "검사만 — 실제로 내보내려면 --apply"));
 
   /* ---- 1. 나갈 수 있는 상태인가 (CI 는 건너뛴다) ---- */
-  if (!VERIFY && !PRE) {
+  if (!VERIFY && !PRE && !GATE) {
     console.log("\n작업 상태");
     const branch = git("rev-parse --abbrev-ref HEAD");
     const dirty = git("status --porcelain");
@@ -104,6 +106,18 @@ for (const f of ["README.md", "SKILL.md"]) {
 
   if (PRE) {
     console.log("\n결과: " + (bad ? `문제 ${bad}건` : "버전 정합 이상 없음 — 태그는 릴리스 단계에서 만든다"));
+    process.exit(bad ? 1 : 0);
+  }
+
+  /* 상시 게이트 — 문서가 가리키는 태그가 원격에 실재하는가.
+     버전만 올리고 릴리스를 안 하면 README·SKILL 이 404 를 가리킨 채 main 에 남는다.
+     그 실패는 «릴리스를 낼 때만» 도는 검사로는 절대 안 잡힌다 — 안 내는 것이 실패이기 때문이다.
+     그래서 push 마다 여기서 본다. CDN 실물은 전파 지연으로 깜빡이므로 이 모드에선 안 본다. (2026-08-28) */
+  if (GATE) {
+    const live = git(`ls-remote --tags origin ${tag}`).length > 0;
+    live ? ok(`원격에 ${tag} 태그 있음`)
+         : no(`원격에 ${tag} 태그가 없다 — 문서는 ${tag} 를 가리키는데 그 주소는 404 다. 릴리스하거나 문서 버전을 되돌려라`);
+    console.log("\n결과: " + (bad ? `문제 ${bad}건` : "문서 버전 = 출시된 태그"));
     process.exit(bad ? 1 : 0);
   }
 

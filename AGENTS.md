@@ -20,8 +20,22 @@
 | `scripts/release.js` | 릴리스 — 태그·푸시·퍼지·실물 확인 (문서가 미출시 태그를 가리키는지 검사) |
 | `.github/workflows/release.yml` | 릴리스를 Actions 버튼으로 (같은 검사를 release.js 와 공유) |
 | `scripts/backlog-sync.js` | GitHub 이슈 ↔ Notion 보드 싱크 검사 (로컬 전용) |
-| `docs/sprint/` | 이슈 사이클 작업 기록 (tasks.json·회고) — 내부 로그, 라이브러리 동작과 무관 |
-| `docs/product/` | 제품 로드맵·단계별 상세기획 — 전략 결정의 단일 출처 (라이브러리 동작과 무관) |
+| `_private/` | **저장소 밖**(gitignore). 사이클 기록·제품 계획 등 내부 문서 — 아래 「저장소에 두지 않는 것」 |
+
+## 저장소에 두지 않는 것 (public repository)
+
+이 저장소는 **지금 나가 있는 판을 설명하는 곳**이다 — 쓰는 법·설정·예제. 그게 전부다.
+
+| 두지 않는다 | 어디에 있나 |
+|---|---|
+| 제품 로드맵·단계별 상세기획·가격/플랜 | Notion (`_private/product/` 는 로컬 사본) |
+| 백로그·우선순위·일정 | Notion 보드 (원본은 GitHub Issues) |
+| 사이클 작업 기록·회고·tasks.json | `_private/sprint/` (로컬) |
+
+경쟁사가 읽어서 곤란한 것이 아니라, **아직 없는 기능을 저장소가 약속하는 것처럼 보이는 게 문제**다.
+읽는 사람은 지금 받을 수 있는 것만 알면 된다. 앞일은 Notion 에서 관리한다.
+
+`tests/lint.js` 가 이 규칙을 강제한다 — `docs/product/`·`docs/sprint/`·`_private/` 가 git 에 추적되면 FAIL.
 
 ## 검증 (변경 후 반드시)
 
@@ -74,6 +88,10 @@ node scripts/release.js --apply   # 태그 → 푸시 → jsDelivr 퍼지 → �
 ```
 
 5. B 로 냈다면 스크립트가 마지막에 출력하는 `gh release create vX.Y.Z` 를 실행 (본문은 같이 출력되는 CHANGELOG 절). A 는 이 단계까지 자동이다
+
+> **CI 가 상시 감시한다.** main 에 push 될 때마다 `node scripts/release.js --tag-gate` 가 돌아
+> 「문서가 가리키는 버전의 태그가 원격에 실재하는가」를 본다. 릴리스를 안 하면 main 이 빨강으로 남는다 —
+> 버전만 올려 두고 잊는 실패는 «릴리스를 낼 때만» 도는 검사로는 잡히지 않기 때문이다. (2026-08-28, 3회 재발)
 
 > **버전 문자열만 올리고 태그를 만들지 않으면 안 된다.** 그 순간 README·SKILL 이 존재하지 않는 CDN 주소(`@vX.Y.Z` → 404)를 가리키고,
 > 그 주소를 심은 프로토타입은 조용히 아무것도 안 뜬다. lint 는 이걸 못 잡는다 — 헤더·배지·CHANGELOG·문서 태그가 *서로 같은지*만 보지

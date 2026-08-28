@@ -8,7 +8,7 @@ description: 이슈 사이클 — GitHub 이슈를 중요순으로 1건씩 plan�
 >
 > v1.1 (2026-08-24 회고 반영): dev 라우팅 기준(소형은 메인 직접) · plan.accept 기본 체크 · smoke 내장 · 기획자 눈높이 보고 규칙 · 회고의 lint 질문
 
-**입력**: `docs/sprint/{cycle}/tasks.json` (이슈 목록·우선순위·게이트 상태) + GitHub 이슈 본문
+**입력**: `_private/sprint/{cycle}/tasks.json` (이슈 목록·우선순위·게이트 상태) + GitHub 이슈 본문
 **출력**: 이슈당 커밋 1개 + tasks.json 증거 + `log.md` 회고 원료
 
 ## Phase 0 — 세션 시작
@@ -47,7 +47,7 @@ description: 이슈 사이클 — GitHub 이슈를 중요순으로 1건씩 plan�
 ### 규칙
 - **즉시 체크오프**: 게이트 통과 즉시 tasks.json 갱신. 모아서 하지 않는다.
 - **막히면 묻기**: 원인 불명·설계 분기·이슈 본문과 코드 불일치 → 사용자에게 선택지 제시. 절대 조용히 skip 하거나 "나중에" 로 미루지 않는다. 미루려면 `status = blocked` + `blocked_reason` 을 적는다.
-- **log.md**: 작업 중 "프로토콜이 빠뜨린 것 / 불필요했던 것 / 통찰" 이 생기면 그 즉시 `docs/sprint/{cycle}/log.md` 에 1줄 적는다. 회고 원료.
+- **log.md**: 작업 중 "프로토콜이 빠뜨린 것 / 불필요했던 것 / 통찰" 이 생기면 그 즉시 `_private/sprint/{cycle}/log.md` 에 1줄 적는다. 회고 원료.
 
 ## Phase 2 — 사이클 종료
 1. 전체 QA: `node tests/lint.js` + `node tests/e2e.js` + `node tests/smoke.js`(예제 전수 클릭, v1.1 부터 저장소 내장). 결과를 tasks.json `cycle_qa` 에 기록. smoke 경고는 main 브랜치와 비교해 회귀인지 판별한다.

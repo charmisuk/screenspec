@@ -22,6 +22,7 @@
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
  * 19) 용량 상한(gzip 60KB) — 단일 파일·의존성 0 약속을 기계로 지킨다 (2026-08-28)
  * 18) 라이브러리 소스의 스크립트 종료 태그·HTML 주석 여는 표시 — 인라인 산출물이 통째로 깨진다 (2026-08-27 2회)
+ * 20) 내부 계획 문서(로드맵·백로그·사이클 기록)가 git 에 추적되면 FAIL — public repository 는 지금 판만 설명한다 (2026-08-28)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
@@ -259,6 +260,24 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("screenspec.js gzip 상한 " + LIMIT_KB + "KB 이하 (지금 " + kb + "KB)", kb <= LIMIT_KB, kb + "KB");
   /* 음성 테스트 — 상한 검사가 실제로 걸러 내는지 양쪽으로 */
   check("(자체검사) 용량 검사가 넘치는 값을 걸러 낸다", !(LIMIT_KB + 1 <= LIMIT_KB) && (LIMIT_KB <= LIMIT_KB));
+}
+
+/* 20) public repository 에 내부 계획이 새지 않는다 — 이 저장소는 «지금 나가 있는 판»을 설명하는 곳이다.
+       로드맵·가격·백로그·사이클 기록은 Notion 에서 관리하고, 로컬 사본은 `_private/`(gitignore) 에 둔다.
+       사람이 지키면 반드시 샌다 — 2026-08-28 에 로드맵·상세기획·사이클 기록 12파일이 public 에 올라가 있었다 */
+{
+  const FORBIDDEN = ["docs/product", "docs/sprint", "_private"];
+  let tracked = null;
+  try { tracked = execFileSync("git", ["ls-files", "--"].concat(FORBIDDEN), { cwd: REPO }).toString().trim(); }
+  catch { /* git 밖에서 돌린 경우 */ }
+  if (tracked === null) check("내부 계획 문서 추적 검사 (git 필요)", false, "git ls-files 실패");
+  else {
+    const files = tracked ? tracked.split(String.fromCharCode(10)) : [];
+    check("내부 계획 문서가 저장소에 없음 (" + FORBIDDEN.join(" · ") + ")", files.length === 0,
+      files.length + "개 추적 중: " + JSON.stringify(files.slice(0, 8)));
+  }
+  /* 음성 테스트 — 목록이 비면 이 검사는 아무것도 안 잡는다 */
+  check("(자체검사) 금지 경로 목록이 비어 있지 않다", FORBIDDEN.length >= 3);
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
