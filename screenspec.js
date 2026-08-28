@@ -398,11 +398,6 @@
   .ss-chips button:last-child{border-right:0}
   .ss-chips button:hover{color:var(--ss-ink)}
   .ss-chips button[aria-pressed="true"]{background:var(--ss-accent);color:#fff}
-  @media print{
-    .ss-pr-table tr.ss-pr-dev .ss-pr-no,.ss-pr-table tr.ss-pr-dev .ss-pr-tag{color:#8E4EC6}
-    .ss-pr-table .ss-pr-devtag{font-family:var(--ss-mono);font-size:7.5pt;font-weight:800;color:#8E4EC6;
-      border:1px solid #D9C3EE;border-radius:3px;padding:0 3px;margin-right:4px}
-  }
   .ss-headtools{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0}
   .ss-headbtn{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);
     font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap}
@@ -467,43 +462,22 @@
   .ss-cap-msg{font-size:11.5px;color:var(--ss-ink2);line-height:1.6;margin-top:10px}
   .ss-cap-msg:empty{display:none}
   .ss-prdlg-hr{border:0;border-top:1px solid var(--ss-line);margin:12px 0 4px}
-  .ss-print{display:none}
-  .ss-pr-head{border-bottom:2px solid #191919;padding-bottom:8px;margin-bottom:14px}
-  .ss-pr-id{font-family:var(--ss-mono);font-size:11pt;font-weight:700;color:#191919}
-  .ss-pr-name{font-size:15pt;font-weight:800;color:#191919;margin:3px 0 2px}
-  .ss-pr-path{font-size:9pt;color:#50524E}
-  .ss-pr-stage{margin:0 0 16px;text-align:center;overflow:hidden}
-  .ss-pr-holder{display:inline-block;transform-origin:top left}
-  .ss-pr-table{width:100%;border-collapse:collapse;font-size:9pt;color:#191919}
-  .ss-pr-table th{background:#F1F1F0;border:1px solid #D3D1CB;padding:5px 7px;text-align:left;font-weight:800;font-size:8.5pt}
-  .ss-pr-table td{border:1px solid #D3D1CB;padding:5px 7px;vertical-align:top;line-height:1.55}
+  /* 기능 설명 표 — 「기능 설명 포함」을 켰을 때만 그림에 함께 굽는다 */
   .ss-pr-table .ss-pr-no{font-family:var(--ss-mono);font-weight:700;white-space:nowrap;width:44px}
-  .ss-pr-table .ss-pr-tag{white-space:nowrap;width:52px;color:#50524E}
+  .ss-pr-table .ss-pr-tag{white-space:nowrap;width:52px;color:var(--ss-ink3)}
   .ss-pr-table .ss-pr-ttl{width:22%;font-weight:700}
-  .ss-pr-table tr.ss-pr-part .ss-pr-no{padding-left:16px;color:#50524E}
+  .ss-pr-table tr.ss-pr-part .ss-pr-no{padding-left:16px;color:var(--ss-ink3)}
   .ss-pr-table ul{margin:0;padding-left:14px}
   .ss-pr-table li{margin:1px 0}
-  .ss-pr-table .ss-pr-why{display:block;color:#50524E;font-size:8pt}
+  .ss-pr-table .ss-pr-why{display:block;color:var(--ss-ink3);font-size:11px}
   .ss-pr-table .ss-pr-why::before{content:"↳ 이유: "}
   .ss-pr-table li.ss-pr-sub{list-style:circle;color:#37352F}
-  .ss-pr-foot{margin-top:12px;padding-top:6px;border-top:1px solid #D3D1CB;font-size:8pt;color:#787774;
-    display:flex;justify-content:space-between}
-  @media print{
-    /* 인쇄에는 «문서» 만 남는다 — 뷰어(툴바·패널·목차·툴팁·띠)는 전부 뺀다 */
-    body.ss-printing .ss-toolbar,body.ss-printing .ss-docmode,body.ss-printing .ss-proto-wrap,
-    body.ss-printing .ss-toc,body.ss-printing .ss-tip,body.ss-printing .ss-pvbar,
-    body.ss-printing .ss-nav-toast,body.ss-printing .ss-ov-panel,body.ss-printing .ss-pill,
-    body.ss-printing .ss-ov-markers,body.ss-printing .ss-ov-anno{display:none !important}
-    body.ss-printing .ss-print{display:block}
-    /* 마커 숨김 = 프로토타입만 깨끗하게 (?screenspec=0 과 같은 모습) */
-    body.ss-pr-nomark .ss-print .ss-markers,body.ss-pr-nomark .ss-print .ss-anno{display:none !important}
-    /* 행이 페이지 중간에서 잘리면 읽는 사람이 항목을 잃는다 */
-    .ss-pr-table tr,.ss-pr-head,.ss-pr-stage{break-inside:avoid;page-break-inside:avoid}
-    .ss-pr-table thead{display:table-header-group} /* 여러 장이면 장마다 머리행 */
-    .ss-print .ss-sheet{box-shadow:none;border-radius:0;overflow:visible}
-    .ss-print .ss-edge-r,.ss-print .ss-edge-b{display:none}
-  }
-  @page{size:A4 portrait;margin:12mm}
+  .ss-pr-table tr.ss-pr-dev .ss-pr-no,.ss-pr-table tr.ss-pr-dev .ss-pr-tag{color:#8E4EC6}
+  .ss-pr-table .ss-pr-devtag{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:#8E4EC6;
+    border:1px solid #D9C3EE;border-radius:3px;padding:0 3px;margin-right:4px}
+  /* 끌 수 없는 선택지는 «꺼져 있음» 이 보여야 한다 (기능 설명을 안 넣으면 레이어는 무의미) */
+  .ss-prdlg label.ss-off{opacity:.4}
+  .ss-prdlg label.ss-off select{cursor:not-allowed}
   .ss-defs-list{flex:1;overflow-y:auto}
   .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
   .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
@@ -750,6 +724,18 @@ ${HL_CSS}
     if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
     if (html != null) el.innerHTML = html;
     return el;
+  }
+  /* 다른 문서(액자 안)의 스타일시트를 글자로 — 캡처가 안쪽 CSS 까지 같이 실어야 그림이 맞다 */
+  function cssText(doc) {
+    let out = "";
+    const sheets = doc.styleSheets;
+    for (let i = 0; i < sheets.length; i++) {
+      try {
+        const rules = sheets[i].cssRules;
+        for (let j = 0; j < rules.length; j++) out += rules[j].cssText + "\n";
+      } catch (e) { /* 읽을 수 없는 시트는 건너뛴다 */ }
+    }
+    return out;
   }
   function injectCSS() {
     const style = document.createElement("style");
@@ -1502,8 +1488,13 @@ ${HL_CSS}
        살아 있는 시트를 «옮긴다» — 복제하면 앱의 상태와 스크립트를 잃는다.
        옮기기는 모드 전환이 이미 쓰는 동작이라 새 위험이 아니다. 끝나면 제자리로 돌린다.
        ============================================================ */
-    const A4_W = 703; /* A4 세로 본문 폭 ≈ 210mm − 12mm×2 = 186mm ≈ 703px(96dpi) */
-    let prBox = null, prDlg = null;
+    /* ============================================================
+       PNG 내보내기 (#40) — 컨플루언스·노션에 붙일 그림 한 장.
+       DOM → SVG foreignObject → canvas → PNG. 캡처 라이브러리를 넣지 않는다:
+       html2canvas 만 해도 gzip 48KB 로 이 라이브러리 전체보다 크다.
+       세 모드가 잡을 대상이 다르므로 «무엇을 캡처할지» 만 각 모드가 알려 준다(ctx.capSource).
+       ============================================================ */
+    let prDlg = null;
     function prLine(d) {
       return "<li>" + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + esc(d.t) +
         (d.why ? '<span class="ss-pr-why">' + esc(d.why) + "</span>" : "") + "</li>" +
@@ -1516,7 +1507,7 @@ ${HL_CSS}
     }
     function prRows(layer) {
       let out = "";
-      /* 화면 공통 개발 정의도 표의 한 행으로 — 종이에서는 블록보다 행이 읽기 쉽다 */
+      /* 화면 공통 개발 정의도 표의 한 행으로 — 그림 속에서는 블록보다 행이 읽기 쉽다 */
       const common = (current && current.dev) || [];
       if (common.length && layer !== "plan") {
         out += '<tr class="ss-pr-dev"><td class="ss-pr-no">—</td><td class="ss-pr-ttl">화면 공통</td>' +
@@ -1524,9 +1515,7 @@ ${HL_CSS}
       }
       items().forEach((it) => {
         let li = "";
-        (it.spec.defs || []).filter((d) => prKeep(d, layer)).forEach((d) => {
-          li += prLine(d);
-        });
+        (it.spec.defs || []).filter((d) => prKeep(d, layer)).forEach((d) => { li += prLine(d); });
         out += '<tr class="' + (it.isPart ? "ss-pr-part" : "") + '"><td class="ss-pr-no">' + esc(it.label) + "</td>" +
           '<td class="ss-pr-ttl">' + esc(it.spec.title || "") + "</td>" +
           '<td class="ss-pr-tag">' + esc(annoOf(it.spec).label) + "</td>" +
@@ -1534,97 +1523,19 @@ ${HL_CSS}
       });
       return out;
     }
-    /* 준비만 하고 되돌리는 함수를 돌려준다. 인쇄 전 모습을 그대로 들여다볼 수 있어야
-       (e2e 든 사람이든) 「뽑기 전에 확인」 이 가능하다 */
-    function printPrepare(opts) {
-      if (prBox) return function () {};
-      const pr = opts || {};
-      const showMarkers = pr.markers !== false, showTable = pr.table === true; /* 표는 이제 «선택» 이다 (#40) */
-      const sc = current || {};
-      const path = (sc.path || []).map(esc).join(" › ");
-      prBox = h("div", { class: "ss-print ss-ui" },
-        '<div class="ss-pr-head"><div class="ss-pr-id">' + esc(sc.id || "") + "</div>" +
-        '<div class="ss-pr-name">' + esc(sc.name || "") + "</div>" +
-        (path ? '<div class="ss-pr-path">' + path + "</div>" : "") + "</div>" +
-        '<div class="ss-pr-stage"><div class="ss-pr-holder"></div></div>' +
-        (showTable ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
-          prRows(pr.layer || LAYER) + "</tbody></table>" : "") +
-        '<div class="ss-pr-foot"><span>' + esc(sc.id || "") + " · " + new Date().toLocaleString() +
-        "</span><span>Made with ScreenSpec</span></div>");
-      document.body.appendChild(prBox);
-      const stage = prBox.querySelector(".ss-pr-stage");
-      const taken = ctx.printTake ? ctx.printTake() : null;
-      if (taken && taken.node) {
-        /* 넓은 PC 화면은 잘라내지 않고 줄인다 — 잘린 그림은 문서로 못 쓴다 */
-        const k = Math.min(1, A4_W / (taken.w || A4_W));
-        const holder = prBox.querySelector(".ss-pr-holder");
-        taken.node.style.transformOrigin = "top left";
-        taken.node.style.transform = "scale(" + k + ")";
-        holder.style.width = Math.round((taken.w || 0) * k) + "px";
-        holder.style.height = Math.round((taken.h || 0) * k) + "px";
-        holder.appendChild(taken.node);
-      } else stage.remove(); /* overlay: 앱이 페이지 그 자체라 옮길 시트가 없다 */
-      document.body.classList.add("ss-printing");
-      document.body.classList.toggle("ss-pr-nomark", !showMarkers);
-      let restored = false;
-      return function restore() {
-        if (restored) return;
-        restored = true;
-        if (taken && taken.node && ctx.printGive) ctx.printGive(taken.node);
-        if (prBox) { prBox.remove(); prBox = null; }
-        document.body.classList.remove("ss-printing");
-        document.body.classList.remove("ss-pr-nomark");
-      };
-    }
-    function printRun(opts) {
-      const restore = printPrepare(opts);
-      if (opts && opts.prepareOnly) return restore;
-      const done = () => { removeEventListener("afterprint", done); clearTimeout(timer); restore(); };
-      /* afterprint 를 안 주는 환경도 있다 — 되돌리기를 브라우저 신호에만 맡기지 않는다 */
-      const timer = setTimeout(done, 60000);
-      addEventListener("afterprint", done);
-      try { window.print(); } catch (e) { done(); }
-      return restore;
-    }
-    /* ---- 이미지 내보내기 (#40) — 컨플·노션에 붙일 그림 한 장이 주된 산출물이다.
-       DOM → SVG foreignObject → canvas → PNG. 캡처 라이브러리를 넣지 않는다:
-       html2canvas 만 해도 gzip 48KB 로 이 라이브러리 전체(46KB)보다 크다.
-       기본은 «화면 전체 높이» 다 — 기기 높이만 자르면 아래쪽 마커가 통째로 사라진다
-       (실측: demo.html 은 마커 10개 중 7개가 날아갔다) ---- */
-    function capOuterHTML(node, css, w, h) {
-      const clone = node.cloneNode(true);
-      /* 조립 상자는 화면 밖(-99999px)에 숨겨 두는데, 그 위치가 SVG 안까지 따라가면
-         그림이 캔버스 밖에 그려져 «백지» 가 나온다. 사본에서는 무력화한다 */
-      clone.style.position = "static";
-      clone.style.left = "auto";
-      clone.style.top = "auto";
-      clone.style.zIndex = "auto";
-      /* 주석 안의 «--» 가 XML 파싱을 통째로 깨뜨린다 (`-----` 구분선이 흔하다) */
-      const walk = document.createTreeWalker(clone, NodeFilter.SHOW_COMMENT);
-      const dead = [];
-      while (walk.nextNode()) dead.push(walk.currentNode);
-      dead.forEach((n) => n.remove());
-      const holder = document.createElement("div");
-      holder.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-      holder.style.cssText = "width:" + w + "px;background:#fff";
-      holder.appendChild(clone);
-      const inner = new XMLSerializer().serializeToString(holder);
-      /* CSS 안의 < 와 & 도 XML 을 깨뜨리므로 CDATA 로 감싼다 */
-      return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
-        "<foreignObject width='100%' height='100%'><style><![CDATA[" + css.split("]]>").join("]]&gt;") + "]]></style>" +
-        inner + "</foreignObject></svg>";
-    }
-    function capCSS() {
+
+    function capCSS(doc) {
       let css = "";
-      for (let i = 0; i < document.styleSheets.length; i++) {
+      const sheets = (doc || document).styleSheets;
+      for (let i = 0; i < sheets.length; i++) {
         try {
-          const rules = document.styleSheets[i].cssRules;
+          const rules = sheets[i].cssRules;
           for (let j = 0; j < rules.length; j++) css += rules[j].cssText + "\n";
         } catch (e) { /* cross-origin 스타일시트는 읽을 수 없다 — 건너뛴다 */ }
       }
       return css;
     }
-    /* 바깥 주소 이미지는 캡처에 «빈칸» 으로 나온다 — <img> 안의 SVG 는 바깥 요청을 못 하기 때문이다.
+    /* 바깥 주소 이미지는 그림에 «빈칸» 으로 나온다 — <img> 안의 SVG 는 바깥 요청을 못 하기 때문이다.
        조용히 백지를 내주는 것은 실패보다 나쁘므로 미리 센다 */
     function capRemoteImgs(node) {
       return node.querySelectorAll('img[src^="http"],img[src^="//"]').length;
@@ -1636,66 +1547,116 @@ ${HL_CSS}
         (path ? '<div class="ss-cap-path">' + path + "</div>" : "") +
         '<div class="ss-cap-when">' + new Date().toLocaleString() + " · Made with ScreenSpec</div></div>";
     }
-    /* 내보낼 그림을 조립한다. 되돌리는 함수를 준다 — 인쇄와 같은 «옮겼다 제자리» 규칙 */
-    function capBuild(opt) {
-      const taken = ctx.printTake ? ctx.printTake() : null;
-      if (!taken || !taken.node) return null; /* overlay·frame: 옮길 시트가 없다 */
-      const sheet = taken.node.querySelector(".ss-sheet");
-      if (!sheet) return null;
-      const w = sheet.offsetWidth;
-      const full = opt.fullHeight === false ? sheet.offsetHeight : Math.max(sheet.scrollHeight, sheet.offsetHeight);
+    /* 우리 뷰어 UI — 그림에는 «문서» 만 남고 뷰어는 빠진다 */
+    const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode,.ss-proto-wrap," +
+      ".ss-toc,.ss-tip,.ss-pvbar,.ss-nav-toast,.ss-cap";
+    const CAP_MARKS = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno";
+
+    function capBox(opt) {
       const box = h("div", { class: "ss-cap ss-ui" },
         (opt.head === false ? "" : capHeadHTML(current || {})) + '<div class="ss-cap-body"></div>' +
         (opt.table ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
           prRows(opt.layer || LAYER) + "</tbody></table>" : ""));
       document.body.appendChild(box);
+      return box;
+    }
+    /* 그림을 조립한다. 되돌리는 함수를 같이 준다 — 화면은 원래대로 돌아가야 한다 */
+    function capBuild(opt) {
+      const src = ctx.capSource ? ctx.capSource() : null;
+      if (!src) return null;
+      const box = capBox(opt);
       const body = box.querySelector(".ss-cap-body");
-      taken.node.style.transform = "";
-      /* 시트를 «전체 높이» 로 펼친다. 마커 좌표는 스크롤과 무관한 콘텐츠 좌표라 그대로 맞는다 */
-      sheet.style.height = full + "px";
-      sheet.style.overflow = "visible";
-      if (opt.markers === false) taken.node.querySelectorAll(".ss-markers,.ss-anno").forEach((n) => n.remove());
-      body.appendChild(taken.node);
-      /* 여백은 «마커가 실제로 튀어나온 만큼» 만 준다. 사방에 넉넉히 주면 프로토타입 둘레에
-         쓸데없는 흰 띠가 남는다 — 컨플에 붙일 그림이라 딱 맞아야 한다 */
-      const sr = sheet.getBoundingClientRect();
-      const pad = { l: 0, r: 0, t: 0, b: 0 };
-      taken.node.querySelectorAll(".ss-marker").forEach((mk) => {
-        const mr = mk.getBoundingClientRect();
-        pad.l = Math.max(pad.l, sr.left - mr.left);
-        pad.r = Math.max(pad.r, mr.right - sr.right);
-        pad.t = Math.max(pad.t, sr.top - mr.top);
-        pad.b = Math.max(pad.b, mr.bottom - sr.bottom);
-      });
-      const up = (v) => Math.max(0, Math.ceil(v) + (v > 0 ? 2 : 0)); /* 안티에일리어싱 여유 2px */
-      body.style.cssText = "box-sizing:border-box;width:" + (w + up(pad.l) + up(pad.r)) + "px;padding:" +
-        up(pad.t) + "px " + up(pad.r) + "px " + up(pad.b) + "px " + up(pad.l) + "px";
-      box.style.width = Math.max(w + up(pad.l) + up(pad.r), opt.head === false ? 0 : 320) + "px";
-      const remote = capRemoteImgs(taken.node);
-      return {
-        box: box, node: taken.node, remote: remote,
-        restore: function () {
+      let restoreSrc = function () {};
+      let target;
+
+      if (src.kind === "move") {
+        /* wrap — 살아 있는 시트를 «옮긴다». 복제하면 앱의 상태(입력값·canvas)를 잃는다 */
+        const sheet = src.node.querySelector(".ss-sheet");
+        if (!sheet) { box.remove(); return null; }
+        const full = Math.max(sheet.scrollHeight, sheet.offsetHeight);
+        src.node.style.transform = "";
+        sheet.style.height = full + "px";
+        sheet.style.overflow = "visible";
+        if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
+        body.appendChild(src.node);
+        target = src.node;
+        restoreSrc = function () {
           sheet.style.height = "";
           sheet.style.overflow = "";
-          if (ctx.printGive) ctx.printGive(taken.node);
-          box.remove();
-        },
+          if (src.give) src.give(src.node);
+        };
+      } else {
+        /* overlay·frame — 옮길 시트가 없으므로 사본을 뜬다. 다른 문서의 노드도 importNode 로 가져온다 */
+        target = document.importNode(src.node, true);
+        target.querySelectorAll(CAP_DROP).forEach((n) => n.remove());
+        if (opt.markers === false) target.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
+        else if (src.marks) src.marks.forEach((m) => target.appendChild(document.importNode(m, true)));
+        /* 마커는 absolute 다. 기준이 될 것이 없으면 조립 상자(fixed)를 기준으로 잡혀
+           머리말 높이만큼 통째로 밀린다 — 캡처 대상을 기준으로 세운다 */
+        target.style.position = "relative";
+        target.style.margin = "0";
+        target.style.width = src.w + "px";
+        target.style.minHeight = src.h + "px";
+        target.style.background = "#fff";
+        body.style.width = src.w + "px";
+        body.appendChild(target);
+      }
+
+      /* 여백은 «마커가 실제로 튀어나온 만큼» 만 준다. 사방에 넉넉히 주면 그림 둘레에 흰 띠가 남는다 */
+      const base = (src.kind === "move" ? target.querySelector(".ss-sheet") : target).getBoundingClientRect();
+      const pad = { l: 0, r: 0, t: 0, b: 0 };
+      target.querySelectorAll(".ss-marker").forEach((mk) => {
+        const mr = mk.getBoundingClientRect();
+        pad.l = Math.max(pad.l, base.left - mr.left);
+        pad.r = Math.max(pad.r, mr.right - base.right);
+        pad.t = Math.max(pad.t, base.top - mr.top);
+        pad.b = Math.max(pad.b, mr.bottom - base.bottom);
+      });
+      const up = (v) => Math.max(0, Math.ceil(v) + (v > 0 ? 2 : 0)); /* 안티에일리어싱 여유 */
+      const inner = src.kind === "move" ? target.querySelector(".ss-sheet").offsetWidth : src.w;
+      body.style.cssText = "box-sizing:border-box;width:" + (inner + up(pad.l) + up(pad.r)) + "px;padding:" +
+        up(pad.t) + "px " + up(pad.r) + "px " + up(pad.b) + "px " + up(pad.l) + "px";
+      box.style.width = Math.max(inner + up(pad.l) + up(pad.r), opt.head === false ? 0 : 320) + "px";
+
+      return {
+        box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
+        restore: function () { restoreSrc(); box.remove(); },
       };
     }
     async function capPNG(opt) {
       const built = capBuild(opt || {});
-      if (!built) return { ok: false, why: "이 모드에서는 이미지로 뽑을 수 없습니다 — 인쇄를 쓰세요." };
+      if (!built) return { ok: false, why: "지금 화면은 그림으로 뽑을 수 없습니다." };
       try {
         const r = built.box.getBoundingClientRect();
         const w = Math.ceil(r.width), hgt = Math.ceil(r.height);
-        const svg = capOuterHTML(built.box, capCSS(), w, hgt);
+        const clone = built.box.cloneNode(true);
+        /* 조립 상자는 화면 밖(-99999px)에 숨겨 두는데, 그 위치가 SVG 안까지 따라가면
+           그림이 캔버스 밖에 그려져 «백지» 가 나온다. 사본에서는 무력화한다 */
+        clone.style.position = "static";
+        clone.style.left = "auto";
+        clone.style.top = "auto";
+        clone.style.zIndex = "auto";
+        /* 주석 안의 «--» 가 XML 파싱을 통째로 깨뜨린다 (`-----` 구분선이 흔하다) */
+        const walk = document.createTreeWalker(clone, NodeFilter.SHOW_COMMENT);
+        const dead = [];
+        while (walk.nextNode()) dead.push(walk.currentNode);
+        dead.forEach((n) => n.remove());
+        const holder = document.createElement("div");
+        holder.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+        holder.style.cssText = "width:" + w + "px;background:#fff";
+        holder.appendChild(clone);
+        /* CSS 안의 < 와 & 도 XML 을 깨뜨리므로 CDATA 로 감싼다 */
+        const css = capCSS(document) + built.extraCSS;
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + hgt + '">' +
+          "<foreignObject width='100%' height='100%'><style><![CDATA[" + css.split("]]>").join("]]&gt;") + "]]></style>" +
+          new XMLSerializer().serializeToString(holder) + "</foreignObject></svg>";
         const img = new Image();
         const okLoad = await new Promise((res) => {
           img.onload = () => res(true);
           img.onerror = () => res(false);
           img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
         });
-        if (!okLoad) return { ok: false, why: "이 화면은 그림으로 바꾸지 못했습니다 — 인쇄로 뽑아 주세요." };
+        if (!okLoad) return { ok: false, why: "이 화면은 그림으로 바꾸지 못했습니다." };
         const scale = opt && opt.scale ? opt.scale : 2;
         const cv = document.createElement("canvas");
         cv.width = w * scale;
@@ -1705,8 +1666,7 @@ ${HL_CSS}
         cx.fillRect(0, 0, cv.width, cv.height);
         cx.scale(scale, scale);
         cx.drawImage(img, 0, 0);
-        /* 백지를 «성공» 이라고 내주지 않는다 — 흰 그림을 받아 컨플에 붙이는 것이 최악이다.
-           촘촘히 다 볼 필요는 없어 일정 간격으로 찍어 본다 */
+        /* 백지를 «성공» 이라고 내주지 않는다 — 흰 그림을 컨플에 붙이는 것이 가장 나쁜 실패다 */
         let ink = 0, seen = 0;
         try {
           const px = cx.getImageData(0, 0, cv.width, cv.height).data;
@@ -1717,7 +1677,7 @@ ${HL_CSS}
         } catch (e) {
           return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다 — 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." };
         }
-        if (seen && ink / seen < 0.002) return { ok: false, why: "그림이 비어 있게 나와 내보내지 않았습니다 — 인쇄로 뽑아 주세요.", blank: true };
+        if (seen && ink / seen < 0.002) return { ok: false, why: "그림이 비어 있게 나와 내보내지 않았습니다.", blank: true };
         let url;
         try { url = cv.toDataURL("image/png"); }
         catch (e) { return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다 — 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." }; }
@@ -1734,7 +1694,7 @@ ${HL_CSS}
       a.click();
       edSay2(r.remote
         ? "내려받았습니다. 다만 바깥에서 불러오는 이미지 " + r.remote + "개는 빈칸으로 나옵니다 — 자체 완결 파일로 만든 뒤 뽑으면 제대로 나옵니다."
-        : "「" + a.download + "」 을 내려받았습니다 (" + r.w + "×" + r.h + ").");
+        : "「" + a.download + "」 · " + r.w + "×" + r.h);
       return r;
     }
 
@@ -1742,47 +1702,47 @@ ${HL_CSS}
       const el = prDlg && prDlg.querySelector(".ss-cap-msg");
       if (el) el.textContent = msg || "";
     }
+    /* 레이어는 «기능 설명 포함» 을 켜야 의미가 있다 — 표가 없으면 거를 것이 없다 */
+    function prSyncLayer() {
+      if (!prDlg) return;
+      const sel = prDlg.querySelector("#ss-prLayer");
+      if (!sel) return;
+      const on = prDlg.querySelector("#ss-prTable").checked;
+      sel.disabled = !on;
+      sel.closest("label").classList.toggle("ss-off", !on);
+    }
     function printOpen() {
       if (!prDlg) {
-        const canImage = !!ctx.printTake;
         prDlg = h("dialog", { class: "ss-prdlg ss-ui" },
-          "<h3>내보내기</h3>" +
-          '<p class="ss-prdlg-sub">지금 보는 화면을 컨플루언스·노션에 붙일 수 있게 뽑습니다.</p>' +
-          (canImage
-            ? '<label><input type="radio" name="ss-prKind" value="img" id="ss-prImg" checked> 이미지 (PNG) — 붙여넣기용</label>' +
-              '<label><input type="radio" name="ss-prKind" value="pdf"> 인쇄 · PDF — 결재·제출용</label>'
-            : '<p class="ss-prdlg-sub">이 모드에서는 이미지로 뽑을 수 없어 인쇄만 됩니다.</p>') +
-          '<hr class="ss-prdlg-hr">' +
-          '<label><input type="checkbox" id="ss-prMark" checked> 번호(마커) 표시</label>' +
-          '<label><input type="checkbox" id="ss-prHead" checked> 머리말 — 화면 ID · 화면명 · 경로 · 일시</label>' +
-          '<label><input type="checkbox" id="ss-prTable"> 기능 설명 표 함께</label>' +
-          (anyDev() ? '<label>레이어 <select id="ss-prLayer"><option value="all">전체</option>' +
+          "<h3>PNG 로 내보내기</h3>" +
+          '<label><input type="checkbox" id="ss-prMark" checked> 번호 표시</label>' +
+          '<label><input type="checkbox" id="ss-prHead" checked> 머리말 표시 — 화면 ID · 화면명 · 경로 · 일시</label>' +
+          '<label><input type="checkbox" id="ss-prTable"> 기능 설명 포함</label>' +
+          (anyDev() ? '<label class="ss-prdlg-sub2 ss-off">레이어 <select id="ss-prLayer" disabled><option value="all">전체</option>' +
             '<option value="plan">기획만</option><option value="dev">개발만</option></select></label>' : "") +
           '<div class="ss-cap-msg"></div>' +
           '<div class="ss-prdlg-btns"><button type="button" data-pr="cancel">닫기</button>' +
           '<button type="button" data-pr="go" class="ss-prdlg-go">내보내기</button></div>');
         document.body.appendChild(prDlg);
+        prDlg.addEventListener("change", prSyncLayer);
         prDlg.addEventListener("click", (e) => {
           const b = e.target.closest("[data-pr]");
           if (!b) return;
           if (b.dataset.pr !== "go") { prDlg.close(); return; }
-          const img = prDlg.querySelector("#ss-prImg");
           const lySel = prDlg.querySelector("#ss-prLayer");
-          const opt = {
+          edSay2("만드는 중…");
+          /* 대화상자를 열어 둔 채 결과를 알린다 — 빈칸 이미지 경고를 읽을 자리가 필요하다 */
+          exportImage({
             markers: prDlg.querySelector("#ss-prMark").checked,
             head: prDlg.querySelector("#ss-prHead").checked,
             table: prDlg.querySelector("#ss-prTable").checked,
-            layer: lySel ? lySel.value : "all",
-          };
-          if (img && img.checked) { edSay2("만드는 중…"); exportImage(opt); return; } /* 대화상자를 열어 둔 채 결과를 알린다 */
-          prDlg.close();
-          /* 인쇄는 대화상자를 닫고 나서 — 최상위 레이어라 열려 있으면 종이에 같이 찍힌다 */
-          setTimeout(() => printRun(opt), 0);
+            layer: lySel && !lySel.disabled ? lySel.value : "all",
+          });
         });
       }
       edSay2("");
+      prSyncLayer();
       if (prDlg.showModal) prDlg.showModal();
-      else printRun({});
     }
 
     /* 패널 머리의 도구 자리 — 편집 버튼이 여기 산다 (wrap·overlay 공용).
@@ -1796,8 +1756,7 @@ ${HL_CSS}
       }
       return box;
     }
-    /* 내보내기 진입점은 «화면 단위» 동작이 모이는 자리에 둔다 — 툴바(wrap)·모드 알약(overlay).
-       기능 설명 패널 머리에 있던 것은 위계 오류였다: 내보내기는 패널이 아니라 화면 전체에 작용한다 */
+    /* 내보내기 진입점은 «화면 단위» 동작이 모이는 자리에 둔다 — 툴바(wrap)·모드 알약(overlay) */
     function prMount(box) {
       if (!box) return;
       const b = h("button", { class: "ss-headbtn ss-prbtn ss-ui", type: "button" }, "내보내기");
@@ -2121,7 +2080,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, print: printRun, exportImage };
+    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -2154,7 +2113,7 @@ ${HL_CSS}
        프로토타입이 setScreen()·refresh() 를 부르고 있을 수 있으므로 빈 껍데기만 남긴다(안 그러면 프로토타입이 깨진다). */
     if (SWITCH === "off") {
       const noop = function () {};
-      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, print: noop, exportImage: noop, edit: noop, serialize: () => "", dirty: () => false };
+      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, exportImage: noop, edit: noop, serialize: () => "", dirty: () => false };
       window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
       console.info("[ScreenSpec] off — 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
       return;
@@ -2420,8 +2379,16 @@ ${HL_CSS}
       },
       ensureDoc: () => { if (document.body.classList.contains("ss-mode-proto")) setMode("doc"); },
       /* 인쇄는 시트를 «옮겨» 간다 — 크기는 축소 전 원본 기준이어야 A4 배율을 다시 잴 수 있다 (#34) */
-      printTake: () => ({ node: frame, w: sheetW, h: sheetH }),
-      printGive: (node) => { docHolder.appendChild(node); layout(); },
+      /* 캡처 대상 (#40). 액자 모드는 앱이 iframe 안에 있어 옮길 수가 없다 —
+         same-origin 이 조건이므로 안쪽 문서를 직접 떠서 마커만 얹는다 */
+      capSource: () => {
+        if (!FRAME) return { kind: "move", node: frame, give: (n) => { docHolder.appendChild(n); layout(); } };
+        let idoc = null;
+        try { idoc = appFrame && appFrame.contentDocument; } catch (e) { idoc = null; }
+        if (!idoc || !idoc.body) return null; /* cross-origin: 안쪽을 못 읽는다 */
+        return { kind: "copy", node: idoc.body, css: cssText(idoc), w: sheetW,
+                 h: Math.max(idoc.body.scrollHeight, sheetH), marks: [markerLayer] };
+      },
       isDoc: () => document.body.classList.contains("ss-mode-doc"),
       afterRender: () => requestAnimationFrame(layout),
       toggleRoot: true /* wrap은 앱 DOM을 소유한다 — setScreen이 root 표시/숨김도 함께 전환 */
@@ -2531,7 +2498,7 @@ ${HL_CSS}
     core.prMount(toolbar);
     core.edMount();
     core.lyMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", print: core.print, exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
@@ -2626,6 +2593,17 @@ ${HL_CSS}
         return { l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY };
       },
       ensureDoc: () => { if (!document.body.classList.contains("ss-ov-doc")) setMode("doc"); },
+      /* 캡처 대상 (#40) — 앱이 페이지 그 자체라 옮길 시트가 없다. 본문을 뜨고 뷰어 UI 만 걷어낸다 */
+      capSource: () => {
+        /* 정의서 모드는 본문 오른쪽에 패널 자리(400px)를 비워 둔다. 패널을 걷어내도 그 자리는
+           빈 띠로 남으므로 폭에서 뺀다 — 그림 옆에 흰 띠가 붙으면 컨플에서 눈에 띈다 */
+        const cs = getComputedStyle(document.body);
+        const gapR = parseFloat(cs.paddingRight) || 0;
+        const gapB = parseFloat(cs.paddingBottom) || 0;
+        return { kind: "copy", node: document.body,
+          w: Math.max(320, document.documentElement.clientWidth - gapR),
+          h: Math.max(200, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) - gapB) };
+      },
       isDoc: () => document.body.classList.contains("ss-ov-doc"),
       afterRender: () => requestAnimationFrame(place)
     });
@@ -2659,7 +2637,7 @@ ${HL_CSS}
     core.prMount(pill);
     core.edMount();
     core.lyMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", print: core.print, exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);

@@ -435,6 +435,16 @@ function check(name, ok, detail) {
     return { dl: Math.round(Math.abs(m.left - (ir.left + t.left))), dt: Math.round(Math.abs(m.top - (ir.top + t.top))) };
   });
   check("정의서 모드: 마커가 액자 안 대상 위 (±14px)", mk.dl <= 14 && mk.dt <= 14, JSON.stringify(mk));
+  /* 액자는 앱이 iframe 안이라 «옮길 시트» 가 없다. same-origin 이 조건이므로 안쪽 문서를 직접 뜬다 (#40) */
+  const frImg = await page.evaluate(async () => {
+    const r = await window.ScreenSpec.exportImage({ markers: true, head: true });
+    return { ok: r.ok, w: r.w, h: r.h, ink: r.ink, why: r.why };
+  });
+  check("frame: 액자 안 문서를 떠서 PNG 로 뽑는다", frImg.ok === true, JSON.stringify(frImg));
+  check("frame: 백지가 아니다", frImg.ink > 0.5, JSON.stringify(frImg));
+  check("frame: 내보낸 뒤 조립 상자가 남지 않고 액자도 그대로", await page.evaluate(() =>
+    document.querySelectorAll(".ss-cap").length === 0 &&
+    document.querySelectorAll(".ss-sheet iframe[data-ss-frame]").length === 1));
   const widthOf = () => page.evaluate(() => {
     const f = document.querySelector("iframe[data-ss-frame]");
     return { w: f.clientWidth, dir: f.contentWindow.getComputedStyle(f.contentDocument.querySelector(".gnb")).flexDirection };
@@ -1279,27 +1289,17 @@ function check(name, ok, detail) {
     srv.close();
   }
 
-  /* ============ 인쇄 · 화면별 PDF (#34) ============
-     실제로 인쇄 미디어를 켜고(emulateMedia) 본다 — @media print 를 안 켜고 클래스만 세는 것은
-     「종이에 뭐가 나오는가」를 검증하지 못한다. 마지막에 page.pdf() 로 진짜 산출물까지 만든다. */
-  console.log("[print] 인쇄 · PDF");
+  /* ============ PNG 내보내기 (#40) — 컨플·노션에 붙일 그림 한 장 ============
+     실제로 PNG 를 만들어 «백지가 아닌지(잉크 비율)» 까지 본다. 클래스만 세는 검사는
+     「그림이 제대로 나오는가」를 검증하지 못한다. 세 모드(wrap·overlay·frame) 전부 확인한다. */
+  console.log("[export] PNG 내보내기");
   {
-    const os = require("os");
-    const prep = async (opts) => {
-      await page.evaluate((o) => { window.__prRestore = window.ScreenSpec.print(Object.assign({ prepareOnly: true }, o)); }, opts || {});
-      await page.emulateMedia({ media: "print" });
-      await page.waitForTimeout(150);
-    };
-    const undo = async () => {
-      await page.emulateMedia({ media: "screen" });
-      await page.evaluate(() => window.__prRestore && window.__prRestore());
-      await page.waitForTimeout(200);
-    };
-    const shown = (sel) => page.evaluate((s) => {
-      const el = document.querySelector(s);
-      return el ? getComputedStyle(el).display : "(없음)";
-    }, sel);
+    const shoot = (opt) => page.evaluate(async (o) => {
+      const r = await window.ScreenSpec.exportImage(o);
+      return { ok: r.ok, w: r.w, h: r.h, ink: r.ink, remote: r.remote, why: r.why };
+    }, opt || {});
 
+    /* --- wrap --- */
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
     await page.waitForTimeout(1000);
     await page.click("#ss-mDoc");
@@ -1309,165 +1309,86 @@ function check(name, ok, detail) {
       return !!b && !!b.closest(".ss-toolbar") && !b.closest(".ss-defs");
     }));
     check("내보내기: 이름이 「내보내기」", await page.evaluate(() => document.querySelector(".ss-prbtn").textContent.trim() === "내보내기"));
-    check("편집 버튼은 패널 도구 자리에 그대로", (await page.locator(".ss-headtools .ss-editbtn").count()) === 1);
-    check("내보내기: 대화상자에 형식·번호·머리말·표", await page.evaluate(() => {
+    check("내보내기: 대화상자는 번호·머리말·기능 설명 세 가지만 (PDF 는 없다)", await page.evaluate(() => {
       document.querySelector(".ss-prbtn").click();
       const d = document.querySelector(".ss-prdlg");
-      return !!d && d.open === true && !!d.querySelector("#ss-prImg") && !!d.querySelector("#ss-prMark") &&
-        !!d.querySelector("#ss-prHead") && !!d.querySelector("#ss-prTable");
+      return !!d && d.open && !!d.querySelector("#ss-prMark") && !!d.querySelector("#ss-prHead") &&
+        !!d.querySelector("#ss-prTable") && !d.querySelector("#ss-prImg");
     }));
-    check("내보내기: 기본 형식은 이미지 · 표는 기본 꺼짐", await page.evaluate(() => {
+    check("내보내기: 번호·머리말은 기본 켬 · 기능 설명은 기본 끔", await page.evaluate(() => {
       const d = document.querySelector(".ss-prdlg");
-      return d.querySelector("#ss-prImg").checked === true && d.querySelector("#ss-prTable").checked === false &&
-        d.querySelector("#ss-prMark").checked === true && d.querySelector("#ss-prHead").checked === true;
+      return d.querySelector("#ss-prMark").checked && d.querySelector("#ss-prHead").checked &&
+        !d.querySelector("#ss-prTable").checked;
     }));
     await page.evaluate(() => document.querySelector(".ss-prdlg").close());
 
-    const before = await page.evaluate(() => ({
-      rows: document.querySelectorAll(".ss-defs-list .ss-row").length,
-      markers: document.querySelectorAll(".ss-marker").length,
-      parent: document.querySelector(".ss-frame").parentElement.id,
-    }));
-
-    await prep({ table: true });
-    check("인쇄: 뷰어(툴바)는 종이에 안 나온다", (await shown(".ss-toolbar")) === "none");
-    check("인쇄: 정의서 패널도 안 나온다", (await shown(".ss-docmode")) === "none");
-    check("인쇄: 인쇄 블록만 나온다", (await shown(".ss-print")) === "block");
-    check("인쇄: 화면 ID·화면명·경로가 머리에", await page.evaluate(() => {
-      const t = document.querySelector(".ss-pr-head").innerText;
-      return t.includes("SCR-MOA-HOME-001") && t.includes("홈");
-    }));
-    check("인쇄: 항목 표에 하위(1a·1b)까지 나온다", await page.evaluate(() =>
-      [...document.querySelectorAll(".ss-pr-table .ss-pr-no")].map((x) => x.textContent).join(",").indexOf("1,1a,1b,2") === 0));
-    check("인쇄: 표에 유형·기능 설명이 있다", await page.evaluate(() => {
-      const r = document.querySelector(".ss-pr-table tbody tr");
-      return r.children.length === 4 && r.querySelectorAll("li").length > 0;
-    }));
-    check("인쇄: 프로토타입이 인쇄 블록 안으로 옮겨진다 (복제가 아니라)", await page.evaluate(() =>
-      document.querySelectorAll(".ss-frame").length === 1 && !!document.querySelector(".ss-print .ss-frame")));
-    check("인쇄: 표 행이 페이지 중간에서 안 잘린다", await page.evaluate(() =>
-      getComputedStyle(document.querySelector(".ss-pr-table tbody tr")).breakInside === "avoid"));
-    check("인쇄: 꼬리에 생성 일시 + Made with ScreenSpec", await page.evaluate(() =>
-      document.querySelector(".ss-pr-foot").innerText.includes("Made with ScreenSpec")));
-    check("인쇄: 마커는 기본으로 나온다", await page.evaluate(() =>
-      getComputedStyle(document.querySelector(".ss-print .ss-markers")).display !== "none"));
-
-    /* 진짜 산출물 — 브라우저의 「PDF 로 저장」과 같은 경로 */
-    const pdfPath = path.join(os.tmpdir(), "ss-print-test.pdf");
-    await page.pdf({ path: pdfPath, format: "A4", printBackground: true });
-    const pdfBuf = fs.readFileSync(pdfPath);
-    check("인쇄: PDF 가 실제로 만들어진다", pdfBuf.length > 1000, pdfBuf.length);
-    check("인쇄: PDF 가 여러 장으로 나뉜다", (pdfBuf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length >= 1);
-    await undo();
-
-    check("인쇄: 끝나면 화면이 원상 복귀한다", await page.evaluate((b) => {
-      const now = {
-        rows: document.querySelectorAll(".ss-defs-list .ss-row").length,
-        markers: document.querySelectorAll(".ss-marker").length,
-        parent: document.querySelector(".ss-frame").parentElement.id,
-      };
-      return now.rows === b.rows && now.markers === b.markers && now.parent === b.parent;
-    }, before), JSON.stringify(before));
-    check("인쇄: 인쇄 블록·클래스가 남지 않는다", await page.evaluate(() =>
-      document.querySelectorAll(".ss-print").length === 0 && !document.body.classList.contains("ss-printing")));
-
-    /* 옵션 — 마커 숨김 / 표 제외 */
-    await prep({ markers: false, table: true });
-    check("인쇄: 마커 숨김이면 번호가 안 나온다", (await shown(".ss-print .ss-markers")) === "none");
-    check("인쇄: 마커 숨김이어도 표는 그대로", (await page.locator(".ss-pr-table").count()) === 1);
-    await undo();
-    await prep({});
-    check("인쇄: 표는 기본으로 안 나온다 (그림이 주된 산출물이다)", (await page.locator(".ss-pr-table").count()) === 0);
-    check("인쇄: 표가 없어도 프로토타입은 나온다", (await page.locator(".ss-print .ss-frame").count()) === 1);
-    await undo();
-
-    /* A4 보다 넓은 PC 폭은 잘라내지 않고 줄인다 */
-    await page.goto("about:blank");
-    await page.setContent('<div data-spec="1">넓은 화면</div><script>window.SCREENSPEC={baseViewport:"pc",' +
-      'screen:{id:"S-PC",name:"어드민"},specs:[{n:1,target:"1",title:"표",defs:[{t:"한 줄"}]}]};<' + "/script>");
-    await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
-    await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
-    await prep();
-    const k = await page.evaluate(() => {
-      const m = (document.querySelector(".ss-print .ss-frame").style.transform || "").match(/scale\(([\d.]+)\)/);
-      const h = document.querySelector(".ss-pr-holder");
-      return { k: m ? Number(m[1]) : null, w: parseFloat(h.style.width) };
-    });
-    check("인쇄: A4 보다 넓은 PC 화면은 축소해서 넣는다", k.k !== null && k.k < 1 && k.w <= 703, JSON.stringify(k));
-    await undo();
-
-
-    /* --- 이미지 내보내기: 컨플에 붙일 그림 한 장이 주된 산출물 (#40) --- */
-    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
-    await page.waitForTimeout(1000);
-    await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
     const dev = await page.evaluate(() => ({
       기기높이: document.querySelector(".ss-sheet").offsetHeight,
       내용높이: document.querySelector(".ss-sheet").scrollHeight,
-      마커: document.querySelectorAll(".ss-marker").length,
       기기폭: document.querySelector(".ss-sheet").offsetWidth,
+      마커: document.querySelectorAll(".ss-marker").length,
     }));
-    const img = await page.evaluate(async () => {
-      const r = await window.ScreenSpec.exportImage({ markers: true, head: true });
-      return { ok: r.ok, w: r.w, h: r.h, ink: r.ink, remote: r.remote, why: r.why };
-    });
-    check("이미지: 내보내기가 성공한다", img.ok === true, JSON.stringify(img));
-    check("이미지: 백지가 아니다 (잉크 비율로 확인)", img.ink > 5, JSON.stringify(img));
-    check("이미지: «화면 전체 높이» 로 뽑는다 — 기기 높이만 자르면 아래쪽 마커가 사라진다",
+    const img = await shoot({ markers: true, head: true });
+    check("wrap: 내보내기가 성공한다", img.ok === true, JSON.stringify(img));
+    check("wrap: 백지가 아니다 (잉크 비율로 확인)", img.ink > 5, JSON.stringify(img));
+    check("wrap: «화면 전체 높이» 로 뽑는다 — 기기 높이만 자르면 아래쪽 마커가 사라진다",
       img.h / 2 > dev.내용높이 * 0.9, JSON.stringify({ img: img.h, dev: dev }));
-    /* 여백은 «마커가 튀어나온 만큼» 만 준다 — 사방에 넉넉히 주면 프로토타입 둘레에 흰 띠가 남는다 */
-    check("이미지: 폭이 기기 폭에 딱 맞는다 (쓸데없는 흰 띠 없음)",
+    check("wrap: 폭이 기기 폭에 딱 맞는다 (쓸데없는 흰 띠 없음)",
       img.w / 2 >= dev.기기폭 && img.w / 2 <= dev.기기폭 + 60, JSON.stringify({ img: img.w / 2, 기기폭: dev.기기폭 }));
-    check("이미지: 내보낸 뒤 화면이 원상 복귀한다", await page.evaluate((d) =>
+    check("wrap: 내보낸 뒤 화면이 원상 복귀한다", await page.evaluate((d) =>
       document.querySelectorAll(".ss-cap").length === 0 &&
       !document.querySelector(".ss-sheet").style.height &&
       document.querySelector(".ss-frame").parentElement.id === "ss-docHolder" &&
       document.querySelectorAll(".ss-marker").length === d.마커, dev));
 
-    const noHead = await page.evaluate(async () => {
-      const r = await window.ScreenSpec.exportImage({ head: false, markers: false });
-      return { ok: r.ok, h: r.h, ink: r.ink };
-    });
-    check("이미지: 머리말을 끄면 그만큼 세로가 짧아진다 (프로토타입 그림만)",
-      noHead.ok && noHead.h < img.h, JSON.stringify({ noHead, img }));
-    check("이미지: 머리말을 꺼도 백지가 아니다", noHead.ink > 5, JSON.stringify(noHead));
+    const noHead = await shoot({ head: false, markers: false });
+    check("wrap: 머리말을 끄면 그만큼 세로가 짧아진다", noHead.ok && noHead.h < img.h, JSON.stringify({ noHead, img }));
+    check("wrap: 머리말을 꺼도 백지가 아니다", noHead.ink > 5, JSON.stringify(noHead));
+    const withTable = await shoot({ table: true });
+    check("wrap: 기능 설명을 포함하면 세로가 길어진다", withTable.ok && withTable.h > img.h, JSON.stringify({ withTable, img }));
 
-    /* 바깥 주소 이미지는 빈칸으로 나온다 — 조용히 넘기지 않고 «몇 개인지» 를 돌려준다 */
+    /* --- 바깥 주소 이미지 · 주석에 «--» 가 있는 프로토타입 --- */
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
     await page.waitForTimeout(1000);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(400);
-    const rem = await page.evaluate(async () => {
-      const r = await window.ScreenSpec.exportImage({});
-      return { ok: r.ok, remote: r.remote };
-    });
-    check("이미지: 바깥에서 불러오는 이미지 개수를 알려 준다 (빈칸으로 나오므로)", rem.ok === true && rem.remote >= 1, JSON.stringify(rem));
-    check("이미지: 주석에 «--» 가 있는 프로토타입도 캡처된다 (XML 이 안 깨진다)", rem.ok === true);
+    const rem = await shoot({});
+    check("wrap: 바깥에서 불러오는 이미지 개수를 알려 준다 (빈칸으로 나오므로)", rem.ok === true && rem.remote >= 1, JSON.stringify(rem));
+    check("wrap: 주석에 «--» 가 있는 프로토타입도 캡처된다 (XML 이 안 깨진다)", rem.ok === true, JSON.stringify(rem));
 
-    /* overlay — 옮길 시트가 없다 */
-    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/overlay-spa.html");
+    /* --- overlay: 옮길 시트가 없어 사본을 뜬다 --- */
+    const srvOv = http.createServer((rq, rs) => {
+      const u = rq.url.split("?")[0].split("#")[0];
+      const p = u.indexOf("/screenspec.js") === 0 ? "/screenspec.js" : "/examples/overlay-spa.html";
+      rs.writeHead(200, { "Content-Type": p.endsWith(".js") ? "text/javascript" : "text/html" });
+      rs.end(fs.readFileSync(path.join(REPO, p)));
+    });
+    await new Promise((r) => srvOv.listen(4192, r));
+    await page.goto("http://localhost:4192/");
     await page.waitForTimeout(1000);
     await page.click("#ss-ovDoc");
-    await page.waitForTimeout(400);
-    await prep({ table: true });
-    check("인쇄(overlay): 헤더·표·꼬리가 나온다", await page.evaluate(() =>
-      !!document.querySelector(".ss-pr-head") && !!document.querySelector(".ss-pr-table") && !!document.querySelector(".ss-pr-foot")));
-    check("인쇄(overlay): 옮길 시트가 없으므로 프로토타입 칸은 생략한다", (await page.locator(".ss-pr-stage").count()) === 0);
-    check("인쇄(overlay): 뷰어 패널은 종이에 안 나온다", (await shown(".ss-ov-panel")) === "none");
-    await undo();
-    check("인쇄(overlay): 원상 복귀", await page.evaluate(() =>
-      document.querySelectorAll(".ss-print").length === 0 && document.querySelectorAll(".ss-ov-row,.ss-row").length > 0));
-    check("내보내기(overlay): 버튼이 모드 알약에 있다", await page.evaluate(() => {
-      const b = document.querySelector(".ss-prbtn");
-      return !!b && !!b.closest(".ss-pill");
+    await page.waitForTimeout(500);
+    check("내보내기(overlay): 버튼이 모드 알약에 있다", await page.evaluate(() =>
+      !!document.querySelector(".ss-pill .ss-prbtn")));
+    const ov = await shoot({ markers: true, head: true });
+    check("overlay: 내보내기가 성공한다", ov.ok === true, JSON.stringify(ov));
+    check("overlay: 백지가 아니다", ov.ink > 0.3, JSON.stringify(ov));
+    check("overlay: 뷰어 UI(패널·알약·헤더)는 그림에 안 들어간다", await page.evaluate(async () => {
+      /* 캡처 직전 사본에서 무엇이 빠지는지 — 조립 상자를 잡아 확인한다 */
+      let seen = null;
+      const mo = new MutationObserver(() => {
+        const box = document.querySelector(".ss-cap");
+        if (box && seen === null) seen = box.querySelectorAll(".ss-ov-panel,.ss-pill,.ss-ov-header,.ss-toc").length;
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+      await window.ScreenSpec.exportImage({});
+      mo.disconnect();
+      return seen === 0;
     }));
-    check("이미지(overlay): 옮길 시트가 없어 이미지로는 못 뽑고 사유를 말한다", await page.evaluate(async () => {
-      const r = await window.ScreenSpec.exportImage({});
-      return r.ok === false && typeof r.why === "string" && r.why.length > 0;
-    }));
+    check("overlay: 내보낸 뒤 조립 상자가 남지 않는다", (await page.locator(".ss-cap").count()) === 0);
+    check("overlay: 앱 DOM 이 그대로다 (사본을 떴을 뿐)", await page.evaluate(() =>
+      !!document.querySelector("[data-spec]") && document.querySelectorAll(".ss-ov-panel").length === 1));
+    srvOv.close();
   }
 
   /* ============ 개발 정의 레이어 (#38) ============
@@ -1566,36 +1487,50 @@ function check(name, ok, detail) {
       return w.SCREENSPEC.specs[0].defs[1].layer === "dev" && (w.SCREENSPEC.screen.dev || []).length === 2;
     }));
 
-    /* 인쇄가 같은 축을 쓴다 */
-    await page.evaluate(() => { window.__prRestore = window.ScreenSpec.print({ prepareOnly: true, layer: "dev", table: true }); });
-    await page.emulateMedia({ media: "print" });
-    await page.waitForTimeout(150);
-    check("레이어: 인쇄 「개발만」 이면 표에 기획 줄이 없다", await page.evaluate(() => {
-      const t = document.querySelector(".ss-pr-table").innerText;
-      return t.includes("POST /api/items") && !t.includes("기획 한 줄");
+    /* 내보내기가 같은 축을 쓴다 — 그림 속 표를 레이어로 거른다 */
+    const tableText = (layer) => page.evaluate(async (ly) => {
+      let txt = null;
+      const mo = new MutationObserver(() => {
+        const t = document.querySelector(".ss-cap .ss-pr-table");
+        if (t && txt === null) txt = t.innerText;
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+      await window.ScreenSpec.exportImage({ table: true, layer: ly });
+      mo.disconnect();
+      return txt;
+    }, layer);
+    const tDev = await tableText("dev");
+    check("레이어: 내보내기 「개발만」 이면 표에 기획 줄이 없다",
+      tDev && tDev.includes("POST /api/items") && !tDev.includes("기획 한 줄"), tDev);
+    check("레이어: 내보내기 「개발만」 에 화면 공통도 들어간다", tDev && tDev.includes("Bearer"), tDev);
+    const tPlan = await tableText("plan");
+    check("레이어: 내보내기 「기획만」 이면 표에 개발 줄이 없다",
+      tPlan && tPlan.includes("기획 한 줄") && !tPlan.includes("POST /api/items") && !tPlan.includes("Bearer"), tPlan);
+
+    /* 레이어는 «기능 설명 포함» 을 켜야 의미가 있다 — 표가 없으면 거를 것이 없다 */
+    check("레이어: 기능 설명을 안 넣으면 레이어 선택이 꺼져 있다", await page.evaluate(() => {
+      document.querySelector(".ss-prbtn").click();
+      const d = document.querySelector(".ss-prdlg");
+      const sel = d.querySelector("#ss-prLayer");
+      return sel.disabled === true && sel.closest("label").classList.contains("ss-off");
     }));
-    check("레이어: 인쇄 「개발만」 에 화면 공통도 들어간다", await page.evaluate(() =>
-      document.querySelector(".ss-pr-table").innerText.includes("Bearer")));
-    await page.emulateMedia({ media: "screen" });
-    await page.evaluate(() => window.__prRestore());
-    await page.waitForTimeout(200);
-    await page.evaluate(() => { window.__prRestore = window.ScreenSpec.print({ prepareOnly: true, layer: "plan", table: true }); });
-    await page.emulateMedia({ media: "print" });
-    await page.waitForTimeout(150);
-    check("레이어: 인쇄 「기획만」 이면 표에 개발 줄이 없다", await page.evaluate(() => {
-      const t = document.querySelector(".ss-pr-table").innerText;
-      return t.includes("기획 한 줄") && !t.includes("POST /api/items") && !t.includes("Bearer");
+    check("레이어: 기능 설명을 켜면 레이어 선택이 살아난다", await page.evaluate(() => {
+      const d = document.querySelector(".ss-prdlg");
+      const cb = d.querySelector("#ss-prTable");
+      cb.checked = true;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+      const sel = d.querySelector("#ss-prLayer");
+      const ok = sel.disabled === false && !sel.closest("label").classList.contains("ss-off");
+      d.close();
+      return ok;
     }));
-    await page.emulateMedia({ media: "screen" });
-    await page.evaluate(() => window.__prRestore());
-    await page.waitForTimeout(200);
 
     /* 하위 호환 — layer 를 안 쓰는 문서는 예전 그대로 */
     await boot(plain);
     check("레이어: 개발 정의가 없으면 칩을 만들지 않는다", (await page.locator(".ss-layerbar").count()) === 0);
     check("레이어: 개발 정의가 없으면 개발 블록도 0개", (await page.locator(".ss-dev").count()) === 0);
     check("레이어: 옛 문서는 정의서가 그대로 뜬다", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
-    check("레이어: 옛 문서의 인쇄 대화상자엔 레이어 선택이 없다", await page.evaluate(() => {
+    check("레이어: 옛 문서의 내보내기 대화상자엔 레이어 선택이 없다", await page.evaluate(() => {
       document.querySelector(".ss-prbtn").click();
       const has = !!document.querySelector("#ss-prLayer");
       document.querySelector(".ss-prdlg").close();
