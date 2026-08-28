@@ -20,12 +20,14 @@
        코드는 되는데 문서에만 없어 사용자가 못 찾는 드리프트를 막는다 (2026-08-24 #28: Part.optional 누락)
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
+ * 19) 용량 상한(gzip 60KB) — 단일 파일·의존성 0 약속을 기계로 지킨다 (2026-08-28)
  * 18) 라이브러리 소스의 스크립트 종료 태그·HTML 주석 여는 표시 — 인라인 산출물이 통째로 깨진다 (2026-08-27 2회)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const zlib = require("zlib");
 
 const REPO = path.resolve(__dirname, "..");
 let fail = 0;
@@ -244,6 +246,19 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("(자체검사) 위 두 검사가 실제로 잡아낸다",
     seen("앞 " + CLOSE + "> 뒤", CLOSE) && !seen("정상 소스", CLOSE) &&
     seen("앞 " + OPENC + " 뒤", OPENC) && !seen("정상 소스", OPENC));
+}
+
+/* 19) 용량 상한 — 단일 파일·의존성 0 이 이 제품의 약속이다. 상한이 없으면
+       「이것 하나쯤」이 쌓여 어느 날 라이브러리가 두 배가 된다. 참고: html2canvas 48KB ·
+       ProseMirror 코어 40KB — 엔진 하나만 넣어도 우리 전체보다 크다. 넘으면 기능이 아니라
+       상한을 다시 논의한다 (2026-08-28 결정) */
+{
+  const LIMIT_KB = 60;
+  const gz = zlib.gzipSync(fs.readFileSync(path.join(REPO, "screenspec.js")), { level: 9 }).length;
+  const kb = +(gz / 1024).toFixed(1);
+  check("screenspec.js gzip 상한 " + LIMIT_KB + "KB 이하 (지금 " + kb + "KB)", kb <= LIMIT_KB, kb + "KB");
+  /* 음성 테스트 — 상한 검사가 실제로 걸러 내는지 양쪽으로 */
+  check("(자체검사) 용량 검사가 넘치는 값을 걸러 낸다", !(LIMIT_KB + 1 <= LIMIT_KB) && (LIMIT_KB <= LIMIT_KB));
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));

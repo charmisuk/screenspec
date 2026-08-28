@@ -223,12 +223,41 @@
         "done": true,
         "evidence": "feat: 개발 정의 레이어 (fix #38)"
       }
+    },
+    {
+      "order": 5,
+      "issue": [
+        40,
+        41
+      ],
+      "type": "feat",
+      "release": "Phase 0-3 개정 · 0-7",
+      "title": "내보내기 — 이미지가 주된 산출물 · 기획/개발 순서 일관성",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "기획자 피드백: 목적지는 A4 문서가 아니라 컨플루언스 페이지이고 거기서는 이미지를 붙인 뒤 설명을 옆에 직접 쓴다. 그리고 화면 공통 개발 블록만 목록 맨 위에 있어 층마다 순서가 달랐다.",
+        "measured": "① 의존성 0 캡처 가능 여부 — DOM→SVG→canvas 로 2배 해상도 100~240ms, 3/3 성공(준비 3가지: 주석 노드 제거·CSS CDATA·여백). html2canvas 는 gzip 48KB 로 라이브러리 전체(46KB)보다 커서 후보 탈락 ② 잘림 실측 — 기기 높이(800px)만 캡처하면 shop 은 988px·demo 는 3474px 이 날아가고 demo 는 마커 10개 중 7개가 사라진다. 그래서 기본을 화면 전체 높이로 확정",
+        "change": "capPNG/capBuild/exportImage 신설 · 대화상자를 형식(이미지/인쇄)+번호+머리말+표로 · 버튼을 패널 머리에서 툴바(wrap)·알약(overlay)으로 이동하고 「내보내기」로 개명 · 표 기본값을 끔으로 · devCommonHTML 을 목록 맨 아래로 · lint 에 gzip 60KB 상한 · README 호환 약속"
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "evidence": "작업 중 발견해 같이 고친 것 2건: ①조립 상자를 화면 밖(-99999px)에 두는데 그 위치가 SVG 안까지 따라가 «백지 PNG» 가 나왔다 — 사본에서 무력화하고, 나아가 잉크 비율을 세어 백지면 성공이라고 말하지 않게 했다 ②인쇄 CSS 의 .ss-ov-pill 은 존재하지 않는 클래스였다(진짜는 .ss-pill) — #34 부터 overlay 알약이 인쇄에 찍히고 있었다. 여백은 고정 30px 에서 «마커가 실제로 튀어나온 만큼» 실측으로 바꿨다(사용자 피드백 — 폭 840→720, 기기 폭에 딱 맞음)"
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 전부 통과(gzip 50.7KB / 상한 60KB 포함). e2e PASS 261 / FAIL 0 — 248 에서 +13. 이미지 케이스는 실제로 PNG 를 만들어 «백지가 아닌지(잉크 비율)»·«전체 높이인지»·«폭이 기기 폭에 맞는지»·«원상 복귀»까지 확인. smoke 는 demo.html 외부 이미지 차단 1건(회귀 아님)."
+      },
+      "commit": {
+        "done": true
+      }
     }
   ],
   "cycle_qa": {
     "done": true,
-    "lint": "전부 통과 (버전 정합 4항목 포함)",
-    "e2e": "PASS 248 / FAIL 0 — 사이클 시작 시점 150 에서 +98",
+    "lint": "전부 통과 (버전 정합 4항목 + gzip 60KB 상한 포함)",
+    "e2e": "PASS 261 / FAIL 0 — 사이클 시작 150 에서 +111",
     "smoke": "FAIL 1건 = examples/demo.html 외부 이미지 차단. 이슈마다 git stash 로 변경을 제거하고 재실행해 동일하게 실패함을 확인 — 샌드박스 한정이며 회귀 아님",
     "release_pre": "node scripts/release.js --pre 통과 — CHANGELOG 최상단 v0.20.0 · 문서 CDN 태그 v0.20.0 일치"
   },
