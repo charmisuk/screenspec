@@ -112,10 +112,10 @@ async function main() {
   if (FROM_PUSH) {
     let log = '';
     try { log = execSync('git log --format=%B origin/main..HEAD', { cwd: REPO }).toString(); } catch { log = ''; }
-    const re = new RegExp('(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*#(\d+)', 'gi');
+    const re = /(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*#(\d+)/gi; /* 정규식 리터럴 — 문자열로 쓰면 \\s 가 글자 s 가 된다 */
     let m;
     while ((m = re.exec(log))) closing.add(Number(m[1]));
-    if (closing.size) console.log('푸시가 닫을 이슈: ' + [...closing].map((n) => '#' + n).join(' '));
+    console.log("푸시 범위: 커밋 " + (log.trim() ? log.trim().split(/^commit /m).length : 0) + "덩이 · 닫을 이슈 " + (closing.size ? [...closing].map((n) => "#" + n).join(" ") : "없음"));
   }
   parsed.forEach((c) => {
     const n = issueNo(c.url);
