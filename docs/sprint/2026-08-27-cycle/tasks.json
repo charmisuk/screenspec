@@ -1,0 +1,281 @@
+{
+  "cycle": "2026-08-27-cycle",
+  "branch": "claude/user-engagement-mode-strategy-kxk15a",
+  "base_version": "0.19.3",
+  "protocol": ".agents/workflows/issue-cycle.md (v1.1)",
+  "note": "Phase 0 (라이브러리) — docs/product/phase0.md 를 이슈로 옮긴 사이클. 순서는 기획 문서 그대로.",
+  "rules": [
+    "병렬 금지 — 이슈 1건이 commit 까지 끝나야 다음",
+    "게이트마다 증거를 적어야 done",
+    "push 는 사용자 명시 요청 시에만"
+  ],
+  "issues": [
+    {
+      "order": 1,
+      "issue": [
+        36
+      ],
+      "type": "feat",
+      "release": "Phase 0-1",
+      "title": "온보딩 인터뷰 + style 설정",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "SKILL.md 는 §1 화면 메타부터 곧바로 작성에 들어간다 — 프로젝트의 문구 어휘·상태 축·화면 ID 체계·기준 폭을 묻는 단계가 없다. 그래서 (a) 기획자가 AI 초안을 받은 뒤 손으로 톤을 고쳐야 하고 (b) AI 가 다시 쓸 때 그 취향이 남아 있지 않아 톤이 갈린다. 취향이 남을 자리(설정 필드)도 없다. #24 가 이 방향을 열어 뒀고 #31 의 §4 어휘 뼈대가 재료다.",
+        "change": "(1) SKILL.md — §1 앞에 «### 0. 적용 전 인터뷰» 신설. 네 문항(문구 어휘 / 상태 축 / 화면 ID 체계 / 기준 폭)만 묻고, 이미 대화에 답이 있으면 건너뛴다. 「전부 기본으로」 한 마디로 종료 가능함을 명시. 4문항 초과 금지를 규칙으로 적는다. (2) SKILL.md §4 첫머리 — 「설정에 style.vocab 이 있으면 그것만 쓰고 기본 어휘와 섞지 않는다」 추가. §3 설정 예시에 style 한 줄. (3) screenspec.js — RAW.style 을 읽어 «형식 검증 + 콘솔 경고 1회» 만 한다. 렌더·동작은 일절 바꾸지 않는다. 검증: 객체가 아니면 경고 / vocab.prefixes·endings 가 배열 아니면 경고 / idScheme·notes 가 문자열 아니면 경고. 기존 checklist 경고문 어조를 따른다. 위치는 accent·checklist 검증 블록 옆(L~130~150). (4) docs/config.md — 전체 구조 ts 블록에 style 타입, §최상위 필드 표에 style 행 추가. (5) tests/e2e.js — style 검증 경고 케이스 추가. 레이아웃·위치는 건드리지 않으므로 ScreenSpec 자체 fixed UI(헤더 48px·패널 400px)와의 겹침 이슈는 발생하지 않는다.",
+        "accept": [
+          "SKILL.md 만 읽은 AI 가 빈 대화에서 「ScreenSpec 적용해줘」 를 받으면 작성 전에 네 문항을 먼저 묻는다 (문항 수 ≤4)",
+          "style 이 없으면 라이브러리 동작·콘솔 출력이 지금과 완전히 동일하다 (경고 0건)",
+          "style 이 올바른 객체면 경고 없이 통과하고, 렌더 결과가 style 없을 때와 같다 (런타임 무영향)",
+          "style 이 객체가 아니거나 하위 필드 타입이 틀리면 [ScreenSpec] 로 시작하는 경고가 1회 나오고, 그래도 정의서는 정상 렌더된다",
+          "node tests/lint.js 통과 — RAW.style 이 docs/config.md 에 문서화되어 필드 커버리지 검사를 만족"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과 (필드 커버리지에 style 포함)",
+          "node tests/e2e.js — 기존 150 케이스 전부 유지 + style 신규 케이스 통과",
+          "신규 e2e: (a) style 없음 → 경고 0 (b) 정상 style → 경고 0 + 행 수 동일 (c) style:\"문자열\" → 경고 1 + 정상 렌더 (d) style.vocab.prefixes:\"문자열\" → 경고 1",
+          "node tests/smoke.js — demo.html 의 외부 이미지 차단 실패만 허용(샌드박스 한정, main 에서도 동일)"
+        ],
+        "docs": [
+          "docs/config.md — 전체 구조 ts 블록 + 최상위 필드 표 (lint 9 필드 커버리지가 강제)",
+          "SKILL.md — §0 인터뷰 신설 · §4 style 우선 참조 · §3 예시"
+        ]
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "routing": "코드 변경 ~15줄(검증 경고만) + 나머지는 문서·테스트. 프로토콜 v1.1 라우팅 기준(≤40줄, 문서만이면 메인 직접)에 해당",
+        "evidence": "screenspec.js +21줄 — RAW.style 형식 검증 IIFE(L150~170), 렌더·동작 무영향. SKILL.md +34줄 — §0 인터뷰(4문항, L18) · §3 예시 style 한 줄 · §4 style.vocab 우선 블록. docs/config.md +32줄 — Style 타입 · 최상위 필드 표 style 행 · 「쓰는 법 고정 (style)」 절. tests/e2e.js +36줄 — style 케이스 4건. 계획에 없는 파일 변경 0건."
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 전부 통과 (RAW.style 필드 커버리지 포함). e2e PASS 154 / FAIL 0 — 기존 150 유지 + 신규 4건 전부 통과. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단, git stash 로 변경 제거 후 재실행해도 동일하게 실패함을 확인 — 회귀 아님. accept 5개 항목 전부 확인."
+      },
+      "commit": {
+        "done": true,
+        "evidence": "feat: 온보딩 인터뷰 + style 설정 (fix #36)"
+      }
+    },
+    {
+      "order": 2,
+      "issue": [
+        37
+      ],
+      "type": "feat",
+      "release": "Phase 0-2",
+      "title": "편집 모드 — 코드를 안 보고 정의서 수정",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "정의서를 고치려면 지금은 window.SCREENSPEC 이라는 JS 객체를 직접 열어야 한다. 따옴표·쉼표를 한 글자 틀리면 정의서가 통째로 안 뜨므로 기획자는 사실상 개발자를 거쳐야 한다. 그런데 주 시나리오는 「AI 초안을 받아 손본다」이고, 손보기가 매번 남을 거치면 초안의 가치가 반감된다. 저장 경로도 없다 — 고친 결과를 파일로 되돌릴 방법이 라이브러리 안에 없다. Phase 0 의 심장인 이유는 같은 편집 UI 가 Phase 1 온라인 편집기의 몸통이 되기 때문이다(오프라인=파일 저장, 온라인=API 저장, 코드는 하나).",
+        "measured": "기획서가 「파일 접근 API 의 file:// 지원 범위를 구현 첫 주에 실측하라」고 요구 → 계획 전에 측정 완료. file:// 에서도 showOpenFilePicker·showSaveFilePicker 가 존재하고 isSecureContext=true 이며, 실제 창에서는 피커가 열린다(SecurityError 로 원본 거절되지 않음). 단 피커는 CDP 로도 자동 조작이 불가(이 크롬 빌드에 Page.handleFileChooser 없음) → 자동 검증 불가. 결론: 순수 로직(직렬화·블록 교체)과 브라우저 껍데기(피커·핸들)를 분리해 순수 로직만 e2e 로 두들기고, 피커 경로는 사용자 QA 항목으로 넘긴다.",
+        "change": "(1) screenspec.js — 편집 엔진(순수): serializeConfig(RAW) → 「window.SCREENSPEC = {…};」 텍스트(필드 순서 고정·들여쓰기 2칸·한글 이스케이프 없음), replaceConfigBlock(htmlText, block) → 설정 <script> 블록만 교체한 새 HTML. 둘 다 DOM 을 안 쓰는 순수 함수로 두고 window.ScreenSpec.serialize()·_replaceBlock 으로 노출해 e2e 가 직접 호출한다. (2) screenspec.js — 편집 UI: 툴바 「편집」 토글(화면정의서 모드에서만 보임, readonly:true 면 아예 안 만듦) · 패널 텍스트 클릭 → 그 자리 입력(Enter/바깥클릭=반영, Esc=취소) · 행 hover 컨트롤(+줄 · +이유 · ↑↓ · 삭제) · 항목 삭제는 확인 후. 편집 대상은 title · defs[].t · defs[].why · defs[].subs[] · parts 의 같은 필드로 한정. anno·target·play·preview·flowTo·screen 메타는 v1 제외. (3) screenspec.js — 저장 3경로: ①파일에 직접(File System Access, 있을 때만 노출·핸들은 세션 기억) ②다운로드 폴백(이름.edited.html) ③설정 블록 클립보드 복사. 어느 경로든 localStorage 초안이 항상 깔리고, 다시 열면 「저장 안 된 초안 — 이어서/버리기」 배너. 미저장이면 툴바에 ● 배지 + beforeunload 경고. (4) 편집은 SCREENS 가 RAW 와 같은 객체·배열을 참조한다는 성질을 이용해 spec 객체를 제자리 수정한다(단일화면은 RAW.specs 와 SCREENS[0].specs 가 동일 참조, 다중화면은 RAW.screens 자체). 삭제는 splice 로만 — 배열을 재대입하면 RAW 와 끊긴다. (5) docs/config.md — readonly 필드 행 + 「편집 모드」 절 + 공개 API 3개. (6) SKILL.md — 편집 모드 한 절(기획자가 코드를 안 보고 고친다). (7) README.md 기능 줄. (8) tests/e2e.js — 아래 qa 참조. 배치 제약: 「편집」 토글은 툴바(높이 50px) 안 기존 ss-modes 오른쪽에 넣고 새 고정 요소를 만들지 않는다. 초안 배너·저장바는 패널(폭 460px) 안쪽 상단에 흐름 배치로 넣어 마커 층·재현 중 띠(ss-pvbar, top:50px)와 겹치지 않게 한다. 기존 e2e 가 의존하는 ID·문구(#ss-mDoc·#ss-mProto·#ss-defsList·.ss-row·.ss-t·[data-play]·[data-preview]·.ss-cnt 문구)는 그대로 둔다.",
+        "accept": [
+          "편집 토글 ON → 패널의 항목명·정의 줄을 클릭해 고치고 Enter 로 반영되며, 화면정의서 표시가 즉시 바뀐다 (코드 한 줄도 안 본다)",
+          "serialize() 왕복 무손실 — 직렬화한 텍스트를 다시 평가하면 원래 설정과 값이 같다 (주석 제외)",
+          "replaceConfigBlock 산출물이 완전한 HTML 이며, 그 파일을 다시 열면 고친 내용이 그대로 뜬다",
+          "Esc 는 취소 — 고치던 값이 원래대로 돌아가고 미저장 표시도 안 생긴다",
+          "readonly: true 면 편집 토글이 아예 없다 (숨김이 아니라 미생성)",
+          "미저장 변경이 있으면 툴바에 ● 배지가 뜨고, 저장하면 사라지며 마지막 저장 시각이 보인다",
+          "저장 없이 닫았다 다시 열면 「저장 안 된 초안」 배너가 뜨고 「이어서」로 복원된다",
+          "편집 모드에서도 마커·▶ 재생·상태 재현 스위치가 그대로 동작한다 (기존 e2e 154건 전부 유지)",
+          "편집 UI 가 ScreenSpec 자체 고정 UI 와 겹치지 않는다 — 툴바 50px 안에 토글이 들어가고, 배너·저장바는 패널 460px 안쪽 흐름 배치라 재현 중 띠(top:50px)·마커 층을 가리지 않는다",
+          "node tests/lint.js 통과 — readonly 가 docs/config.md 에 문서화되어 필드 커버리지를 만족"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과 (필드 커버리지에 readonly 포함)",
+          "node tests/e2e.js — 기존 154 케이스 전부 유지 + 편집 신규 케이스 통과",
+          "신규 e2e (엔진·순수): 왕복 무손실(단일화면·다중화면·parts·subs·why 포함) / 특수문자(따옴표·역슬래시·줄바꿈·한글) 안전 / replaceConfigBlock 이 설정 블록만 바꾸고 나머지 HTML 은 바이트 그대로 / 설정 블록이 없는 HTML 이면 경고하고 안 쓴다",
+          "신규 e2e (UI): 토글로 편집 켜짐 / 항목명 수정 → 패널 반영 / Esc 취소 / +줄·삭제 / readonly 면 토글 미생성 / 미저장 배지 / 초안 저장·복원 / 편집 중 ▶ 재생 정상",
+          "신규 e2e (통합): 편집 → serialize → replaceConfigBlock → 그 HTML 을 새 페이지로 열기 → 고친 문구가 뜬다 (파일 저장을 뺀 전 경로를 브라우저 안에서 재현)",
+          "node tests/smoke.js — demo.html 외부 이미지 차단 1건만 허용 (변경 전에도 동일)",
+          "사용자 QA(자동화 불가): 실제 브라우저에서 프로토타입 HTML 을 열고 편집→「파일에 저장」→파일 선택→다시 열기 로 반영 확인. 피커는 자동 조작이 불가능해 e2e 로 못 덮는다"
+        ],
+        "docs": [
+          "docs/config.md — readonly 필드 표 행 + 「편집 모드」 절 + 공개 API(edit·serialize·dirty)",
+          "SKILL.md — 편집 모드 안내 (AI 초안 뒤 사람이 고치는 자리)",
+          "README.md — 기능 줄"
+        ],
+        "amend": "(G1 보정) 편집 토글을 툴바가 아니라 «패널 머리»(ctx.cntEl 의 부모)에 둔다. 이유: ① 툴바는 wrap 에만 있고 overlay 에는 없다 — 패널 머리는 둘 다 있어 구현이 하나로 끝난다 ② 패널 자체가 화면정의서 모드에서만 보이므로 기획서가 요구한 「프로토타입 모드에서는 숨김」이 저절로 만족된다 ③ 툴바(50px)를 안 건드리니 높이·겹침 위험이 0 이다. 기획서 원문의 의도(정의서 모드에서만 보이는 편집 진입점)는 그대로 지킨다."
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "routing": "프로토콜 v1.1 기준으로는 >40줄이라 opus 서브에이전트지만, 이번 세션은 서브에이전트 사용이 막혀 메인이 직접 한다. 프로토콜이 든 근거(서브에이전트는 컨텍스트를 처음부터 다시 읽어 비싸다)는 이미 전 맥락을 쥔 메인에는 반대로 작용한다 — log.md 에 회고 항목으로 적었다.",
+        "evidence": "screenspec.js +494줄 — ①편집 엔진(순수): serializeConfig·replaceConfigBlock·findConfigBlock·adoptInto, DOM 을 안 쓴다 ②편집 UI: 패널 머리 편집 토글·저장바·초안 배너, 글자는 contenteditable 로 제자리 수정(Enter 반영·Esc 취소), 구조는 ＋줄/＋하위 줄/＋이유/×/↑↓/삭제 ③저장 3경로(파일 접근 API·내려받기·설정 복사) + localStorage 초안 + beforeunload ④READONLY·SRC_SNAPSHOT·공개 API 3개(edit·serialize·dirty). 편집 손잡이는 EDIT 가 켜져야만 렌더돼 «꺼진 상태의 DOM 은 예전과 한 글자도 다르지 않다» — 기존 154 케이스가 그대로 통과하는 근거. docs/config.md +42(readonly 필드·편집 모드 절·API 3개) · SKILL.md +17(§3-G) · README.md +1 · tests/e2e.js +189(44 케이스). 계획 밖 변경 1건: scripts/inline.js +3 — 라이브러리에 HTML 주석 여는 표시가 들어가 인라인 산출물이 깨져 e2e 가 죽었다. 종료 태그는 이미 막고 있던 자리라 같은 종류의 가드를 한 줄 더 넣었다(원인이 이 이슈의 작업이고 기존 검사와 동종이라 되돌리지 않고 기록으로 남긴다)."
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 전부 통과(readonly 필드 커버리지 + 공개 API 3개 문서화 포함 — 셋 다 처음엔 FAIL 이었고 문서를 채워 통과시켰다). e2e PASS 198 / FAIL 0 — 기존 154 전부 유지 + 편집 44건 신규. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단, git stash -u 로 변경 전부 제거 후 재실행해도 동일하게 실패함을 다시 확인 — 회귀 아님. 범위 검사: 계획한 5개 파일 + 사유를 적은 inline.js + 프로토콜 기록 파일(tasks.json·log.md) 뿐. accept 10개 항목 중 9개는 e2e 로 자동 확인, 1개(파일 접근 API 로 원본 파일에 직접 저장)는 피커를 자동 조작할 수 없어 사용자 QA 로 넘긴다.",
+        "user_qa": "실제 브라우저(크롬·엣지)에서 프로토타입 HTML 을 로컬 서버로 열고 → 화면정의서 → 「편집」 → 문구 하나 수정 → 「파일에 저장」 → 그 HTML 파일 선택 → 페이지 새로고침. 고친 문구가 그대로 떠야 정상. 파일 선택 창은 자동 테스트가 조작할 수 없어 e2e 로 못 덮는 유일한 경로다."
+      },
+      "commit": {
+        "done": true,
+        "evidence": "feat: 편집 모드 — 코드를 안 보고 정의서 수정 (fix #37)"
+      }
+    },
+    {
+      "order": 3,
+      "issue": [
+        34
+      ],
+      "type": "feat",
+      "release": "Phase 0-3",
+      "title": "인쇄·화면별 PDF",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "고친 정의서를 남에게 보여줄 방법이 화면 공유뿐이다. 실무에서는 화면 하나를 종이 문서 형태로 뽑아 컨플·노션·결재에 붙이는데, 지금 Ctrl+P 를 누르면 툴바·패널·시트가 뒤섞여 아무 것도 못 쓴다. 브라우저의 「PDF 로 저장」이 곧 산출물이 되게 하면 서버도 계정도 없이 내보내기가 끝난다 — 로드맵 D6 이 「오프라인은 인쇄(PDF)가 담당한다」로 정해 둔 자리다.",
+        "change": "(1) screenspec.js — 인쇄 준비/복원: 인쇄 전용 컨테이너 .ss-print 를 body 끝에 만들고 «살아 있는 .ss-frame 을 그 안으로 옮긴다». 복제하지 않는다 — 앱 DOM 복제는 상태·스크립트를 잃는다. 옮기는 것은 이미 setMode 가 쓰는 검증된 동작이다. afterprint(+타임아웃 폴백)에서 원래 홀더로 되돌리고 컨테이너를 지운 뒤 layout() 으로 배치를 복구한다. (2) 인쇄 컨테이너 내용: ①화면 헤더(ID·화면명·경로) ②프로토타입(축소 배율을 A4 폭 기준으로 다시 계산) ③항목 표(번호·영역명·유형·기능 설명, flatItems 로 하위 1a·1b 포함, 「↳ 이유」 포함) ④꼬리(생성 일시 · Made with ScreenSpec). (3) CSS — @media print 에서 body.ss-printing 일 때 툴바·정의서 모드·프로토타입 래퍼·목차·툴팁·재현 중 띠를 감추고 .ss-print 만 보인다. @page{size:A4 portrait;margin:12mm}. 표 행과 프로토타입 블록에 break-inside:avoid. 화면에서는 .ss-print{display:none} 이라 깜빡임이 없다. (4) 대화상자 — <dialog>.showModal() 을 쓴다. 브라우저 최상위 레이어라 z-index 다툼도 겹침도 원천적으로 없다. 항목: 마커 표시/숨김 · 항목 표 포함/제외. 범위는 「현재 화면」 고정(일괄은 로드맵대로 유료 후보). 인쇄 직전에 닫는다. (5) 진입점 — 패널 머리(ctx.cntEl 의 부모)에 「인쇄」 버튼. #37 의 편집 버튼 옆이고 wrap·overlay 공용이며 화면정의서 모드에서만 보인다. (6) overlay 는 시트가 없다(앱이 페이지 그 자체) — 프로토타입 블록 없이 헤더+표+꼬리만 낸다. (7) 공개 API window.ScreenSpec.print(opts). (8) docs/config.md 인쇄 절 + API, SKILL.md 한 줄, README 기능 줄. (9) tests/e2e.js — 아래 qa. 배치 제약: 새 fixed 요소를 만들지 않는다(<dialog> 는 top layer 라 해당 없음). 기존 e2e 가 쓰는 ID·문구(#ss-mDoc·#ss-defsList·.ss-row·.ss-marker·.ss-editbtn)는 그대로 둔다.",
+        "accept": [
+          "정의서 패널에 「인쇄」 버튼이 있고, 누르면 마커·항목 표 선택 대화상자가 뜬다",
+          "인쇄 미디어에서 툴바·정의서 패널·목차·툴팁이 전부 사라지고 인쇄 블록만 남는다",
+          "인쇄 블록에 화면 ID·화면명·경로, 프로토타입, 항목 표(하위 1a·1b·이유 포함), 생성 일시가 있다",
+          "마커 숨김을 고르면 프로토타입만 깨끗하게 나온다 (마커·주석선 0개)",
+          "항목 표 제외를 고르면 표가 안 나온다",
+          "A4 세로 폭(약 703px)보다 넓은 PC 폭 프로토타입은 잘리지 않고 축소돼 들어간다",
+          "표 행이 페이지 중간에서 잘리지 않는다 (break-inside: avoid)",
+          "인쇄가 끝나면 화면이 원상 복귀한다 — 인쇄 전후 정의서 DOM 이 같고 마커도 제자리다",
+          "overlay 모드에서도 헤더+표+꼬리가 나온다 (시트가 없으므로 프로토타입 블록은 생략)",
+          "인쇄 UI 가 ScreenSpec 자체 고정 UI 와 겹치지 않는다 — 버튼은 패널 머리(460px) 안, 대화상자는 브라우저 최상위 레이어",
+          "node tests/lint.js 통과 — 새 공개 API 가 docs/config.md 에 문서화"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과",
+          "node tests/e2e.js — 기존 198 케이스 전부 유지 + 인쇄 신규 케이스 통과",
+          "신규 e2e: page.emulateMedia({media:\"print\"}) 로 인쇄 미디어를 실제로 켜고 ①툴바·패널이 안 보인다 ②인쇄 블록이 보인다 ③헤더·표·꼬리 내용 ④마커 숨김 옵션 ⑤표 제외 옵션 ⑥break-inside 계산값 ⑦PC 폭 축소 배율 ⑧인쇄 전후 DOM·마커 동일 ⑨overlay 경로",
+          "page.pdf() 로 실제 PDF 를 만들어 ①파일이 생성되고 ②페이지 수가 1 이상 ③본문 텍스트가 들어 있는지 확인 — 브라우저의 「PDF 로 저장」과 같은 경로다",
+          "node tests/smoke.js — demo.html 외부 이미지 차단 1건만 허용 (변경 전에도 동일)"
+        ],
+        "docs": [
+          "docs/config.md — 「인쇄·PDF」 절 + 공개 API print()",
+          "SKILL.md — 인쇄로 뽑는다 한 줄",
+          "README.md — 기능 줄"
+        ],
+        "open": "기획서의 열린 결정(A4 보다 넓은 PC 화면: 축소 vs 가로 용지 안내)은 기획서 제안대로 «축소»로 간다. 가로 용지는 사용자가 인쇄 대화상자에서 직접 고를 수 있으므로 우리가 강제할 이유가 없다."
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "routing": "#37 과 같은 사유 — 서브에이전트 사용이 막힌 세션이라 메인이 직접.",
+        "evidence": "screenspec.js — printPrepare/printRun/printOpen/prRows/headTools/prMount + @media print CSS + <dialog>. 핵심 선택: 살아 있는 .ss-frame 을 인쇄 컨테이너로 «옮긴다»(복제 아님) — e2e 가 .ss-frame 개수 1 을 확인해 못박는다. ctx.printTake/printGive 로 wrap 만 시트를 넘기고 overlay 는 안 넘겨 프로토타입 칸이 저절로 생략된다. printRun({prepareOnly:true}) 는 준비만 하고 되돌리기 함수를 준다 — 테스트 뒷문이 아니라 문서에 적은 공개 동작이다(인쇄 전 확인 용도). 인쇄 버튼은 #37 의 편집 버튼과 같은 .ss-headtools 자리(패널 머리)로 모았다. docs/config.md 인쇄 절 + API · SKILL.md · README.md · tests/e2e.js +26 케이스. 계획 밖 파일 변경 0건."
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 전부 통과 — 도중 1건 FAIL 이 났다: 인쇄 옵션 지역변수 o.markers·o.table 을 lint 의 Screen·Spec 필드 추출기가 설정 필드로 오인. 검사를 느슨하게 하는 대신 변수명을 pr 로 바꿔 통과시켰다. e2e PASS 224 / FAIL 0 — 기존 198 유지 + 인쇄 26 신규. 인쇄 케이스는 page.emulateMedia({media:\"print\"}) 로 «실제 인쇄 미디어» 를 켜고 검증했고, page.pdf() 로 진짜 PDF(566KB·4페이지)까지 만들어 확인했다. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단(회귀 아님, 앞선 두 이슈에서 stash 로 확인). accept 11개 전부 자동 확인 — 이번 이슈는 사용자 QA 로 넘긴 항목이 없다."
+      },
+      "commit": {
+        "done": true,
+        "evidence": "feat: 인쇄 · 화면별 PDF (fix #34)"
+      }
+    },
+    {
+      "order": 4,
+      "issue": [
+        38
+      ],
+      "type": "feat",
+      "release": "Phase 0-4",
+      "title": "개발 정의 레이어 형식",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "화면정의서는 기획자 혼자 쓰는 문서가 아니다. 개발 PM 이 같은 화면·같은 항목 옆에 개발 정의(정책·API·이벤트)를 적는데, 지금 설정에는 그걸 적을 자리가 없다. 그래서 개발 정의는 컨플루언스 다른 페이지로 흩어지고 기획 정의와 따로 논다. 결정 D2 가 「탭이 아니라 인라인 레이어」로 못박아 뒀다 — 개발 정의는 기획 정의를 «보면서» 쓰는 글이기 때문이다.",
+        "change": "(1) 데이터 — Def 에 layer?:\"dev\" (줄 단위. 생략 = 기획), Screen 에 dev?:Def[] (항목에 안 붙는 화면 공통). 줄 단위로 두는 이유는 한 항목 안에 기획·개발이 섞이는 게 실무의 실제 모습이라서다. (2) 렌더 — defItemsHTML(defs, want) 에 레이어 인자를 넣되 «원래 배열 인덱스(di)를 그대로 실어» 편집 모드가 옳은 줄에 쓰게 한다. 기획 줄은 ul.ss-items.ss-plan, 개발 줄은 div.ss-dev(다른 보더 색 + DEV 태그) 안의 ul 로. parts 도 동일. (3) 화면 공통 — screen.dev 는 정의 목록 «맨 위»에 「화면 공통 · 개발」 블록 하나. (기획서 원문은 「화면 헤더 아래」인데 그 헤더는 ID·화면명·경로가 가로로 늘어선 좁은 띠라 블록이 안 들어간다. 정의 목록 맨 위가 같은 뜻이면서 읽는 순서에 맞다.) (4) 필터 — 패널 머리에 칩 전체|기획|개발. 구현은 «CSS 전용»이다: 패널에 data-layer 를 걸고 .ss-dev / .ss-items.ss-plan 을 숨긴다. 모델을 안 건드리므로 마커·누락 경고·커버리지에 부작용이 원천적으로 없다(수용 기준이 요구하는 바). 행 자체는 숨기지 않는다 — 번호와 마커의 대응이 깨지면 안 된다. (5) 개발 정의가 문서에 하나도 없으면 칩을 만들지 않는다 — layer 없는 기존 문서는 화면이 한 픽셀도 안 바뀐다. (6) 편집(0-2) — 개발 줄도 같은 방식으로 고쳐진다(di 를 그대로 실었으므로 자동). 「＋ 개발 줄」 명령 추가(layer:\"dev\" 를 붙여 push). 직렬화 KEY_RANK 에 layer·dev 를 넣어 순서 고정. (7) 인쇄(0-3) — 대화상자에 레이어 선택을 더하고 prRows 가 같은 축으로 거른다. 개발 정의가 없으면 그 줄도 안 만든다. (8) docs/config.md(Def·Screen 타입 + 개발 레이어 절) · SKILL.md · README.md. (9) tests/e2e.js. 배치 제약: 칩은 패널 머리(.ss-headtools 옆) 안, 새 fixed 요소 없음. 기존 e2e 가 쓰는 .ss-items·.ss-row·.ss-marker·[data-play]·[data-ed] 는 그대로 둔다.",
+        "accept": [
+          "layer:\"dev\" 줄이 항목 행 안의 「개발」 블록(DEV 태그)으로 렌더된다",
+          "screen.dev 가 정의 목록 맨 위의 「화면 공통 · 개발」 블록으로 렌더된다",
+          "필터 칩 전체|기획|개발 이 동작한다 — 기획을 고르면 개발 블록이, 개발을 고르면 기획 줄이 안 보인다",
+          "필터는 마커 수·누락 경고·상태 커버리지에 아무 영향이 없다 (CSS 전용이라는 것이 e2e 로 확인된다)",
+          "필터를 걸어도 행과 마커의 번호 대응이 유지된다 (행 자체는 숨기지 않는다)",
+          "layer 가 하나도 없는 문서는 칩도 개발 블록도 안 생기고 기존과 완전히 동일하다 (하위 호환)",
+          "편집 모드에서 개발 줄의 글자를 고치면 그 줄(원래 인덱스)에 정확히 반영된다",
+          "편집 모드의 「＋ 개발 줄」 이 layer:\"dev\" 인 줄을 추가한다",
+          "직렬화가 layer·screen.dev 를 잃지 않는다 (왕복 무손실)",
+          "인쇄 대화상자에서 레이어를 고르면 항목 표가 그 축으로 걸러진다",
+          "개발 레이어 UI 가 ScreenSpec 자체 고정 UI 와 겹치지 않는다 — 칩은 패널 머리(460px) 안 흐름 배치",
+          "node tests/lint.js 통과 — layer·dev 가 docs/config.md 에 문서화 (Part 표 정합 포함)"
+        ],
+        "qa": [
+          "node tests/lint.js — 전부 통과 (Def·Screen·Part 타입 정합 검사 포함)",
+          "node tests/e2e.js — 기존 224 케이스 전부 유지 + 개발 레이어 신규 케이스 통과",
+          "신규 e2e: ①dev 블록·DEV 태그 렌더 ②화면 공통 블록 ③칩 3종 동작(computed display 로 실측) ④필터 전후 마커 수·경고 수 동일 ⑤layer 없는 문서에 칩·블록 0개 ⑥개발 줄 편집이 옳은 인덱스에 ⑦＋개발 줄 ⑧serialize 왕복에 layer·dev 보존 ⑨인쇄 레이어 필터",
+          "node tests/smoke.js — demo.html 외부 이미지 차단 1건만 허용 (변경 전에도 동일)"
+        ],
+        "docs": [
+          "docs/config.md — Def.layer · Screen.dev 타입 + Part 표 정합 + 「개발 정의 레이어」 절 + 인쇄 절에 레이어 한 줄",
+          "SKILL.md — 개발 정의는 개발 PM 이 쓴다 · AI 는 layer 를 함부로 붙이지 않는다",
+          "README.md — 기능 줄"
+        ],
+        "open": "기획서의 열린 결정(개발 정의에 API 경로·이벤트명 같은 구조 필드를 줄지)은 기획서 제안대로 «자유 텍스트로 시작»한다. 형식은 실제로 쓰는 걸 본 뒤에 정한다."
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "routing": "#37·#34 와 같은 사유 — 서브에이전트 사용이 막힌 세션이라 메인이 직접.",
+        "evidence": "screenspec.js — Def.layer·Screen.dev 렌더(defItemsHTML 에 레이어 인자, devBlockHTML·devCommonHTML·hasDev·anyDev), 필터 칩 lyMount, 편집의 ＋개발 줄, KEY_RANK 에 layer·dev, 인쇄 prRows(layer)+대화상자 레이어 선택. 두 가지가 이 건의 핵심: ①필터를 CSS 전용으로 짰다(.ss-defs-list[data-layer] 두 줄) — 모델을 안 건드리므로 마커·누락 경고·커버리지 부작용이 «설계상» 불가능하고, e2e 가 필터 전후 마커·행·항목 수 동일을 실측해 못박는다 ②걸러도 di 를 원래 배열 인덱스 그대로 실어 편집이 옳은 줄에 쓴다 — 배열 가운데(index 1)의 개발 줄을 고쳐 앞뒤 기획 줄이 그대로인지 e2e 가 확인한다. docs/config.md(Def·Screen 타입·개발 레이어 절·인쇄 표 한 줄) · SKILL.md · README.md · tests/e2e.js +24. 계획 밖 파일 변경 0건."
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 전부 통과 — 도중 1건 FAIL: 칩 코드의 x.setAttribute 를 Screen·Spec 필드 추출기가 설정 필드로 오인. 이번 사이클 세 번째 같은 유형이라 변수명을 chip 으로 바꿔 통과시키고 log.md 회고 항목에 적었다. e2e PASS 248 / FAIL 0 — 기존 224 유지 + 레이어 24 신규. 하위 호환은 별도 문서(layer 없음)로 칩·블록 0개와 정상 렌더를 확인. 인쇄 레이어 필터는 인쇄 미디어를 켜고 표 내용으로 확인. smoke FAIL 1건 = examples/demo.html 외부 이미지 차단(회귀 아님). accept 12개 전부 자동 확인 — 사용자 QA 로 넘긴 항목 없음."
+      },
+      "commit": {
+        "done": true,
+        "evidence": "feat: 개발 정의 레이어 (fix #38)"
+      }
+    },
+    {
+      "order": 5,
+      "issue": [
+        40,
+        41
+      ],
+      "type": "feat",
+      "release": "Phase 0-3 개정 · 0-7",
+      "title": "내보내기 — PNG 하나로 통일 · 세 모드 전부 · 기획/개발 순서",
+      "status": "done",
+      "plan": {
+        "done": true,
+        "cause": "기획자 피드백: 목적지는 A4 문서가 아니라 컨플루언스 페이지이고 거기서는 이미지를 붙인 뒤 설명을 옆에 직접 쓴다. 그리고 화면 공통 개발 블록만 목록 맨 위에 있어 층마다 순서가 달랐다.",
+        "measured": "① 의존성 0 캡처 가능 여부 — DOM→SVG→canvas 로 2배 해상도 100~240ms, 3/3 성공(준비 3가지: 주석 노드 제거·CSS CDATA·여백). html2canvas 는 gzip 48KB 로 라이브러리 전체(46KB)보다 커서 후보 탈락 ② 잘림 실측 — 기기 높이(800px)만 캡처하면 shop 은 988px·demo 는 3474px 이 날아가고 demo 는 마커 10개 중 7개가 사라진다. 그래서 기본을 화면 전체 높이로 확정",
+        "change": "capPNG/capBuild/exportImage 신설 · 대화상자를 형식(이미지/인쇄)+번호+머리말+표로 · 버튼을 패널 머리에서 툴바(wrap)·알약(overlay)으로 이동하고 「내보내기」로 개명 · 표 기본값을 끔으로 · devCommonHTML 을 목록 맨 아래로 · lint 에 gzip 60KB 상한 · README 호환 약속",
+        "change2": "(피드백 2차) PDF/인쇄를 통째로 스펙아웃하고 PNG 하나만 남긴다. 「기술적으로 불가능해서 overlay·frame 은 이미지가 안 된다」던 내 말이 틀렸다 — 실측으로 셋 다 가능함을 확인하고 세 모드 모두 지원한다. 대화상자 문구는 「번호 표시 / 머리말 표시 / 기능 설명 포함」으로 바꾸고, 레이어는 「기능 설명 포함」을 켜야 활성화한다(표가 없으면 거를 것이 없다). 「컨플루언스·노션에 붙일 수 있게」 설명 문구는 PNG 라는 것 자체가 설명이라 뺀다."
+      },
+      "dev": {
+        "done": true,
+        "model": "main",
+        "evidence": "작업 중 발견해 같이 고친 것 2건: ①조립 상자를 화면 밖(-99999px)에 두는데 그 위치가 SVG 안까지 따라가 «백지 PNG» 가 나왔다 — 사본에서 무력화하고, 나아가 잉크 비율을 세어 백지면 성공이라고 말하지 않게 했다 ②인쇄 CSS 의 .ss-ov-pill 은 존재하지 않는 클래스였다(진짜는 .ss-pill) — #34 부터 overlay 알약이 인쇄에 찍히고 있었다. 여백은 고정 30px 에서 «마커가 실제로 튀어나온 만큼» 실측으로 바꿨다(사용자 피드백 — 폭 840→720, 기기 폭에 딱 맞음)",
+        "evidence2": "ctx.capSource() 로 «무엇을 캡처할지» 만 모드가 알려 주게 하고 엔진은 공용으로. wrap=시트를 옮김(상태 보존) · overlay=본문 사본+뷰어 UI 제거 · frame=same-origin 으로 액자 안 문서를 직접 뜨고 마커를 얹음. 그 과정에서 마커가 머리말 높이만큼 밀리는 버그를 잡았다(마커는 absolute 인데 기준이 될 것이 없어 position:fixed 인 조립 상자를 기준으로 잡혔다 — 캡처 대상을 position:relative 로 세워 해결). overlay 는 정의서 모드가 본문 오른쪽에 400px 를 비워 두므로 폭에서 빼서 흰 띠를 없앴다. 인쇄 코드·CSS(@media print·@page·ss-printing·printPrepare·printRun)와 공개 API print 를 전부 제거."
+      },
+      "qa": {
+        "done": true,
+        "evidence": "lint 전부 통과(gzip 50.7KB / 상한 60KB 포함). e2e PASS 261 / FAIL 0 — 248 에서 +13. 이미지 케이스는 실제로 PNG 를 만들어 «백지가 아닌지(잉크 비율)»·«전체 높이인지»·«폭이 기기 폭에 맞는지»·«원상 복귀»까지 확인. smoke 는 demo.html 외부 이미지 차단 1건(회귀 아님).",
+        "evidence2": "lint 전부 통과(gzip 50.4KB / 상한 60KB). e2e PASS 247 / FAIL 0 — 인쇄 케이스를 걷어내고 내보내기 케이스로 대체, 세 모드 전부 실제 PNG 를 만들어 백지 여부·전체 높이·폭·원상 복귀를 확인. 레이어 활성화 조건도 케이스로 못박음. smoke 는 demo.html 외부 이미지 차단 1건(회귀 아님)."
+      },
+      "commit": {
+        "done": true
+      }
+    }
+  ],
+  "cycle_qa": {
+    "done": true,
+    "lint": "전부 통과 (버전 정합 4항목 + gzip 60KB 상한 포함)",
+    "e2e": "PASS 261 / FAIL 0 — 사이클 시작 150 에서 +111",
+    "smoke": "FAIL 1건 = examples/demo.html 외부 이미지 차단. 이슈마다 git stash 로 변경을 제거하고 재실행해 동일하게 실패함을 확인 — 샌드박스 한정이며 회귀 아님",
+    "release_pre": "node scripts/release.js --pre 통과 — CHANGELOG 최상단 v0.20.0 · 문서 CDN 태그 v0.20.0 일치"
+  },
+  "release": {
+    "done": false,
+    "version": "0.20.0",
+    "note": "버전 bump + CHANGELOG 커밋까지 완료. 실제 배포(main 머지 → 태그 → gh release → CDN 퍼지)는 사용자 확인 뒤."
+  },
+  "retro": {
+    "done": true,
+    "file": "docs/sprint/2026-08-27-cycle/retro.md",
+    "lint_added": [
+      "18) 인라인 빌드를 깨뜨리는 스크립트 종료 태그·HTML 주석 여는 표시 (음성 테스트로 검증)",
+      "Screen·Spec 필드 추출기에서 o·x 접두사 제거 — 고유 기여 0개 실측 확인"
+    ],
+    "protocol_applied": "issue-cycle.md v1.1 → v1.2 — ①G1 「먼저 재고 계획한다」 ②G2 라우팅 맥락 보유 예외(원안보다 좁게: 맥락+한 덩이+컨텍스트 여유) ③fixed UI 수치 정정(툴바 50px·패널 460/400px). 사용자가 판단을 위임함."
+  }
+}

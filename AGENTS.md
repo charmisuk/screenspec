@@ -21,6 +21,7 @@
 | `.github/workflows/release.yml` | 릴리스를 Actions 버튼으로 (같은 검사를 release.js 와 공유) |
 | `scripts/backlog-sync.js` | GitHub 이슈 ↔ Notion 보드 싱크 검사 (로컬 전용) |
 | `docs/sprint/` | 이슈 사이클 작업 기록 (tasks.json·회고) — 내부 로그, 라이브러리 동작과 무관 |
+| `docs/product/` | 제품 로드맵·단계별 상세기획 — 전략 결정의 단일 출처 (라이브러리 동작과 무관) |
 
 ## 검증 (변경 후 반드시)
 

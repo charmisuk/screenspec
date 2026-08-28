@@ -32,6 +32,9 @@ if (!fs.existsSync(LIB_PATH)) die("screenspec.js 를 찾을 수 없다: " + LIB_
 
 const lib = fs.readFileSync(LIB_PATH, "utf8");
 if (lib.includes(CLOSE)) die("라이브러리에 스크립트 종료 태그가 있어 인라인할 수 없다");
+/* 여는 주석 표시도 같은 함정이다 — <script> 안에서 파서를 escaped 상태로 넣어 닫는 태그를 못 보게 만든다 */
+const OPEN_C = "<" + "!--";
+if (lib.includes(OPEN_C)) die("라이브러리에 HTML 주석 여는 표시가 있어 인라인할 수 없다");
 
 let html = fs.readFileSync(input, "utf8");
 

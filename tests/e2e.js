@@ -435,6 +435,16 @@ function check(name, ok, detail) {
     return { dl: Math.round(Math.abs(m.left - (ir.left + t.left))), dt: Math.round(Math.abs(m.top - (ir.top + t.top))) };
   });
   check("정의서 모드: 마커가 액자 안 대상 위 (±14px)", mk.dl <= 14 && mk.dt <= 14, JSON.stringify(mk));
+  /* 액자는 앱이 iframe 안이라 «옮길 시트» 가 없다. same-origin 이 조건이므로 안쪽 문서를 직접 뜬다 (#40) */
+  const frImg = await page.evaluate(async () => {
+    const r = await window.ScreenSpec.exportImage({ markers: true, head: true });
+    return { ok: r.ok, w: r.w, h: r.h, ink: r.ink, why: r.why };
+  });
+  check("frame: 액자 안 문서를 떠서 PNG 로 뽑는다", frImg.ok === true, JSON.stringify(frImg));
+  check("frame: 백지가 아니다", frImg.ink > 0.5, JSON.stringify(frImg));
+  check("frame: 내보낸 뒤 조립 상자가 남지 않고 액자도 그대로", await page.evaluate(() =>
+    document.querySelectorAll(".ss-cap").length === 0 &&
+    document.querySelectorAll(".ss-sheet iframe[data-ss-frame]").length === 1));
   const widthOf = () => page.evaluate(() => {
     const f = document.querySelector("iframe[data-ss-frame]");
     return { w: f.clientWidth, dir: f.contentWindow.getComputedStyle(f.contentDocument.querySelector(".gnb")).flexDirection };
@@ -1052,6 +1062,480 @@ function check(name, ok, detail) {
     check("#screenspec (해시·값 생략) → 켜짐", await page.evaluate(() =>
       !!document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "wrap"));
     srv2.close();
+  }
+
+  /* ============ style — AI 가 읽는 계약. 라이브러리는 형식만 보고 렌더는 바꾸지 않는다 (#36) ============ */
+  console.log("[docs] style 설정");
+  {
+    const base = (styleLine) => '<div id="a" data-spec="1">본문</div><script>window.SCREENSPEC={' + styleLine +
+      'screen:{id:"S-A",name:"a"},specs:[{n:1,target:"1",title:"본문",defs:[{t:"한 줄"}]}]};</script>';
+    const boot = async (html) => {
+      const warns = [];
+      const on = (m) => { if (m.type() === "warning") warns.push(m.text()); };
+      page.on("console", on);
+      await page.goto("about:blank");
+      await page.setContent(html);
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(400);
+      const rows = await page.locator(".ss-defs-list .ss-row").count();
+      page.off("console", on);
+      return { st: warns.filter((x) => x.includes("style")), rows };
+    };
+
+    const none = await boot(base(""));
+    check("style: 없으면 경고 0 · 정상 렌더", none.st.length === 0 && none.rows === 1, JSON.stringify(none));
+
+    const okStyle = await boot(base('style:{vocab:{prefixes:["기본값 :"],endings:["~가능"]},idScheme:"SCR-{n}",notes:"존댓말 금지"},'));
+    check("style: 올바르면 경고 0 · 렌더는 없을 때와 동일", okStyle.st.length === 0 && okStyle.rows === none.rows, JSON.stringify(okStyle));
+
+    const notObj = await boot(base('style:"문자열",'));
+    check("style: 객체가 아니면 경고 1회 · 그래도 정상 렌더",
+      notObj.st.length === 1 && notObj.st[0].includes("객체") && notObj.rows === 1, JSON.stringify(notObj));
+
+    const badVocab = await boot(base('style:{vocab:{prefixes:"문자열"},idScheme:12},'));
+    check("style: 하위 필드 타입이 틀리면 어긋난 항목을 짚어 경고 1회",
+      badVocab.st.length === 1 && badVocab.st[0].includes("vocab.prefixes") && badVocab.st[0].includes("idScheme") && badVocab.rows === 1,
+      JSON.stringify(badVocab));
+  }
+
+  /* ============ 편집 모드 — 코드를 안 보고 정의서를 고친다 (#37) ============
+     http 로 띄운다: localStorage(초안)·fetch(원본)·다운로드가 file:// 나 about:blank 에서는 막힌다.
+     기획자가 실제로 쓰는 자리(로컬 서버·공유 링크)와 같은 조건이다. */
+  console.log("[edit] 편집 모드");
+  {
+    const PROTO = '<!DOCTYPE html>\n<html lang="ko"><head><meta charset="utf-8"><title>편집 대상</title></head>\n' +
+      '<body>\n<div id="a" data-spec="1">가</div>\n<div id="b" data-spec="2">나</div>\n' +
+      "<script>\nwindow.SCREENSPEC = {\n  screen: { id: \"S-A\", name: \"화면\" },\n  specs: [\n" +
+      '    { n:1, target:"1", title:"머리", defs:[{ t:"첫 줄", why:"근거" },{ t:"둘째 줄", subs:["하위"] }] },\n' +
+      '    { n:2, target:"2", anno:"action", title:"몸통", defs:[{ t:"한 줄" }], play:{ selector:"#b", label:"눌러 보기" } }\n' +
+      "  ]\n};\n<" + '/script>\n<script src="/screenspec.js"><' + "/script>\n<p id=\"tail\">꼬리</p>\n</body></html>\n";
+    const srv = http.createServer((rq, rs) => {
+      if (rq.url.indexOf("/screenspec.js") === 0) { rs.writeHead(200, { "Content-Type": "text/javascript" }); return rs.end(LIB); }
+      if (rq.url.indexOf("/ro") === 0) { rs.writeHead(200, { "Content-Type": "text/html" }); return rs.end(PROTO.replace("window.SCREENSPEC = {", "window.SCREENSPEC = {\n  readonly: true,")); }
+      rs.writeHead(200, { "Content-Type": "text/html" });
+      rs.end(PROTO);
+    });
+    await new Promise((r) => srv.listen(4197, r));
+    const open = async (p) => {
+      await page.goto("http://localhost:4197" + (p || "/"));
+      await page.waitForTimeout(500);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+    };
+
+    /* --- 진입 --- */
+    await open();
+    check("편집: 정의서 패널에 편집 버튼", (await page.locator(".ss-editbtn").count()) === 1);
+    check("편집: 끄면 정의서 DOM 이 예전과 같다 (편집 표식 0개)", (await page.locator("[data-ed]").count()) === 0);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+    check("편집: 켜면 body 에 표시", await page.evaluate(() => document.body.classList.contains("ss-editing")));
+    check("편집: 고칠 수 있는 글자에 표식이 붙는다", (await page.locator("[data-ed]").count()) >= 6);
+    check("편집: 저장바가 보인다", await page.evaluate(() => getComputedStyle(document.querySelector(".ss-edbar")).display === "flex"));
+    check("편집: 저장 경로 안내 (내려받기·설정 복사는 늘 있다)", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-edbar [data-sv]")].map((x) => x.dataset.sv).join(",").includes("down,copy")));
+    check("편집: 새 고정 요소를 만들지 않는다 (마커·띠를 가릴 일이 없다)", await page.evaluate(() =>
+      [".ss-edbar", ".ss-draft", ".ss-editbtn"].every((s) => {
+        const el = document.querySelector(s);
+        return !el || getComputedStyle(el).position !== "fixed";
+      })));
+
+    /* --- 글자 고치기 --- */
+    await page.click('[data-defrow="1"] .ss-t');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("고친 머리");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    check("편집: 항목명이 설정에 들어간다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "고친 머리"));
+    check("편집: 화면에도 그대로", await page.evaluate(() => document.querySelector('[data-defrow="1"] .ss-t').textContent === "고친 머리"));
+    check("편집: 미저장 표시가 뜬다", await page.evaluate(() => document.querySelector(".ss-editbtn").classList.contains("ss-dirty") && window.ScreenSpec.dirty()));
+
+    await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("고친 첫 줄");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    check("편집: 설명 줄도 고쳐진다", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t === "고친 첫 줄"));
+
+    /* --- Esc 는 취소 --- */
+    await page.click('[data-defrow="2"] .ss-t');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("버릴 값");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    check("편집: Esc 는 설정을 안 바꾼다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"));
+    check("편집: Esc 는 화면도 되돌린다", await page.evaluate(() => document.querySelector('[data-defrow="2"] .ss-t').textContent === "몸통"));
+
+    /* --- 구조 --- */
+    await page.click('[data-defrow="2"] [data-ec="addline"]');
+    await page.waitForTimeout(200);
+    check("편집: 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
+    await page.click('[data-defrow="1"] [data-ec="delline"][data-di="0"]');
+    await page.waitForTimeout(200);
+    check("편집: 줄 삭제", await page.evaluate(() => window.SCREENSPEC.specs[0].defs.length === 1 && window.SCREENSPEC.specs[0].defs[0].t === "둘째 줄"));
+    await page.click('[data-defrow="1"] [data-ec="addwhy"][data-di="0"]');
+    await page.waitForTimeout(200);
+    check("편집: 이유 붙이기", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].why === "이유"));
+    await page.click('[data-defrow="2"] [data-ec="up"]');
+    await page.waitForTimeout(250);
+    check("편집: 순서 바꾸기", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "몸통"));
+    check("편집: 순서를 바꾸면 번호를 1부터 다시 매긴다", await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n).join() === "1,2"));
+    check("편집: 마커 번호도 따라온다", await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((x) => x.textContent).join() === "1,2"));
+
+    /* --- 편집 중에도 문서는 살아 있다 --- */
+    await page.click('.ss-defs-list [data-play="1"]');
+    await page.waitForTimeout(250);
+    check("편집 중에도 ▶ 재생이 동작한다", (await page.locator(".ss-marker").count()) === 2 && await page.evaluate(() => document.body.classList.contains("ss-editing")));
+
+    /* --- 직렬화 (공개 API) --- */
+    const ser = await page.evaluate(() => {
+      const txt = window.ScreenSpec.serialize();
+      const w = {};
+      new Function("window", txt)(w);
+      /* 키 순서는 «일부러» 정규화한다(필드 순서 고정) — 그래서 왕복은 값으로 본다 */
+      const norm = (v) => Array.isArray(v) ? v.map(norm)
+        : (v && typeof v === "object") ? Object.keys(v).sort().reduce((o, k) => (o[k] = norm(v[k]), o), {})
+        : v;
+      return {
+        same: JSON.stringify(norm(w.SCREENSPEC)) === JSON.stringify(norm(window.SCREENSPEC)),
+        ordered: txt.indexOf("screen:") < txt.indexOf("specs:") && txt.indexOf("n: 1") < txt.indexOf("title:"),
+        twice: txt === window.ScreenSpec.serialize(),
+        head: txt.slice(0, 20),
+        got: JSON.stringify(norm(w.SCREENSPEC)).slice(0, 300),
+        want: JSON.stringify(norm(window.SCREENSPEC)).slice(0, 300),
+      };
+    });
+    check("편집: serialize 왕복 무손실 (값 기준)", ser.same, { got: ser.got, want: ser.want });
+    check("편집: 필드 순서를 고정한다 (고친 줄만 바뀐 파일이 나오게)", ser.ordered);
+    check("편집: 같은 설정이면 늘 같은 텍스트 (저장이 결정적)", ser.twice);
+    check("편집: serialize 는 window.SCREENSPEC 대입문", ser.head.indexOf("window.SCREENSPEC") === 0, ser.head);
+
+    /* 스크립트를 깨뜨리려는 글자를 넣어도 블록이 안 깨져야 한다 */
+    await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("종료 시도 <" + "/script><" + "script>alert(1)");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    const esc = await page.evaluate(() => {
+      const txt = window.ScreenSpec.serialize();
+      const w = {};
+      new Function("window", txt)(w);
+      return { leaks: /<\/script/i.test(txt), back: w.SCREENSPEC.specs[0].defs[0].t };
+    });
+    check("편집: 스크립트 종료 태그가 그대로 새어 나가지 않는다", !esc.leaks);
+    check("편집: 그래도 값은 원래 글자 그대로 복원된다", esc.back.indexOf("종료 시도") === 0, esc.back);
+
+    /* --- 내려받기: replaceConfigBlock 을 실제 경로로 검증 --- */
+    const dl = await Promise.all([page.waitForEvent("download"), page.click('.ss-edbar [data-sv="down"]')]);
+    const saved = path.join(require("os").tmpdir(), "ss-edited.html");
+    await dl[0].saveAs(saved);
+    const outHtml = fs.readFileSync(saved, "utf8");
+    check("내려받기: 파일 이름이 .edited.html", /\.edited\.html$/.test(dl[0].suggestedFilename()), dl[0].suggestedFilename());
+    check("내려받기: 고친 내용이 들어 있다", outHtml.includes("고친 머리"));
+    check("내려받기: 프로토타입 코드는 그대로 남는다", outHtml.includes('id="tail"') && outHtml.includes('data-spec="2"'));
+    check("내려받기: 라이브러리 스크립트 태그도 그대로", /<script[^>]+src=[^>]*screenspec\.js/.test(outHtml));
+    check("내려받기: 미저장 표시가 사라진다", await page.evaluate(() => !window.ScreenSpec.dirty()));
+
+    /* 산출물을 다시 열면 고친 내용이 뜬다 — 저장의 목적 그 자체 */
+    const srv2 = http.createServer((rq, rs) => {
+      if (rq.url.indexOf("/screenspec.js") === 0) { rs.writeHead(200, { "Content-Type": "text/javascript" }); return rs.end(LIB); }
+      rs.writeHead(200, { "Content-Type": "text/html" });
+      rs.end(outHtml);
+    });
+    await new Promise((r) => srv2.listen(4196, r));
+    await page.goto("http://localhost:4196/");
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("내려받기: 산출물을 열면 고친 내용이 뜬다", await page.evaluate(() => document.body.innerText.includes("고친 머리")));
+    check("내려받기: 산출물도 정상 부팅 (마커 2개)", (await page.locator(".ss-marker").count()) === 2);
+    srv2.close();
+
+    /* --- 저장 안 된 초안 --- */
+    await open();
+    await page.click(".ss-editbtn");
+    await page.click('[data-defrow="1"] .ss-t');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("초안만 고침");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(250);
+    check("초안: 고치면 브라우저에 자동으로 깔린다", await page.evaluate(() =>
+      Object.keys(localStorage).some((k) => k.indexOf("screenspec:draft") === 0)));
+    await open(); /* 저장 없이 떠났다가 다시 온다 */
+    check("초안: 다시 열면 배너가 뜬다", await page.evaluate(() => document.querySelector(".ss-draft").classList.contains("ss-show")));
+    check("초안: 배너가 뜨기만 하고 설정을 멋대로 바꾸지는 않는다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "머리"));
+    await page.click('.ss-draft [data-dc="take"]');
+    await page.waitForTimeout(250);
+    check("초안: 「이어서」 를 누르면 되살아난다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "초안만 고침"));
+    check("초안: 되살리면 화면에도 뜬다", await page.evaluate(() => document.body.innerText.includes("초안만 고침")));
+    check("초안: 되살리면 편집 모드로 들어간다", await page.evaluate(() => document.body.classList.contains("ss-editing")));
+    await open();
+    await page.click('.ss-draft [data-dc="drop"]');
+    await page.waitForTimeout(200);
+    check("초안: 「버리기」 를 누르면 지워진다", await page.evaluate(() =>
+      !Object.keys(localStorage).some((k) => k.indexOf("screenspec:draft") === 0)));
+
+    /* --- readonly: 숨김이 아니라 미생성 --- */
+    await open("/ro");
+    check("readonly: 편집 버튼을 아예 만들지 않는다", (await page.locator(".ss-editbtn").count()) === 0);
+    check("readonly: 저장바도 없다", (await page.locator(".ss-edbar").count()) === 0);
+    check("readonly: edit() 를 불러도 편집이 안 켜진다", await page.evaluate(() => {
+      window.ScreenSpec.edit(true);
+      return !document.body.classList.contains("ss-editing");
+    }));
+    check("readonly: 정의서 자체는 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    srv.close();
+  }
+
+  /* ============ PNG 내보내기 (#40) — 컨플·노션에 붙일 그림 한 장 ============
+     실제로 PNG 를 만들어 «백지가 아닌지(잉크 비율)» 까지 본다. 클래스만 세는 검사는
+     「그림이 제대로 나오는가」를 검증하지 못한다. 세 모드(wrap·overlay·frame) 전부 확인한다. */
+  console.log("[export] PNG 내보내기");
+  {
+    const shoot = (opt) => page.evaluate(async (o) => {
+      const r = await window.ScreenSpec.exportImage(o);
+      return { ok: r.ok, w: r.w, h: r.h, ink: r.ink, remote: r.remote, why: r.why };
+    }, opt || {});
+
+    /* --- wrap --- */
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
+    await page.waitForTimeout(1000);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("내보내기: 툴바에 있다 (패널이 아니라 화면 전체에 작용하므로)", await page.evaluate(() => {
+      const b = document.querySelector(".ss-prbtn");
+      return !!b && !!b.closest(".ss-toolbar") && !b.closest(".ss-defs");
+    }));
+    check("내보내기: 이름이 「내보내기」", await page.evaluate(() => document.querySelector(".ss-prbtn").textContent.trim() === "내보내기"));
+    check("내보내기: 대화상자는 번호·머리말·기능 설명 세 가지만 (PDF 는 없다)", await page.evaluate(() => {
+      document.querySelector(".ss-prbtn").click();
+      const d = document.querySelector(".ss-prdlg");
+      return !!d && d.open && !!d.querySelector("#ss-prMark") && !!d.querySelector("#ss-prHead") &&
+        !!d.querySelector("#ss-prTable") && !d.querySelector("#ss-prImg");
+    }));
+    check("내보내기: 번호·머리말은 기본 켬 · 기능 설명은 기본 끔", await page.evaluate(() => {
+      const d = document.querySelector(".ss-prdlg");
+      return d.querySelector("#ss-prMark").checked && d.querySelector("#ss-prHead").checked &&
+        !d.querySelector("#ss-prTable").checked;
+    }));
+    await page.evaluate(() => document.querySelector(".ss-prdlg").close());
+
+    const dev = await page.evaluate(() => ({
+      기기높이: document.querySelector(".ss-sheet").offsetHeight,
+      내용높이: document.querySelector(".ss-sheet").scrollHeight,
+      기기폭: document.querySelector(".ss-sheet").offsetWidth,
+      마커: document.querySelectorAll(".ss-marker").length,
+    }));
+    const img = await shoot({ markers: true, head: true });
+    check("wrap: 내보내기가 성공한다", img.ok === true, JSON.stringify(img));
+    check("wrap: 백지가 아니다 (잉크 비율로 확인)", img.ink > 5, JSON.stringify(img));
+    check("wrap: «화면 전체 높이» 로 뽑는다 — 기기 높이만 자르면 아래쪽 마커가 사라진다",
+      img.h / 2 > dev.내용높이 * 0.9, JSON.stringify({ img: img.h, dev: dev }));
+    check("wrap: 폭이 기기 폭에 딱 맞는다 (쓸데없는 흰 띠 없음)",
+      img.w / 2 >= dev.기기폭 && img.w / 2 <= dev.기기폭 + 60, JSON.stringify({ img: img.w / 2, 기기폭: dev.기기폭 }));
+    check("wrap: 내보낸 뒤 화면이 원상 복귀한다", await page.evaluate((d) =>
+      document.querySelectorAll(".ss-cap").length === 0 &&
+      !document.querySelector(".ss-sheet").style.height &&
+      document.querySelector(".ss-frame").parentElement.id === "ss-docHolder" &&
+      document.querySelectorAll(".ss-marker").length === d.마커, dev));
+
+    const noHead = await shoot({ head: false, markers: false });
+    check("wrap: 머리말을 끄면 그만큼 세로가 짧아진다", noHead.ok && noHead.h < img.h, JSON.stringify({ noHead, img }));
+    check("wrap: 머리말을 꺼도 백지가 아니다", noHead.ink > 5, JSON.stringify(noHead));
+    const withTable = await shoot({ table: true });
+    check("wrap: 기능 설명을 포함하면 세로가 길어진다", withTable.ok && withTable.h > img.h, JSON.stringify({ withTable, img }));
+
+    /* --- 바깥 주소 이미지 · 주석에 «--» 가 있는 프로토타입 --- */
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
+    await page.waitForTimeout(1000);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    const rem = await shoot({});
+    check("wrap: 바깥에서 불러오는 이미지 개수를 알려 준다 (빈칸으로 나오므로)", rem.ok === true && rem.remote >= 1, JSON.stringify(rem));
+    check("wrap: 주석에 «--» 가 있는 프로토타입도 캡처된다 (XML 이 안 깨진다)", rem.ok === true, JSON.stringify(rem));
+
+    /* --- overlay: 옮길 시트가 없어 사본을 뜬다 --- */
+    const srvOv = http.createServer((rq, rs) => {
+      const u = rq.url.split("?")[0].split("#")[0];
+      const p = u.indexOf("/screenspec.js") === 0 ? "/screenspec.js" : "/examples/overlay-spa.html";
+      rs.writeHead(200, { "Content-Type": p.endsWith(".js") ? "text/javascript" : "text/html" });
+      rs.end(fs.readFileSync(path.join(REPO, p)));
+    });
+    await new Promise((r) => srvOv.listen(4192, r));
+    await page.goto("http://localhost:4192/");
+    await page.waitForTimeout(1000);
+    await page.click("#ss-ovDoc");
+    await page.waitForTimeout(500);
+    check("내보내기(overlay): 버튼이 모드 알약에 있다", await page.evaluate(() =>
+      !!document.querySelector(".ss-pill .ss-prbtn")));
+    const ov = await shoot({ markers: true, head: true });
+    check("overlay: 내보내기가 성공한다", ov.ok === true, JSON.stringify(ov));
+    check("overlay: 백지가 아니다", ov.ink > 0.3, JSON.stringify(ov));
+    check("overlay: 뷰어 UI(패널·알약·헤더)는 그림에 안 들어간다", await page.evaluate(async () => {
+      /* 캡처 직전 사본에서 무엇이 빠지는지 — 조립 상자를 잡아 확인한다 */
+      let seen = null;
+      const mo = new MutationObserver(() => {
+        const box = document.querySelector(".ss-cap");
+        if (box && seen === null) seen = box.querySelectorAll(".ss-ov-panel,.ss-pill,.ss-ov-header,.ss-toc").length;
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+      await window.ScreenSpec.exportImage({});
+      mo.disconnect();
+      return seen === 0;
+    }));
+    check("overlay: 내보낸 뒤 조립 상자가 남지 않는다", (await page.locator(".ss-cap").count()) === 0);
+    check("overlay: 앱 DOM 이 그대로다 (사본을 떴을 뿐)", await page.evaluate(() =>
+      !!document.querySelector("[data-spec]") && document.querySelectorAll(".ss-ov-panel").length === 1));
+    srvOv.close();
+  }
+
+  /* ============ 개발 정의 레이어 (#38) ============
+     개발 정의는 기획 정의를 «보면서» 쓰는 글이라 탭으로 가르지 않고 같은 항목 안에 넣는다 (결정 D2).
+     필터는 CSS 전용이어야 한다 — 모델을 건드리면 마커·경고가 따라 흔들린다. 그걸 실측으로 못박는다. */
+  console.log("[layer] 개발 정의 레이어");
+  {
+    const withDev = '<div data-spec="1">가</div><div data-spec="2">나</div><script>window.SCREENSPEC={' +
+      'screen:{id:"S-A",name:"화면",dev:[{t:"인증 : Bearer 토큰"},{t:"에러코드 4xx 는 토스트"}]},specs:[' +
+      '{n:1,target:"1",title:"머리",defs:[{t:"기획 한 줄"},{t:"GET /api/items", layer:"dev"},{t:"기획 둘째 줄"}]},' +
+      '{n:2,target:"2",title:"몸통",defs:[{t:"기획만 있는 항목"}]}]};<' + "/script>";
+    const plain = '<div data-spec="1">가</div><div data-spec="2">나</div><script>window.SCREENSPEC={' +
+      'screen:{id:"S-B",name:"옛 문서"},specs:[{n:1,target:"1",title:"머리",defs:[{t:"한 줄"}]},' +
+      '{n:2,target:"2",title:"몸통",defs:[{t:"한 줄"}]}]};<' + "/script>";
+    const boot = async (html) => {
+      await page.goto("about:blank");
+      await page.setContent(html);
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+    };
+    const disp = (sel) => page.evaluate((s) => {
+      const el = document.querySelector(s);
+      return el ? getComputedStyle(el).display : "(없음)";
+    }, sel);
+
+    await boot(withDev);
+    check("레이어: 개발 줄이 항목 안 개발 블록으로", await page.evaluate(() =>
+      [...document.querySelectorAll('[data-defrow="1"] .ss-dev li')].map((x) => x.textContent).join() === "GET /api/items"));
+    check("레이어: 기획 줄은 개발 블록 밖에 그대로", await page.evaluate(() =>
+      [...document.querySelectorAll('[data-defrow="1"] .ss-items.ss-plan li')].map((x) => x.textContent).join() === "기획 한 줄,기획 둘째 줄"));
+    check("레이어: DEV 태그가 붙는다", (await page.locator('[data-defrow="1"] .ss-devtag').count()) === 1);
+    check("레이어: 개발 줄이 없는 항목엔 개발 블록도 없다", (await page.locator('[data-defrow="2"] .ss-dev').count()) === 0);
+    /* 어느 층에서든 «기획이 먼저, 개발이 나중» — 화면 공통 개발도 예외가 아니다 (#41) */
+    check("레이어: 화면 공통 개발 정의가 항목들 «뒤» 에 온다", await page.evaluate(() => {
+      const c = document.querySelector(".ss-dev-common");
+      if (!c) return false;
+      const rows = [...document.querySelectorAll(".ss-defs-list .ss-row")];
+      const kids = [...c.parentElement.children];
+      return c.innerText.includes("화면 공통") && c.innerText.includes("Bearer") &&
+        rows.every((r) => kids.indexOf(r) < kids.indexOf(c));
+    }));
+    check("레이어: 필터 칩 3종", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-chips [data-ly]")].map((x) => x.dataset.ly).join() === "all,plan,dev"));
+
+    const base = await page.evaluate(() => ({
+      markers: document.querySelectorAll(".ss-marker").length,
+      rows: document.querySelectorAll(".ss-row").length,
+      cnt: document.querySelector(".ss-cnt").textContent,
+    }));
+
+    await page.click('[data-ly="plan"]');
+    await page.waitForTimeout(150);
+    check("레이어: 「기획」 을 고르면 개발 블록이 안 보인다", (await disp('[data-defrow="1"] .ss-dev')) === "none");
+    check("레이어: 「기획」 이어도 기획 줄은 그대로", (await disp('[data-defrow="1"] .ss-items.ss-plan')) !== "none");
+    check("레이어: 「기획」 이면 화면 공통(개발)도 숨는다", (await disp(".ss-dev-common")) === "none");
+
+    await page.click('[data-ly="dev"]');
+    await page.waitForTimeout(150);
+    check("레이어: 「개발」 을 고르면 기획 줄이 안 보인다", (await disp('[data-defrow="1"] .ss-items.ss-plan')) === "none");
+    check("레이어: 「개발」 이면 개발 블록이 보인다", (await disp('[data-defrow="1"] .ss-dev')) !== "none");
+    check("레이어: 필터가 마커·행·항목 수에 영향이 없다 (CSS 전용)", await page.evaluate((b) =>
+      document.querySelectorAll(".ss-marker").length === b.markers &&
+      document.querySelectorAll(".ss-row").length === b.rows &&
+      document.querySelector(".ss-cnt").textContent === b.cnt, base), JSON.stringify(base));
+    check("레이어: 필터를 걸어도 행은 안 숨긴다 (번호·마커 대응 유지)", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-row")].every((r) => getComputedStyle(r).display !== "none")));
+
+    await page.click('[data-ly="all"]');
+    await page.waitForTimeout(150);
+    check("레이어: 「전체」 로 돌아온다", await page.evaluate(() =>
+      !document.querySelector(".ss-defs-list").hasAttribute("data-layer")));
+
+    /* 편집 — 걸러도 원래 인덱스에 쓴다 */
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+    await page.click('[data-defrow="1"] .ss-dev [data-ed="t"]');
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("POST /api/items");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    check("레이어: 개발 줄 편집이 «원래 인덱스» 에 정확히 들어간다", await page.evaluate(() =>
+      window.SCREENSPEC.specs[0].defs.map((d) => (d.layer || "plan") + ":" + d.t).join("|") ===
+      "plan:기획 한 줄|dev:POST /api/items|plan:기획 둘째 줄"),
+      await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
+    await page.click('[data-defrow="2"] [data-ec="adddev"]');
+    await page.waitForTimeout(200);
+    check("레이어: 「＋ 개발 줄」 이 layer:dev 로 붙는다", await page.evaluate(() => {
+      const d = window.SCREENSPEC.specs[1].defs;
+      return d.length === 2 && d[1].layer === "dev";
+    }));
+    check("레이어: 직렬화가 layer·screen.dev 를 잃지 않는다", await page.evaluate(() => {
+      const w = {};
+      new Function("window", window.ScreenSpec.serialize())(w);
+      return w.SCREENSPEC.specs[0].defs[1].layer === "dev" && (w.SCREENSPEC.screen.dev || []).length === 2;
+    }));
+
+    /* 내보내기가 같은 축을 쓴다 — 그림 속 표를 레이어로 거른다 */
+    const tableText = (layer) => page.evaluate(async (ly) => {
+      let txt = null;
+      const mo = new MutationObserver(() => {
+        const t = document.querySelector(".ss-cap .ss-pr-table");
+        if (t && txt === null) txt = t.innerText;
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+      await window.ScreenSpec.exportImage({ table: true, layer: ly });
+      mo.disconnect();
+      return txt;
+    }, layer);
+    const tDev = await tableText("dev");
+    check("레이어: 내보내기 「개발만」 이면 표에 기획 줄이 없다",
+      tDev && tDev.includes("POST /api/items") && !tDev.includes("기획 한 줄"), tDev);
+    check("레이어: 내보내기 「개발만」 에 화면 공통도 들어간다", tDev && tDev.includes("Bearer"), tDev);
+    const tPlan = await tableText("plan");
+    check("레이어: 내보내기 「기획만」 이면 표에 개발 줄이 없다",
+      tPlan && tPlan.includes("기획 한 줄") && !tPlan.includes("POST /api/items") && !tPlan.includes("Bearer"), tPlan);
+
+    /* 레이어는 «기능 설명 포함» 을 켜야 의미가 있다 — 표가 없으면 거를 것이 없다 */
+    check("레이어: 기능 설명을 안 넣으면 레이어 선택이 꺼져 있다", await page.evaluate(() => {
+      document.querySelector(".ss-prbtn").click();
+      const d = document.querySelector(".ss-prdlg");
+      const sel = d.querySelector("#ss-prLayer");
+      return sel.disabled === true && sel.closest("label").classList.contains("ss-off");
+    }));
+    check("레이어: 기능 설명을 켜면 레이어 선택이 살아난다", await page.evaluate(() => {
+      const d = document.querySelector(".ss-prdlg");
+      const cb = d.querySelector("#ss-prTable");
+      cb.checked = true;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+      const sel = d.querySelector("#ss-prLayer");
+      const ok = sel.disabled === false && !sel.closest("label").classList.contains("ss-off");
+      d.close();
+      return ok;
+    }));
+
+    /* 하위 호환 — layer 를 안 쓰는 문서는 예전 그대로 */
+    await boot(plain);
+    check("레이어: 개발 정의가 없으면 칩을 만들지 않는다", (await page.locator(".ss-layerbar").count()) === 0);
+    check("레이어: 개발 정의가 없으면 개발 블록도 0개", (await page.locator(".ss-dev").count()) === 0);
+    check("레이어: 옛 문서는 정의서가 그대로 뜬다", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    check("레이어: 옛 문서의 내보내기 대화상자엔 레이어 선택이 없다", await page.evaluate(() => {
+      document.querySelector(".ss-prbtn").click();
+      const has = !!document.querySelector("#ss-prLayer");
+      document.querySelector(".ss-prdlg").close();
+      return !has;
+    }));
   }
 
   /* ============ 인라인 빌드: 바깥 요청이 막힌 환경 재현 ============
