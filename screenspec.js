@@ -136,12 +136,12 @@
     if (/^#[0-9a-fA-F]{3,8}$/.test(a)) return a;
     /* CSS 변수 참조 — 값을 복사하지 않고 제품 토큰을 가리킨다 (색 하드코딩 lint 회피·테마 추종) (#18) */
     if (/^var\(--[\w-]+(\s*,[^)]*)?\)$/.test(a)) return a;
-    console.warn("[ScreenSpec] accent \"" + a + "\" 인식 불가 — 기본(blue) 사용. 프리셋: " + Object.keys(ACCENT_PRESETS).join(", ") + ", hex 또는 var(--토큰)");
+    console.warn("[ScreenSpec] accent \"" + a + "\" 인식 불가: 기본(blue) 사용. 프리셋: " + Object.keys(ACCENT_PRESETS).join(", ") + ", hex 또는 var(--토큰)");
     return ACCENT_PRESETS.blue;
   })();
 
   /* v0.14 의 panel:"left" 는 폐기 — 겹침의 정식 해법은 mode:"frame" */
-  if (RAW.panel) console.warn("[ScreenSpec] panel 설정은 v0.15 에서 폐기 — 설명 패널은 오른쪽 고정. 앱의 우측 서랍과 겹치면 mode:\"frame\" 을 쓰세요");
+  if (RAW.panel) console.warn("[ScreenSpec] panel 설정은 v0.15 에서 폐기. 설명 패널은 오른쪽 고정. 앱의 우측 서랍과 겹치면 mode:\"frame\" 을 쓰세요");
 
   /* ============ 상태 커버리지 (#26) ============
      프로젝트가 정한 상태 축(checklist)을 화면마다 covers/skip 으로 대조한다.
@@ -151,7 +151,7 @@
     const c = RAW.checklist;
     if (c == null) return null;
     if (!Array.isArray(c) || !c.length || !c.every((v) => typeof v === "string" && v.trim())) {
-      console.warn("[ScreenSpec] checklist 는 문자열 배열이어야 합니다 — 무시");
+      console.warn("[ScreenSpec] checklist 는 문자열 배열이어야 합니다: 무시");
       return null;
     }
     return c.map((v) => v.trim());
@@ -163,7 +163,7 @@
     const st = RAW.style;
     if (st == null) return;
     if (typeof st !== "object" || Array.isArray(st)) {
-      console.warn("[ScreenSpec] style 은 객체여야 합니다 — 무시 (규격: docs/config.md)");
+      console.warn("[ScreenSpec] style 은 객체여야 합니다: 무시 (규격: docs/config.md)");
       return;
     }
     const bad = [];
@@ -175,7 +175,7 @@
       });
     }
     ["idScheme", "notes"].forEach((k) => { if (st[k] != null && typeof st[k] !== "string") bad.push(k + "(문자열)"); });
-    if (bad.length) console.warn("[ScreenSpec] style 의 형식이 어긋납니다 — " + bad.join(", ") + " (해당 항목만 무시, 규격: docs/config.md)");
+    if (bad.length) console.warn("[ScreenSpec] style 의 형식이 어긋납니다: " + bad.join(", ") + " (해당 항목만 무시, 규격: docs/config.md)");
   })();
   const COV_CACHE = new WeakMap(); /* 화면당 1회만 계산 — 렌더마다 같은 경고가 쌓이지 않게 */
   /* → { done:[축], skipped:[{axis,reason}], missing:[축] } · checklist 가 없으면 null */
@@ -191,7 +191,7 @@
     Object.keys(sk).forEach((k) => {
       const reason = typeof sk[k] === "string" ? sk[k].trim() : "";
       /* 사유 없는 skip 은 비운 게 아니라 빠뜨린 것 — 미정의로 되돌린다 */
-      if (!reason) { console.warn("[ScreenSpec] " + s.id + ": skip \"" + k + "\" 에 사유가 없습니다 — 미정의로 봅니다"); return; }
+      if (!reason) { console.warn("[ScreenSpec] " + s.id + ": skip \"" + k + "\" 에 사유가 없습니다: 미정의로 봅니다"); return; }
       if (CHECKLIST.includes(k)) skipped.push({ axis: k, reason: reason });
     });
     const r = {
@@ -207,7 +207,7 @@
     const c = coverage(s);
     if (!c || !c.missing.length) return "";
     const t = c.missing.join(" · ") + " 미정의";
-    return '<span class="ss-toc-undef ss-toc-cov" title="' + esc("이 화면에 「" + c.missing.join(" · ") + "」 설명이 없습니다 — 설정의 checklist 로 정한 점검 항목") + '">⚠ ' + esc(t) + "</span>";
+    return '<span class="ss-toc-undef ss-toc-cov" title="' + esc("이 화면에 「" + c.missing.join(" · ") + "」 설명이 없습니다: 설정의 checklist 로 정한 점검 항목") + '">⚠ ' + esc(t) + "</span>";
   }
   /* 패널 하단 블록 — 다룸 / 비움(사유) / ⚠ 미정의. 비어 있는 묶음은 줄 자체를 내지 않는다 */
   function covBlockHTML(s) {
@@ -222,7 +222,7 @@
     let out = '<div class="ss-cov" title="' + esc(tip) + '">' +
       '<div class="ss-cov-miss">⚠ 이 화면에 「' + esc(c.missing.join(" · ")) + '」 설명이 없습니다</div>' +
       '<div class="ss-cov-l">이 프로젝트가 화면마다 챙기기로 한 항목입니다. 설명을 더하거나, 이 화면에 해당 없으면 사유와 함께 「해당 없음」으로 적으면 사라집니다.</div>';
-    if (c.skipped.length) out += '<div class="ss-cov-l">해당 없음 — ' + esc(c.skipped.map((z) => z.axis + " (" + z.reason + ")").join(" · ")) + "</div>";
+    if (c.skipped.length) out += '<div class="ss-cov-l">해당 없음: ' + esc(c.skipped.map((z) => z.axis + " (" + z.reason + ")").join(" · ")) + "</div>";
     return out + "</div>";
   }
 
@@ -239,15 +239,21 @@
   const RICH_OK = { STRONG: 1, A: 1 };
   /* 화면에 그릴 글자 — 허용한 두 태그만 살리고 나머지는 글자로 만든다(살균).
      사용자가 붙여넣은 서식이든 남의 스크립트든, 우리 패널에서 실행될 길을 남기지 않는다 */
+  /* 글자 노드용 이스케이프 — 따옴표는 건드리지 않는다. 우리가 만드는 건 «태그 사이 내용» 이지 속성값이 아니고,
+     따옴표까지 바꾸면 저장된 글자가 &quot; 로 남아 다음 편집 때 또 한 겹 쌓인다 (2026-08-30 PM 발견) */
+  function escText(x) {
+    return String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  /* 언제나 «HTML 로 읽어서 다시 쓴다». 태그가 없다고 글자로만 이스케이프하면
+     rich(rich(x)) 가 x 와 달라져(&amp;quot;) 편집할 때마다 한 겹씩 쌓인다 */
   function rich(x) {
     const src = String(x == null ? "" : x);
-    if (src.indexOf("<") < 0) return esc(src);
     const box = document.createElement("div");
     box.innerHTML = src;
     let out = "";
     const walk = (node) => {
       node.childNodes.forEach((n) => {
-        if (n.nodeType === 3) { out += esc(n.nodeValue); return; }
+        if (n.nodeType === 3) { out += escText(n.nodeValue); return; }
         if (n.nodeType !== 1) return;
         const tag = n.tagName;
         if (tag === "A") {
@@ -579,7 +585,8 @@
   .ss-items li .ss-why::before{content:"↳ 이유: "}
   .ss-items li.ss-sub{margin-left:18px}
   .ss-items li.ss-sub::before{background:#fff;border:1.3px solid var(--ss-ink2);left:2px}
-  .ss-defs-list [data-ed]:empty:not(.ss-ed-on)::after{content:"빈 줄 — 눌러서 쓰기";color:var(--ss-ink3);font-style:italic}
+  .ss-defs-list [data-ed]:empty::after{content:"내용";color:var(--ss-ink3)}
+  .ss-defs-list [data-ed].ss-ed-on:empty::after{content:"내용 입력, / 로 넣기"}
   .ss-defs-list [data-ed].ss-ed-on:empty{min-width:120px;display:inline-block}
   .ss-slash{position:fixed;z-index:2147483000;background:var(--ss-bg,#fff);border:1px solid var(--ss-line,#dcdce3);
     border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column;min-width:132px}
@@ -932,7 +939,7 @@ ${HL_CSS}
       return '<button class="ss-play" data-play="' + key + '">▶ ' + esc(sp.play.label || (sp.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
     if (type.mech === "flow" && (sp.flowTo || sp.play)) {
       const dest = SCREENS.find((x) => x.id === sp.flowTo);
-      return '<button class="ss-play" data-play="' + key + '">▶ ' + esc((sp.play && sp.play.label) || "이동 — " + (dest ? dest.name : sp.flowTo)) + "</button>";
+      return '<button class="ss-play" data-play="' + key + '">▶ ' + esc((sp.play && sp.play.label) || "이동: " + (dest ? dest.name : sp.flowTo)) + "</button>";
     }
     return "";
   }
@@ -962,14 +969,14 @@ ${HL_CSS}
       (s.parts || []).forEach((p, i) => {
         const key = String(s.n) + partSuffix(i);
         parts += `<div class="ss-part" data-part="${key}">
-          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
+          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span></div>
           <ul class="ss-items ss-plan">${defItemsHTML(p.defs, "plan")}</ul>${devBlockHTML(p.defs)}${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
         </div>`;
       });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-nowtag">현재 미표시</span></div>
           <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
         </div></div>`;
     });
@@ -1168,7 +1175,7 @@ ${HL_CSS}
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
         if (!final) return; /* 아직 상한 전 — 늦게 올 수도 있으니 경고를 미룬다 (감시는 계속) */
         warned[sc.id] = true;
-        console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건 — " +
+        console.warn("[ScreenSpec] " + sc.id + ": data-spec 요소를 못 찾은 정의 " + missing.length + "건: " +
           missing.map((it) => "#" + it.label + " target=\"" + it.spec.target + "\"").join(", ") +
           " (마커 숨김. 해당 화면에 data-spec 속성이 있는지 확인)" +
           (cond.length ? " · 조건부(state·optional) " + cond.length + "건은 제외" : ""));
@@ -1394,7 +1401,7 @@ ${HL_CSS}
     const pvBarText = pvBar.querySelector(".ss-pvbar-t");
     pvBar.querySelector(".ss-pvbar-x").onclick = () => previewOff();
     function pvBarShow(it) {
-      pvBarText.textContent = "◑ 「" + (it.spec.title || it.label) + "」 재현 중 — 실제 데이터가 아닙니다";
+      pvBarText.textContent = "◑ 「" + (it.spec.title || it.label) + "」 재현 중: 실제 데이터가 아닙니다";
       pvBar.classList.add("ss-show");
       document.body.classList.add("ss-pv-on");
     }
@@ -1440,12 +1447,12 @@ ${HL_CSS}
         return;
       }
       const tag = h("div", { class: "ss-preview-none" });
-      tag.textContent = "이 프로토타입은 아직 이 상태를 만들지 못합니다 — 정의는 있지만 화면으로 확인할 수 없습니다";
+      tag.textContent = "이 프로토타입은 아직 이 상태를 만들지 못합니다. 정의는 있지만 화면으로 확인할 수 없습니다";
       btn.insertAdjacentElement("afterend", tag);
       const id = (current ? current.id : "") + "/" + it.key;
       if (!pvTold[id]) {
         pvTold[id] = 1;
-        console.info('[ScreenSpec] preview "' + (it.spec.title || it.label) + '" 를 받는 앱 코드가 없습니다 — screenspec:preview 이벤트를 들어야 재현됩니다');
+        console.info('[ScreenSpec] preview "' + (it.spec.title || it.label) + '" 를 받는 앱 코드가 없습니다. screenspec:preview 이벤트를 들어야 재현됩니다');
       }
     }
 
@@ -1635,7 +1642,7 @@ ${HL_CSS}
       /* 화면 공통 개발 정의도 표의 한 행으로 — 그림 속에서는 블록보다 행이 읽기 쉽다 */
       const common = (current && current.dev) || [];
       if (common.length && layer !== "plan") {
-        out += '<tr class="ss-pr-dev"><td class="ss-pr-no">—</td><td class="ss-pr-ttl">화면 공통</td>' +
+        out += '<tr class="ss-pr-dev"><td class="ss-pr-no">·</td><td class="ss-pr-ttl">화면 공통</td>' +
           '<td class="ss-pr-tag">개발</td><td><ul>' + common.map((d) => prLine(Object.assign({}, d, { layer: "dev" }))).join("") + "</ul></td></tr>";
       }
       items().forEach((it) => {
@@ -1823,7 +1830,7 @@ ${HL_CSS}
             if (px[i] < 245 || px[i + 1] < 245 || px[i + 2] < 245) ink++;
           }
         } catch (e) {
-          return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다 — 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." };
+          return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다. 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." };
         }
         if (seen && ink / seen < 0.002) return { ok: false, why: "그림이 비어 있게 나와 내보내지 않았습니다.", blank: true };
         /* 밑단은 «잉크가 끝난 곳» 에서 자른다 — 프로토타입의 CSS 가 SVG 캡처에서 얼마나 줄어들든
@@ -1858,7 +1865,7 @@ ${HL_CSS}
         } catch (e) { /* 자르기가 실패해도 원본 그림은 내준다 */ }
         let url;
         try { url = cut.toDataURL("image/png"); }
-        catch (e) { return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다 — 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." }; }
+        catch (e) { return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다. 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." }; }
         return { ok: true, url: url, w: cut.width, h: cut.height, remote: built.remote, ink: +(ink / seen * 100).toFixed(1) };
       } finally { built.restore(); }
     }
@@ -1871,7 +1878,7 @@ ${HL_CSS}
       a.download = base + ".png";
       a.click();
       edSay2(r.remote
-        ? "내려받았습니다. 다만 바깥에서 불러오는 이미지 " + r.remote + "개는 빈칸으로 나옵니다 — 자체 완결 파일로 만든 뒤 뽑으면 제대로 나옵니다."
+        ? "내려받았습니다. 다만 바깥에서 불러오는 이미지 " + r.remote + "개는 빈칸으로 나옵니다. 자체 완결 파일로 만든 뒤 뽑으면 제대로 나옵니다."
         : "「" + a.download + "」 · " + r.w + "×" + r.h);
       return r;
     }
@@ -1894,7 +1901,7 @@ ${HL_CSS}
         prDlg = h("dialog", { class: "ss-prdlg ss-ui" },
           "<h3>PNG 로 내보내기</h3>" +
           '<label><input type="checkbox" id="ss-prMark" checked> 번호 표시</label>' +
-          '<label><input type="checkbox" id="ss-prHead" checked> 머리말 표시 — 화면 ID · 화면명 · 경로 · 일시</label>' +
+          '<label><input type="checkbox" id="ss-prHead" checked> 머리말 표시: 화면 ID · 화면명 · 경로 · 일시</label>' +
           '<label><input type="checkbox" id="ss-prTable"> 기능 설명 포함</label>' +
           (anyDev() ? '<label class="ss-prdlg-sub2 ss-off">레이어 <select id="ss-prLayer" disabled><option value="all">전체</option>' +
             '<option value="plan">기획만</option><option value="dev">개발만</option></select></label>' : "") +
@@ -2374,7 +2381,7 @@ ${HL_CSS}
       render();
       const key = String(sp.n);
       edGo(key, "title");
-      edSay("번호 " + sp.n + " 을 붙였습니다 — 이름을 쓰세요");
+      edSay("번호 " + sp.n + " 을 붙였습니다. 이름을 쓰세요");
     }
     function pickStop() {
       if (!pickOn) return;
@@ -2400,7 +2407,7 @@ ${HL_CSS}
       d.addEventListener("mousemove", pickMove, true);
       d.addEventListener("click", pickClick, true);
       addEventListener("keydown", pickKey, true);
-      edSay("번호를 붙일 곳을 고르세요 — ↑↓ 넓게·좁게, ←→ 옆 요소, Esc 취소");
+      edSay("번호를 붙일 곳을 고르세요. ↑↓ 넓게·좁게, ←→ 옆 요소, Esc 취소");
     }
 
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
@@ -2505,7 +2512,7 @@ ${HL_CSS}
         const out = replaceConfigBlock(html, edBlockText());
         if (out == null) {
           edHandle = null;
-          edSay("그 파일에서 window.SCREENSPEC 설정 블록을 찾지 못했습니다 — 지금 보고 있는 프로토타입 HTML 을 골라 주세요.");
+          edSay("그 파일에서 window.SCREENSPEC 설정 블록을 찾지 못했습니다. 지금 보고 있는 프로토타입 HTML 을 골라 주세요.");
           return;
         }
         const w = await edHandle.createWritable();
@@ -2515,7 +2522,7 @@ ${HL_CSS}
         edSay("「" + edHandle.name + "」 에 저장했습니다.");
       } catch (e) {
         if (e && e.name === "AbortError") return; /* 사용자가 취소 — 알릴 것 없다 */
-        edSay("저장하지 못했습니다 — " + ((e && e.message) || e) + " · 「내려받기」로 저장하세요.");
+        edSay("저장하지 못했습니다: " + ((e && e.message) || e) + " · 「내려받기」로 저장하세요.");
       }
     }
     async function edSaveDownload() {
@@ -2535,7 +2542,7 @@ ${HL_CSS}
       edFlush();
       const txt = edBlockText();
       try { await navigator.clipboard.writeText(txt); edSay("설정을 복사했습니다. 원본의 window.SCREENSPEC 블록에 붙여넣거나, AI 에게 「이걸로 교체해줘」 하세요."); }
-      catch (e) { edSay("복사가 막혔습니다 — 콘솔에 출력했습니다."); console.log(txt); }
+      catch (e) { edSay("복사가 막혔습니다: 콘솔에 출력했습니다."); console.log(txt); }
     }
 
     /* ---- 저장 안 된 초안 ---- */
@@ -2701,7 +2708,7 @@ ${HL_CSS}
       const noop = function () {};
       window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, exportImage: noop, edit: noop, serialize: () => "", dirty: () => false };
       window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
-      console.info("[ScreenSpec] off — 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
+      console.info("[ScreenSpec] off: 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
       return;
     }
     /* 설정 유무 판정 — screens·screen·specs 중 하나라도 있으면 "설정함"으로 본다 */
@@ -2712,17 +2719,17 @@ ${HL_CSS}
     /* 설정 자가 진단 — ID는 자유 형식(불투명 문자열)이지만, 깨진 참조는 조용히 오동작하므로 경고 */
     const seen = {};
     SCREENS.forEach((s) => {
-      if (seen[s.id]) console.warn("[ScreenSpec] 화면 ID 중복: " + s.id + " — 뒤의 화면은 목차·이동에서 무시됩니다");
+      if (seen[s.id]) console.warn("[ScreenSpec] 화면 ID 중복: " + s.id + ". 뒤의 화면은 목차·이동에서 무시됩니다");
       seen[s.id] = 1;
     });
     SCREENS.forEach((sc) => (sc.specs || []).forEach((sp) => {
       [sp].concat(sp.parts || []).forEach((it, i) => { /* 하위 요소(parts)의 flowTo 도 검사 */
         if (it.flowTo && !SCREENS.some((x) => x.id === it.flowTo))
-          console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + (i ? partSuffix(i - 1) : "") + ": flowTo \"" + it.flowTo + "\" 화면이 screens에 없습니다 — 이동 버튼이 동작하지 않습니다");
+          console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + (i ? partSuffix(i - 1) : "") + ": flowTo \"" + it.flowTo + "\" 화면이 screens에 없습니다: 이동 버튼이 동작하지 않습니다");
       });
     }));
     /* 상태 점검이 켜져 있으면 그 사실을 알린다 — 설정을 직접 넣지 않은 사람도 «저 ⚠ 가 뭔지» 를 알 수 있게 */
-    if (CHECKLIST) console.info("[ScreenSpec] 상태 점검 켜짐 — 화면마다 " + CHECKLIST.join(" · ") + " 를 적었는지 확인합니다. 화면의 covers 에 적거나 skip 에 사유를 적으면 ⚠ 가 사라집니다");
+    if (CHECKLIST) console.info("[ScreenSpec] 상태 점검 켜짐: 화면마다 " + CHECKLIST.join(" · ") + " 를 적었는지 확인합니다. 화면의 covers 에 적거나 skip 에 사유를 적으면 ⚠ 가 사라집니다");
     /* 아직 아무것도 안 건드린 지금이 원본을 뜰 수 있는 마지막 순간이다 (#37) */
     if (!READONLY) SRC_SNAPSHOT = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */
@@ -3090,7 +3097,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     /* 시작 폭 = 이 문서가 서술하는 기준 폭. baseViewport: "mobile"(기본) | "pc" — 어드민은 PC, 앱은 모바일 (#17) */
     const base = DEVICES[RAW.baseViewport] ? RAW.baseViewport : "mobile";
-    if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가 — mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
+    if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가: mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */

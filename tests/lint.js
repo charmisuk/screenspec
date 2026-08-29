@@ -23,6 +23,7 @@
  * 19) 용량 상한(gzip 60KB) — 단일 파일·의존성 0 약속을 기계로 지킨다 (2026-08-28)
  * 18) 라이브러리 소스의 스크립트 종료 태그·HTML 주석 여는 표시 — 인라인 산출물이 통째로 깨진다 (2026-08-27 2회)
  * 20) 내부 계획 문서(로드맵·백로그·사이클 기록)가 git 에 추적되면 FAIL — public repository 는 지금 판만 설명한다 (2026-08-28)
+ * 21) 사용자 문구에 em dash 금지 — 구분은 콜론(:), 나열은 가운뎃점(·) (PM 룰 2026-08-30)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
@@ -280,6 +281,64 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   }
   /* 음성 테스트 — 목록이 비면 이 검사는 아무것도 안 잡는다 */
   check("(자체검사) 금지 경로 목록이 비어 있지 않다", FORBIDDEN.length >= 3);
+}
+
+/* 21) 사용자에게 보이는 문구에 em dash 를 쓰지 않는다 (PM 룰 2026-08-30).
+       구분은 콜론(:), 나열은 가운뎃점(·). 주석은 대상이 아니다 — 그건 개발자끼리 읽는 글이다.
+       판정 대상 = «한글이 든 문자열 리터럴» = 우리 UI 카피. 사람이 지키면 반드시 새므로 기계가 본다 */
+{
+  const src = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+  const EM = String.fromCharCode(8212);
+  const lits = [];
+  let i = 0, line = 1;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "\n") { line++; i++; continue; }
+    if (c === "/" && src[i + 1] === "*") { const e = src.indexOf("*/", i + 2); const seg = src.slice(i, e < 0 ? src.length : e); line += (seg.match(/\n/g) || []).length; i = e < 0 ? src.length : e + 2; continue; }
+    if (c === "/" && src[i + 1] === "/") { const e = src.indexOf("\n", i); i = e < 0 ? src.length : e; continue; }
+    /* 정규식 리터럴을 문자열로 오인하면 그 뒤 주석까지 통째로 삼킨다 (2026-08-30 오탐) */
+    if (c === "/") {
+      let j = i - 1;
+      while (j >= 0 && /[ 	]/.test(src[j])) j--;
+      if (j >= 0 && "=(,:[!&|?{};+".indexOf(src[j]) >= 0) {
+        let k = i + 1, esc = false, cls = false;
+        while (k < src.length) {
+          const d = src[k];
+          if (d === "\n") break;
+          if (esc) { esc = false; k++; continue; }
+          if (d === "\\") { esc = true; k++; continue; }
+          if (d === "[") cls = true;
+          else if (d === "]") cls = false;
+          else if (d === "/" && !cls) break;
+          k++;
+        }
+        i = k + 1; continue;
+      }
+      i++; continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const q = c, at = line;
+      let k = i + 1, buf = "", esc = false;
+      while (k < src.length) {
+        const d = src[k];
+        if (esc) { buf += d; esc = false; k++; continue; }
+        if (d === "\\") { esc = true; k++; continue; }
+        if (d === q) break;
+        if (d === "\n") line++;
+        buf += d; k++;
+      }
+      lits.push({ line: at, text: buf });
+      i = k + 1; continue;
+    }
+    i++;
+  }
+  /* CSS 블록은 카피가 아니다 — 변수 이름(--ss-…)이 들어 있어 오탐이 난다 */
+  const copy = lits.filter((s) => /[가-힣]/.test(s.text) && s.text.indexOf("--ss-") < 0);
+  const bad = copy.filter((s) => s.text.indexOf(EM) >= 0).map((s) => s.line + ": " + s.text.replace(/\s+/g, " ").slice(0, 60));
+  check("사용자 문구 " + copy.length + "개에 em dash 없음 (구분은 : · 나열은 ·)", bad.length === 0, bad.slice(0, 5));
+  /* 음성 테스트 — 검사가 살아 있는지 양쪽으로 */
+  check("(자체검사) em dash 검사가 실제로 잡아낸다",
+    ("한글 " + EM + " 있음").indexOf(EM) >= 0 && "한글 : 없음".indexOf(EM) < 0);
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));

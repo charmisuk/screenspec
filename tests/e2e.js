@@ -1638,10 +1638,9 @@ function check(name, ok, detail) {
     await page.waitForTimeout(250);
     check("에디터: / 메뉴의 «이유» 가 이유 칸을 만든다", (await page.locator('[data-ed="why"]').count()) > 0);
 
-    /* #46: 유형 드롭다운은 아카이브 — 만드는 길은 없고, 값은 라벨로 그대로 보인다 */
-    check("에디터: 유형 드롭다운이 없다 (#46 아카이브)", (await page.locator(".ss-annopick").count()) === 0);
-    check("에디터: 유형 라벨은 그대로 렌더된다 (읽기 하위호환)",
-      (await page.locator('[data-defrow="1"] .ss-tag').textContent()).trim().length > 0);
+    /* #46 아카이브 + #50: 만드는 길도 없고 오른쪽 유형 라벨 표시도 뺐다 (데이터·동작은 그대로) */
+    check("에디터: 유형 드롭다운이 없다 (#46)", (await page.locator(".ss-annopick").count()) === 0);
+    check("에디터: 오른쪽 유형 라벨도 보이지 않는다 (#50)", (await page.locator(".ss-tag").count()) === 0);
 
     /* 편집을 끄면 정의서 DOM 이 편집 기능 없던 때와 같아야 한다 — 회귀 위험 0 이 이 기능의 전제다 */
     await page.click(".ss-editbtn");
@@ -1734,6 +1733,28 @@ function check(name, ok, detail) {
     });
     check("서식: 저장 전체에 strong·a 외 태그가 없다",
       tags.every((t) => t === "strong" || t === "a"), tags);
+
+    /* 따옴표가 편집할 때마다 한 겹씩 쌓이던 버그 (PM 2026-08-30 발견).
+       원인은 «글자 이스케이프» 와 «HTML 살균» 을 한 함수가 겸한 것 — 이제 언제나 HTML 로 읽어서 다시 쓴다 */
+    const QT = '마감(00:00:00) 시 타이머를 "오늘 딜 종료"로 교체';
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="t"]');
+    await page.waitForTimeout(150);
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type(QT);
+    await page.keyboard.press("Shift+Enter");
+    await page.waitForTimeout(250);
+    /* 들락거려도 한 겹씩 쌓이지 않아야 한다 */
+    for (let i = 0; i < 3; i++) {
+      await page.click('[data-defrow="1"] .ss-dt[data-ed="t"]');
+      await page.waitForTimeout(120);
+      await page.keyboard.press("Shift+Enter");
+      await page.waitForTimeout(150);
+    }
+    check("서식: 따옴표가 편집을 거듭해도 늘어나지 않는다",
+      (await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t)) === QT,
+      await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t));
+    check("서식: 화면에도 따옴표가 그대로 보인다",
+      (await page.locator('[data-defrow="1"] .ss-items li').first().textContent()).indexOf('"오늘 딜 종료"') >= 0);
   }
 
   /* ============ 번호 찍기 (#43) ============
