@@ -460,7 +460,7 @@
   .ss-cap-id{font-family:var(--ss-mono);font-size:12px;font-weight:800;color:var(--ss-ink)}
   .ss-cap-name{font-size:19px;font-weight:800;color:var(--ss-ink);margin:3px 0 3px}
   .ss-cap-path{font-size:12px;color:var(--ss-ink3)}
-  .ss-cap-when{font-size:11px;color:var(--ss-ink3);margin-top:6px}
+  .ss-cap-foot{font-size:10px;color:var(--ss-ink3);padding:4px 12px 6px;text-align:right}
   .ss-cap .ss-pr-table{margin:0 30px 24px;width:calc(100% - 60px);border-collapse:collapse;font-size:12px;color:var(--ss-ink)}
   .ss-cap .ss-pr-table th{background:#F1F1F0;border:1px solid var(--ss-line2);padding:6px 8px;text-align:left;font-weight:800;font-size:11px}
   .ss-cap .ss-pr-table td{border:1px solid var(--ss-line2);padding:6px 8px;vertical-align:top;line-height:1.55}
@@ -1609,8 +1609,7 @@ ${HL_CSS}
       const path = (sc.path || []).map(esc).join(" › ");
       return '<div class="ss-cap-head"><div class="ss-cap-id">' + esc(sc.id || "") + "</div>" +
         '<div class="ss-cap-name">' + esc(sc.name || "") + "</div>" +
-        (path ? '<div class="ss-cap-path">' + path + "</div>" : "") +
-        '<div class="ss-cap-when">' + new Date().toLocaleString() + " · Made with ScreenSpec</div></div>";
+        (path ? '<div class="ss-cap-path">' + path + "</div>" : "") + "</div>";
     }
     /* 우리 뷰어 UI — 그림에는 «문서» 만 남고 뷰어는 빠진다 */
     const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode,.ss-proto-wrap," +
@@ -1621,7 +1620,8 @@ ${HL_CSS}
       const box = h("div", { class: "ss-cap ss-ui" },
         (opt.head === false ? "" : capHeadHTML(current || {})) + '<div class="ss-cap-body"></div>' +
         (opt.table ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
-          prRows(opt.layer || LAYER) + "</tbody></table>" : ""));
+          prRows(opt.layer || LAYER) + "</tbody></table>" : "") +
+        ""); /* 꼬리표는 DOM 이 아니라 캔버스에 직접 쓴다 — 밑단 잘라내기(아래) 뒤에 붙여야 간격이 안 벌어진다 */
       document.body.appendChild(box);
       return box;
     }
@@ -1634,10 +1634,31 @@ ${HL_CSS}
       let restoreSrc = function () {};
       let target;
 
+      /* sticky·backdrop-filter 중화 — 둘 다 «살아 있는 화면» 의 물건이라 정지 그림에서는 탈이 난다.
+         sticky 는 스크롤이 없으면 제 흐름 자리가 정답이고(안 그러면 빈 띠 + 바가 엉뚱한 곳),
+         backdrop-filter 는 SVG 캡처에서 요소를 통째로 안 그린다 (크롬 실측) */
+      const stickyUndo = [];
+      const capNeutralize = (root) => root.querySelectorAll("*").forEach((el) => {
+        const cs = getComputedStyle(el);
+        if (cs.position === "sticky") { stickyUndo.push([el, "position", el.style.position]); el.style.position = "relative"; }
+        if (cs.backdropFilter && cs.backdropFilter !== "none") { stickyUndo.push([el, "backdropFilter", el.style.backdropFilter]); el.style.backdropFilter = "none"; }
+        /* aspect-ratio 로 높이를 잡는 요소는 SVG 캡처에서 납작해진다 — 아래 내용이 통째로 위로 당겨지고
+           그만큼 그림 밑에 흰 띠가 남는다 (2026-08-29 실측: 배너 115px → 6px). 지금 높이를 픽셀로 못박는다.
+           offsetHeight 인 이유: 정의서 모드의 축소 배율(transform)이 rect 에는 묻지만 layout 값에는 안 묻는다 */
+        if (cs.aspectRatio && cs.aspectRatio !== "auto" && el.offsetHeight) {
+          stickyUndo.push([el, "height", el.style.height], [el, "aspectRatio", el.style.aspectRatio]);
+          el.style.height = el.offsetHeight + "px";
+          el.style.aspectRatio = "auto";
+        }
+      });
+      const restoreSticky = () => stickyUndo.forEach(([el, k, v]) => (el.style[k] = v));
+
       if (src.kind === "move") {
         /* wrap — 살아 있는 시트를 «옮긴다». 복제하면 앱의 상태(입력값·canvas)를 잃는다 */
         const sheet = src.node.querySelector(".ss-sheet");
         if (!sheet) { box.remove(); return null; }
+        capNeutralize(src.node); /* 높이를 재기 «전에» — sticky 채로 재면 내용보다 길게 나온다 */
+        sheet.style.height = "auto";
         const full = Math.max(sheet.scrollHeight, sheet.offsetHeight);
         src.node.style.transform = "";
         sheet.style.height = full + "px";
@@ -1667,6 +1688,8 @@ ${HL_CSS}
         body.appendChild(target);
       }
 
+      if (src.kind !== "move") capNeutralize(target); /* 사본 쪽 — 복제 뒤라야 요소가 있다 */
+
       /* 여백은 «마커가 실제로 튀어나온 만큼» 만 준다. 사방에 넉넉히 주면 그림 둘레에 흰 띠가 남는다 */
       const base = (src.kind === "move" ? target.querySelector(".ss-sheet") : target).getBoundingClientRect();
       const pad = { l: 0, r: 0, t: 0, b: 0 };
@@ -1685,7 +1708,7 @@ ${HL_CSS}
 
       return {
         box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
-        restore: function () { restoreSrc(); box.remove(); },
+        restore: function () { restoreSticky(); restoreSrc(); box.remove(); },
       };
     }
     async function capPNG(opt) {
@@ -1743,10 +1766,40 @@ ${HL_CSS}
           return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다 — 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." };
         }
         if (seen && ink / seen < 0.002) return { ok: false, why: "그림이 비어 있게 나와 내보내지 않았습니다.", blank: true };
+        /* 밑단은 «잉크가 끝난 곳» 에서 자른다 — 프로토타입의 CSS 가 SVG 캡처에서 얼마나 줄어들든
+           (aspect-ratio·sticky·폰트 미세 차이 누적) 아래 흰 띠가 남지 않는다. 원인별로 쫓는 대신 결과를 보정한다.
+           그런 다음 꼬리표(Made with)를 캔버스에 직접 쓴다 — DOM 에 두면 그 띠 아래 매달려 같이 밀린다 (2026-08-29) */
+        let cut = cv;
+        try {
+          const px2 = cx.getImageData(0, 0, cv.width, cv.height).data;
+          let lastInk = cv.height - 1;
+          outer: for (let y = cv.height - 1; y >= 0; y--) {
+            for (let x = 0; x < cv.width; x += 3) {
+              const i = (y * cv.width + x) * 4;
+              if (px2[i] < 245 || px2[i + 1] < 245 || px2[i + 2] < 245) { lastInk = y; break outer; }
+            }
+          }
+          const foot = opt && opt.head === false ? false : true;
+          const padB = Math.round(8 * scale), footH = foot ? Math.round(20 * scale) : 0;
+          const newH = Math.min(cv.height, lastInk + 1 + padB) + footH;
+          const c2 = document.createElement("canvas");
+          c2.width = cv.width; c2.height = newH;
+          const g2 = c2.getContext("2d");
+          g2.fillStyle = "#fff";
+          g2.fillRect(0, 0, c2.width, c2.height);
+          g2.drawImage(cv, 0, 0);
+          if (foot) {
+            g2.fillStyle = "#9b9ba4";
+            g2.font = 700 * 0 + Math.round(9.5 * scale) + "px system-ui, sans-serif";
+            g2.textAlign = "right";
+            g2.fillText("Made with ScreenSpec", c2.width - Math.round(12 * scale), newH - Math.round(7 * scale));
+          }
+          cut = c2;
+        } catch (e) { /* 자르기가 실패해도 원본 그림은 내준다 */ }
         let url;
-        try { url = cv.toDataURL("image/png"); }
+        try { url = cut.toDataURL("image/png"); }
         catch (e) { return { ok: false, why: "바깥에서 불러온 이미지 때문에 그림을 만들 수 없습니다 — 자체 완결 파일로 만든 뒤 다시 뽑아 주세요." }; }
-        return { ok: true, url: url, w: cv.width, h: cv.height, remote: built.remote, ink: +(ink / seen * 100).toFixed(1) };
+        return { ok: true, url: url, w: cut.width, h: cut.height, remote: built.remote, ink: +(ink / seen * 100).toFixed(1) };
       } finally { built.restore(); }
     }
     async function exportImage(opt) {
