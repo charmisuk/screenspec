@@ -1147,11 +1147,15 @@ function check(name, ok, detail) {
     await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(200);
     check("편집: Enter 로 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
-    /* #49 이후 지우기는 «지금 고치는 칸» 에서만 나온다 */
+    /* 지우기 버튼은 없앴다 (PM 2026-08-30) — 빈 줄에서 Backspace 가 그 일을 한다 */
     await page.click('[data-defrow="1"] .ss-dt[data-ed="t"][data-di="0"]');
     await page.waitForTimeout(150);
-    await page.click('[data-defrow="1"] [data-ec="delline"][data-di="0"]');
-    await page.waitForTimeout(200);
+    /* Control+a 는 «문서 전체» 를 고른다 — 그 줄만 비운다 */
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+End");
+    await page.keyboard.press("Delete");
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(250);
     check("편집: 줄 삭제", await page.evaluate(() => window.SCREENSPEC.specs[0].defs.length === 1 && window.SCREENSPEC.specs[0].defs[0].t === "둘째 줄"));
     /* 이유는 슬래시(또는 «?») 로 — ＋이유 버튼은 없앴다 */
     await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
@@ -1667,9 +1671,9 @@ function check(name, ok, detail) {
       const bg = getComputedStyle(document.querySelector('[data-ed="t"]')).backgroundColor;
       return bg === "rgba(0, 0, 0, 0)" || bg === "transparent";
     }));
-    await page.hover(".ss-items li");
-    await page.waitForTimeout(150);
-    await page.click(".ss-items li .ss-g-add", { force: true });
+    /* 거터는 마우스를 올려야 보인다(opacity 0 → 1). 클릭 판정에 걸리므로 이벤트로 직접 누른다 */
+    await page.evaluate(() => document.querySelector(".ss-items li [data-add]")
+      .dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })));
     await page.waitForTimeout(400);
     check("블록: ＋ 가 슬래시와 같은 메뉴를 연다", (await page.locator(".ss-slash [data-sl]").count()) === 3,
       await page.locator(".ss-slash [data-sl]").allTextContents());
@@ -1743,18 +1747,12 @@ function check(name, ok, detail) {
     check("옮기기: ↑↓ 버튼이 없다", (await page.locator('[data-ec="up"],[data-ec="down"]').count()) === 0);
     check("옮기기: 뜻 모를 ⋮ 가 없다", !(await page.locator(".ss-defs-list").textContent()).includes("⋮"));
     check("옮기기: 손잡이가 있다", (await page.locator(".ss-g-grip").count()) > 0);
-    check("옮기기: 지우기는 평소에 숨어 있다", await page.evaluate(() => {
-      const w = document.querySelector(".ss-wipe");
-      return !!w && getComputedStyle(w).display === "none";
+    check("옮기기: 줄마다 붙는 지우기 버튼이 없다", (await page.locator(".ss-wipe").count()) === 0);
+    /* 항목 삭제는 제목 줄 오른쪽으로 옮겼다 (PM: 「원래 그 상태값 쪽으로」) */
+    check("옮기기: 항목 삭제가 제목 줄 오른쪽에 있다", await page.evaluate(() => {
+      const d = document.querySelector('[data-defrow="1"] .ss-rowdel');
+      return !!d && !!d.closest(".ss-title");
     }));
-    await page.click('[data-defrow="1"] .ss-dt[data-ed="t"][data-di="1"]');
-    await page.waitForTimeout(200);
-    check("옮기기: 고치는 칸에서만 지우기가 보인다", await page.evaluate(() => {
-      const li = document.querySelector(".ss-ed-on").closest("li");
-      return getComputedStyle(li.querySelector(".ss-wipe")).display !== "none";
-    }));
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(150);
 
     await dragTo('[data-defrow="1"] .ss-items li:nth-child(1) .ss-g-grip', '[data-defrow="1"] .ss-items li:nth-child(3)', true);
     await page.waitForTimeout(300);

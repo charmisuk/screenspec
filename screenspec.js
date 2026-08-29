@@ -503,11 +503,11 @@
   body.ss-editing .ss-row{padding-left:0}
   .ss-drop-line{height:2px;background:var(--ss-accent);border-radius:2px;margin:0}
   .ss-dragging{opacity:.45}
-  /* 지우기는 «지금 고치는 칸» 에만 (#49) */
-  .ss-wipe{display:none;margin-left:6px;border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);
-    font-size:10.5px;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit}
-  .ss-items li:has(> .ss-ed-on) > .ss-wipe,.ss-title:has(.ss-ed-on) .ss-wipe{display:inline-block}
-  .ss-wipe:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  /* 항목 삭제 — 제목 줄 오른쪽 끝. 마우스를 올린 블록에만 나온다 */
+  .ss-rowdel{margin-left:auto;flex-shrink:0;opacity:0;border:0;background:none;color:var(--ss-ink3);
+    font-size:14px;line-height:1;padding:2px 4px;border-radius:5px;cursor:pointer;transition:opacity .1s}
+  body.ss-editing .ss-row:hover .ss-rowdel,body.ss-editing .ss-row:focus-within .ss-rowdel{opacity:1}
+  .ss-rowdel:hover{background:var(--ss-canvas);color:var(--ss-ink)}
   .ss-draft{display:none;align-items:center;gap:8px;padding:9px 18px;background:#FFF8E1;
     border-bottom:1px solid #F0E4B8;font-size:11.5px;color:#7A5B00;line-height:1.6}
   .ss-draft.ss-show{display:flex}
@@ -574,20 +574,23 @@
     .ss-doc-body{display:block}.ss-stage{overflow:visible}
     .ss-defs{width:100%;border-left:0;border-top:1px solid var(--ss-line2)}
   }
-  .ss-row{display:flex;border-bottom:1px solid var(--ss-line);cursor:pointer;transition:background .12s}
+  /* 번호 블록 = 하나의 덩어리 (노션 콜아웃). PM: 「1~9번 라벨 자체도 컴포넌트가 돼야 한다 —
+     크게 보면 에디터가 있고 그 안에 번호가 있고 그 안에 또 넣을 수 있는 구조」 */
+  .ss-row{display:flex;gap:9px;align-items:flex-start;margin:8px 0;padding:9px 12px 10px;border-radius:9px;
+    background:#FBFBFA;cursor:pointer;transition:background .12s}
   /* 지금 화면에 없는 정의(조건부 상태 등) — 번호를 흐리게 + '현재 미표시' (#27) */
   .ss-nowtag{display:none;font-size:10px;color:var(--ss-ink3);border:1px dashed var(--ss-line2);border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap}
   /* preview 가 있는 항목의 배지는 그 자리에서 눌러 재현한다 — 「지금 없음 → 눌러서 보기」가 한 흐름 (#29) */
   .ss-nowtag[role="button"]{cursor:pointer;color:var(--ss-accent);border-color:color-mix(in srgb,var(--ss-accent) 45%,#fff);transition:background .12s,color .12s}
   .ss-nowtag[role="button"]:hover,.ss-nowtag[role="button"]:focus-visible{background:var(--ss-accent-soft);color:var(--ss-accent);border-style:solid}
-  .ss-row.ss-now-hidden .ss-no{opacity:.35}
+  .ss-row.ss-now-hidden .ss-no{opacity:.4}
   .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
-  .ss-row:hover{background:#FAFAF9}
+  .ss-row:hover{background:#F4F4F2}
   .ss-row.ss-active{background:var(--ss-accent-soft)}
-  .ss-no{width:46px;flex-shrink:0;display:flex;justify-content:center;padding-top:15px;
-    font-family:var(--ss-mono);font-size:13px;font-weight:800;color:var(--ss-ink3)}
-  .ss-row.ss-active .ss-no{color:var(--ss-accent)}
-  .ss-main{flex:1;padding:13px 16px 14px 0;min-width:0}
+  .ss-no{width:20px;height:20px;flex-shrink:0;display:grid;place-items:center;margin-top:1px;
+    border-radius:99px;background:var(--ss-ink);color:#fff;font-family:var(--ss-mono);font-size:11px;font-weight:800}
+  .ss-row.ss-active .ss-no{background:var(--ss-accent)}
+  .ss-main{flex:1;padding:0;min-width:0}
   .ss-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}
   .ss-title .ss-t{font-size:13.5px;font-weight:800;color:var(--ss-ink)}
   .ss-title .ss-pos{font-size:10.5px;color:var(--ss-ink3);white-space:nowrap}
@@ -871,20 +874,16 @@ ${HL_CSS}
       '<button type="button" class="ss-g-add" title="여기에 넣기" data-add="' + kind + '"' + at + ">＋</button>" +
       '<button type="button" class="ss-g-grip" title="잡아서 옮기기" draggable="true" data-g="' + kind + '"' + at + ">⠿</button></span>";
   }
-  function edWipe(cmd, di, si, ti) {
-    if (!EDIT) return "";
-    return '<button type="button" class="ss-wipe ss-ui" data-ec="' + cmd + '"' +
-      (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
-      (ti == null ? "" : ' data-ti="' + ti + '"') + ' title="이 줄 지우기">지우기</button>';
-  }
-  function edLineCtl(di) { return edGut("line", di) + edWipe("delline", di); }
-  function edSubCtl(di, si, ti) {
-    return edGut(ti == null ? "sub" : "sub3", di, si, ti) + edWipe(ti == null ? "delsub" : "delsub3", di, si, ti);
-  }
+  /* 줄 지우기 버튼은 없앴다 (PM 2026-08-30) — 빈 줄에서 Backspace 가 그 일을 한다.
+     버튼이 하나 더 있으면 «어느 쪽이 맞나» 를 사용자가 판단해야 한다 */
+  function edLineCtl(di) { return edGut("line", di); }
+  function edSubCtl(di, si, ti) { return edGut(ti == null ? "sub" : "sub3", di, si, ti); }
   /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
-  function edRowCtl() {
+  /* 항목 삭제는 제목 줄 «오른쪽» 에 (PM: 「원래 그 상태값 쪽으로」). 아래에 줄로 매달려 있으면
+     무엇에 붙은 것인지 흐려지고, 블록의 머리에 있어야 «이 덩어리를 지운다» 로 읽힌다 */
+  function edRowDel() {
     if (!EDIT) return "";
-    return '<div class="ss-edrow ss-ui">' + edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
+    return '<button type="button" class="ss-rowdel ss-ui" data-ec="delitem" title="이 항목을 통째로 삭제">×</button>';
   }
   /* 아카이브 (#46) — 하위 요소(1a·1b)를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
      1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
@@ -975,8 +974,8 @@ ${HL_CSS}
       out += `<div class="ss-row ss-blk" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         ${edGut("item")}<div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-nowtag">현재 미표시</span></div>
-          <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${edRowCtl()}
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-nowtag">현재 미표시</span>${edRowDel()}</div>
+          <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}
         </div></div>`;
     });
     return out;
@@ -2020,6 +2019,10 @@ ${HL_CSS}
       const el = edEl;
       if (!el) return;
       edEl = null;
+      /* 화면을 다시 그리면 옛 입력칸은 문서에서 떨어져 나간다. 그것을 뒤늦게 «저장» 하면
+         di·si 가 이제 다른 줄을 가리켜 엉뚱한 줄이 지워진다 (2026-08-30 실측: 줄 하나 지운 뒤
+         Enter 를 치면 남은 줄까지 사라졌다). 떨어져 나간 칸의 편집은 이미 지난 일이다 */
+      if (!el.isConnected) return;
       el.contentEditable = "false";
       el.classList.remove("ss-ed-on");
       const next = richIn(el); /* <b>→<strong> 정규화 + 허용 목록 밖 서식 제거 (#44) */
@@ -2694,20 +2697,27 @@ ${HL_CSS}
         else edCopyBlock();
       });
 
+      /* 거터의 ＋ (#52) — click 까지 기다리면 그 사이 다른 핸들러가 화면을 다시 그려
+         버튼이 문서에서 떨어져 나간다. 슬래시 메뉴와 같은 이유로 mousedown 에서 잡는다 */
+      ctx.listEl.addEventListener("mousedown", (e) => {
+        if (!EDIT) return;
+        const add = e.target.closest("[data-add]");
+        if (!add) return;
+        e.preventDefault(); e.stopPropagation();
+        edSlashClose();
+        const li = add.closest("li"), row = add.closest(".ss-row");
+        const target = li ? li.querySelector("[data-ed]")
+          : (row ? row.querySelector(".ss-items [data-ed]") || row.querySelector(".ss-t") : null);
+        if (!target) return;
+        edBegin(target);
+        edNewLine();
+        setTimeout(edSlash, 0); /* 새 줄이 그려진 뒤에 연다 */
+      }, true);
+
       /* 패널 안의 편집 상호작용 — 기존 클릭 위임(행 활성화·▶·스위치)보다 «먼저» 잡는다 */
       ctx.listEl.addEventListener("click", (e) => {
         if (!EDIT) return;
-        const add = e.target.closest("[data-add]");
-        if (add) { /* 거터의 ＋ — 그 블록에 커서를 두고 같은 메뉴를 연다 (#52) */
-          e.preventDefault(); e.stopPropagation();
-          edSlashClose();
-          const li = add.closest("li"), row = add.closest(".ss-row");
-          const target = li ? li.querySelector("[data-ed]")
-            : (row ? row.querySelector(".ss-items [data-ed]") || row.querySelector(".ss-t") : null);
-          if (target) { edBegin(target); edNewLine(); }
-          setTimeout(edSlash, 0); /* 새 줄이 그려진 뒤에 연다 */
-          return;
-        }
+        if (e.target.closest("[data-add]")) return; /* ＋ 는 mousedown 에서 처리한다 (아래) */
         edSlashClose();
         const cmd = e.target.closest("[data-ec]");
         if (cmd && cmd.tagName !== "SELECT") { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }
