@@ -480,6 +480,17 @@
   body.ss-editing [data-ed]{cursor:text;border-radius:4px;box-shadow:inset 0 -1px 0 var(--ss-line2)}
   body.ss-editing [data-ed]:hover{background:#FFF8E1;box-shadow:inset 0 -1px 0 var(--ss-ink3)}
   body.ss-editing [data-ed].ss-ed-on{background:#fff;box-shadow:0 0 0 2px var(--ss-accent);outline:none}
+  .ss-grip{display:none;cursor:grab;color:var(--ss-line2);font-size:12px;line-height:1;padding:0 3px;user-select:none}
+  .ss-grip:active{cursor:grabbing}
+  body.ss-editing .ss-items li:hover > .ss-grip,body.ss-editing .ss-row:hover .ss-edrow .ss-grip{display:inline-block}
+  body.ss-editing .ss-items li:hover > .ss-grip:hover{color:var(--ss-ink3)}
+  .ss-drop-line{height:2px;background:var(--ss-accent);border-radius:2px;margin:0}
+  .ss-dragging{opacity:.45}
+  /* 지우기는 «지금 고치는 칸» 에만 (#49) */
+  .ss-wipe{display:none;margin-left:6px;border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);
+    font-size:10.5px;border-radius:5px;padding:1px 6px;cursor:pointer}
+  .ss-items li:has(> .ss-ed-on) > .ss-wipe,.ss-title:has(.ss-ed-on) .ss-wipe{display:inline-block}
+  .ss-wipe:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
   .ss-edrow{display:none;gap:5px;margin-top:9px;flex-wrap:wrap}
   body.ss-editing .ss-row:hover .ss-edrow,body.ss-editing .ss-row:focus-within .ss-edrow{display:flex}
   .ss-edrow button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);font-size:11px;
@@ -864,19 +875,29 @@ ${HL_CSS}
   }
   /* 줄 하나의 손잡이 (#45) — 상시 노출 버튼(＋이유·×)을 걷어냈다. 넣기는 Enter·Tab·슬래시가,
      지우기는 빈 줄 Backspace 가 한다. 마우스를 쓰는 사람을 위해 «올렸을 때만» 나타나는 ⋮ 하나만 남긴다 */
-  function edLineCtl(di) {
+  /* 줄 손잡이 (#49) — 잡아서 옮기는 «손잡이» 하나뿐이다. 지우기는 지금 고치는 칸에서만 나온다.
+     ⋮ 를 지우기로 쓰던 것이 무슨 뜻인지 알 수 없었다는 PM 지적을 따랐다 */
+  function edGrip(kind, di, si, ti) {
     if (!EDIT) return "";
-    return '<span class="ss-edline ss-ui">' + edBtn("delline", "⋮", "이 줄 지우기", di) + "</span>";
+    return '<span class="ss-grip ss-ui" draggable="true" title="잡아서 옮기기" data-g="' + kind + '"' +
+      (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
+      (ti == null ? "" : ' data-ti="' + ti + '"') + ">⠿</span>";
   }
-  function edSubCtl(di, si, ti) {
+  function edWipe(cmd, di, si, ti) {
     if (!EDIT) return "";
-    return '<span class="ss-edline ss-ui">' + edBtn(ti == null ? "delsub" : "delsub3", "⋮", "이 줄 지우기", di, si, ti) + "</span>";
+    return '<button type="button" class="ss-wipe ss-ui" data-ec="' + cmd + '"' +
+      (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
+      (ti == null ? "" : ' data-ti="' + ti + '"') + ' title="이 줄 지우기">지우기</button>';
+  }
+  function edLineCtl(di) { return edGrip("line", di) + edWipe("delline", di); }
+  function edSubCtl(di, si, ti) {
+    return edGrip(ti == null ? "sub" : "sub3", di, si, ti) + edWipe(ti == null ? "delsub" : "delsub3", di, si, ti);
   }
   /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
   function edRowCtl() {
     if (!EDIT) return "";
-    return '<div class="ss-edrow ss-ui">' +
-      edBtn("up", "↑", "위로") + edBtn("down", "↓", "아래로") + edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
+    return '<div class="ss-edrow ss-ui">' + edGrip("item") +
+      edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
   }
   /* 아카이브 (#46) — 하위 요소(1a·1b)를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
      1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
@@ -2410,6 +2431,91 @@ ${HL_CSS}
       edSay("번호를 붙일 곳을 고르세요. ↑↓ 넓게·좁게, ←→ 옆 요소, Esc 취소");
     }
 
+    /* ---- 잡아서 옮기기 (#49) ----
+       ↑↓ 버튼을 없앴다. 순서는 «잡아서 옮긴다» 가 자연스럽고, 버튼 두 개가 줄마다 붙어 있을 이유가 없다.
+       옮길 수 있는 것은 같은 종류끼리다: 항목은 항목끼리, 줄은 그 항목 안에서. 종류가 다르면 놓을 자리를 안 그린다. */
+    let dragFrom = null, dropMark = null;
+    function edKeyOfNode(el) { return edKeyOf(el); }
+    function dragSame(a, b) { return a && b && a.kind === b.kind && (a.kind === "item" || a.key === b.key); }
+    function dragInfo(el) {
+      const g = el.closest && el.closest("[data-g]");
+      if (!g) return null;
+      const d = g.dataset;
+      return { kind: d.g, key: edKeyOfNode(g), di: Number(d.di), si: Number(d.si), ti: Number(d.ti),
+        row: g.closest(".ss-row"), li: g.closest("li") };
+    }
+    function dropClear() { if (dropMark) { dropMark.remove(); dropMark = null; } }
+    function dropShow(target, after) {
+      dropClear();
+      dropMark = h("div", { class: "ss-drop-line ss-ui" });
+      target.parentNode.insertBefore(dropMark, after ? target.nextSibling : target);
+    }
+    /* 배열 안에서 한 칸을 집어 다른 자리에 놓는다 */
+    function moveAt(arr, from, to) {
+      if (from < 0 || from >= arr.length) return;
+      const x = arr.splice(from, 1)[0];
+      arr.splice(from < to ? to - 1 : to, 0, x);
+    }
+    function edDnDMount() {
+      ctx.listEl.addEventListener("dragstart", (e) => {
+        const info = dragInfo(e.target);
+        if (!EDIT || !info) return;
+        if (edEl) edFinish(true);
+        dragFrom = info;
+        (info.kind === "item" ? info.row : info.li).classList.add("ss-dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", info.kind); } catch (x) { /* 일부 브라우저는 필요 */ }
+      });
+      ctx.listEl.addEventListener("dragover", (e) => {
+        if (!dragFrom) return;
+        const over = dragFrom.kind === "item" ? e.target.closest(".ss-row") : e.target.closest(".ss-items li");
+        if (!over) return;
+        if (dragFrom.kind !== "item" && edKeyOfNode(over) !== dragFrom.key) return; /* 남의 항목으로는 못 옮긴다 */
+        e.preventDefault();
+        const r = over.getBoundingClientRect();
+        dropShow(over, e.clientY > r.top + r.height / 2);
+      });
+      ctx.listEl.addEventListener("dragleave", (e) => { if (!e.relatedTarget || !ctx.listEl.contains(e.relatedTarget)) dropClear(); });
+      ctx.listEl.addEventListener("drop", (e) => {
+        if (!dragFrom) return;
+        e.preventDefault();
+        const over = dragFrom.kind === "item" ? e.target.closest(".ss-row") : e.target.closest(".ss-items li");
+        dropClear();
+        if (!over) { edDragEnd(); return; }
+        const r = over.getBoundingClientRect();
+        const after = e.clientY > r.top + r.height / 2;
+        edSnap();
+        if (dragFrom.kind === "item") {
+          const list = specs();
+          const from = list.findIndex((sp) => String(sp.n) === String(dragFrom.key));
+          const toKey = edKeyOfNode(over);
+          let to = list.findIndex((sp) => String(sp.n) === String(toKey));
+          if (from < 0 || to < 0) { edDragEnd(); return; }
+          moveAt(list, from, to + (after ? 1 : 0));
+          edRenumber();
+        } else {
+          const it = itemOf(dragFrom.key);
+          const defs = it && it.spec.defs;
+          if (!defs) { edDragEnd(); return; }
+          const t = dragInfo(over.querySelector("[data-g]") || over) || {};
+          if (dragFrom.kind === "line" && t.kind === "line") moveAt(defs, dragFrom.di, t.di + (after ? 1 : 0));
+          else if (dragFrom.kind === "sub" && t.kind === "sub" && dragFrom.di === t.di) {
+            const subs = defs[dragFrom.di] && defs[dragFrom.di].subs;
+            if (subs) moveAt(subs, dragFrom.si, t.si + (after ? 1 : 0));
+          } else { edDragEnd(); return; } /* 층이 다르면 옮기지 않는다 (Tab 이 층을 정한다) */
+        }
+        edTouched();
+        render();
+        edDragEnd();
+      });
+      ctx.listEl.addEventListener("dragend", edDragEnd);
+    }
+    function edDragEnd() {
+      dropClear();
+      ctx.listEl.querySelectorAll(".ss-dragging").forEach((n) => n.classList.remove("ss-dragging"));
+      dragFrom = null;
+    }
+
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
     function edRenumber() { specs().forEach((s, i) => (s.n = i + 1)); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
     function edCmd(btn) {
@@ -2670,6 +2776,7 @@ ${HL_CSS}
         e.returnValue = "";
         return "";
       });
+      edDnDMount();
       edDraftOffer();
     }
 

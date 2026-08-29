@@ -1177,8 +1177,9 @@ function check(name, ok, detail) {
     await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(200);
     check("편집: Enter 로 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
-    await page.hover('[data-defrow="1"] .ss-items li');
-    await page.waitForTimeout(120);
+    /* #49 이후 지우기는 «지금 고치는 칸» 에서만 나온다 */
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="t"][data-di="0"]');
+    await page.waitForTimeout(150);
     await page.click('[data-defrow="1"] [data-ec="delline"][data-di="0"]');
     await page.waitForTimeout(200);
     check("편집: 줄 삭제", await page.evaluate(() => window.SCREENSPEC.specs[0].defs.length === 1 && window.SCREENSPEC.specs[0].defs[0].t === "둘째 줄"));
@@ -1194,11 +1195,18 @@ function check(name, ok, detail) {
     await page.waitForTimeout(200);
     check("편집: «?» 로 이유 붙이기", await page.evaluate(() =>
       window.SCREENSPEC.specs[0].defs.some((d) => d.why === "근거 한 줄")), await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
-    /* #45 이후 순서 손잡이는 «마우스를 올렸을 때만» 나타난다 */
-    await page.hover('[data-defrow="2"]');
-    await page.waitForTimeout(120);
-    await page.click('[data-defrow="2"] [data-ec="up"]');
-    await page.waitForTimeout(250);
+    /* #49 이후 순서는 «잡아서 옮긴다» (↑↓ 버튼 없음) */
+    await page.evaluate(() => {
+      const src = document.querySelector('[data-defrow="2"] .ss-edrow .ss-grip');
+      const dst = document.querySelector('[data-defrow="1"]');
+      const dt = new DataTransfer();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      const r = dst.getBoundingClientRect();
+      dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
+      dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
+      src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
+    });
+    await page.waitForTimeout(300);
     check("편집: 순서 바꾸기", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "몸통"));
     check("편집: 순서를 바꾸면 번호를 1부터 다시 매긴다", await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n).join() === "1,2"));
     check("편집: 마커 번호도 따라온다", await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((x) => x.textContent).join() === "1,2"));
@@ -1658,6 +1666,68 @@ function check(name, ok, detail) {
     await page.waitForTimeout(300);
     check("에디터: 문자열 subs 만 쓰는 옛 문서가 그대로 그려진다",
       (await page.locator(".ss-items li.ss-sub").count()) === 2 && (await page.locator(".ss-items li.ss-sub3").count()) === 0);
+  }
+
+  /* ============ 잡아서 옮기기 (#49) ============
+     ↑↓ 버튼을 없앴다. 순서는 손잡이를 잡아 옮긴다. 지우기는 «지금 고치는 칸» 에만 나온다.
+     HTML5 드래그는 마우스 조작으로는 안 뜨므로 이벤트를 직접 만들어 보낸다. */
+  console.log("[dnd] 손잡이 · 잡아서 옮기기");
+  {
+    const DND_HTML = '<div id="a" data-spec="1">가</div><div id="b" data-spec="2">나</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-D',name:'드래그'},specs:[" +
+      "{n:1,target:'1',title:'첫 항목',defs:[{t:'A'},{t:'B'},{t:'C'}]}," +
+      "{n:2,target:'2',title:'둘째 항목',defs:[{t:'X'}]}]};<" + "/script>";
+    const dragTo = (fromSel, toSel, after) => page.evaluate(([f, t, af]) => {
+      const src = document.querySelector(f), dst = document.querySelector(t);
+      if (!src || !dst) return "대상 없음";
+      const dt = new DataTransfer();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      const r = dst.getBoundingClientRect();
+      const y = af ? r.bottom - 2 : r.top + 2;
+      dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: r.left + 5 }));
+      dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: r.left + 5 }));
+      src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
+      return "ok";
+    }, [fromSel, toSel, after]);
+
+    await page.goto("about:blank");
+    await page.setContent(DND_HTML);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(250);
+
+    check("옮기기: ↑↓ 버튼이 없다", (await page.locator('[data-ec="up"],[data-ec="down"]').count()) === 0);
+    check("옮기기: 뜻 모를 ⋮ 가 없다", !(await page.locator(".ss-defs-list").textContent()).includes("⋮"));
+    check("옮기기: 손잡이가 있다", (await page.locator(".ss-grip").count()) > 0);
+    check("옮기기: 지우기는 평소에 숨어 있다", await page.evaluate(() => {
+      const w = document.querySelector(".ss-wipe");
+      return !!w && getComputedStyle(w).display === "none";
+    }));
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="t"][data-di="1"]');
+    await page.waitForTimeout(200);
+    check("옮기기: 고치는 칸에서만 지우기가 보인다", await page.evaluate(() => {
+      const li = document.querySelector(".ss-ed-on").closest("li");
+      return getComputedStyle(li.querySelector(".ss-wipe")).display !== "none";
+    }));
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(150);
+
+    await dragTo('[data-defrow="1"] .ss-items li:nth-child(1) .ss-grip', '[data-defrow="1"] .ss-items li:nth-child(3)', true);
+    await page.waitForTimeout(300);
+    check("옮기기: 줄을 잡아 옮기면 순서가 바뀐다",
+      (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join(""))) === "BCA",
+      await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t)));
+
+    await dragTo('[data-defrow="1"] .ss-edrow .ss-grip', '[data-defrow="2"]', true);
+    await page.waitForTimeout(350);
+    check("옮기기: 항목을 옮기면 번호를 1부터 다시 매긴다",
+      (await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n + ":" + s.title).join(","))) === "1:둘째 항목,2:첫 항목",
+      await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n + ":" + s.title)));
+    check("옮기기: 마커 번호도 따라온다",
+      (await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((x) => x.textContent).join())) === "1,2");
   }
 
   /* ============ 인라인 서식 (#44) — 굵게와 링크, 딱 둘 ============
