@@ -1661,6 +1661,81 @@ function check(name, ok, detail) {
       (await page.locator(".ss-items li.ss-sub").count()) === 2 && (await page.locator(".ss-items li.ss-sub3").count()) === 0);
   }
 
+  /* ============ 인라인 서식 (#44) — 굵게와 링크, 딱 둘 ============
+     저장 형식을 컨플루언스 XHTML 의 최소 부분집합(<strong>·<a href>)으로 못박았는지 본다.
+     이게 지켜지면 컨플루언스로 내보낼 때 변환기가 아예 필요 없다. */
+  console.log("[rich] 굵게 · 링크");
+  {
+    const RICH_HTML = '<div id="a" data-spec="1">본문</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-R',name:'서식'}," +
+      "specs:[{n:1,target:'1',title:'영역',defs:[{t:'첫 줄 글자'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(RICH_HTML);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+
+    await page.click('.ss-dt[data-ed="t"][data-di="0"]');
+    await page.waitForTimeout(150);
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Control+b");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("Shift+Enter");
+    await page.waitForTimeout(250);
+    const t1 = await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t);
+    check("서식: 굵게가 <strong> 으로 저장된다 (<b> 아님)",
+      t1.indexOf("<strong>") >= 0 && t1.indexOf("<b>") < 0, t1);
+    check("서식: 화면에도 굵게 그려진다",
+      (await page.locator('[data-defrow="1"] .ss-items strong').count()) >= 1);
+
+    /* 허용 목록 밖 서식은 붙여넣어도 남지 않는다 (살균) */
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-defrow="1"] .ss-dt[data-ed="t"]');
+      el.click();
+      el.innerHTML = '<i>기울임</i> <u>밑줄</u> <span style="color:red">빨강</span> 남는글자';
+    });
+    await page.click('[data-defrow="1"] .ss-t');
+    await page.waitForTimeout(300);
+    const t2 = await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t);
+    check("서식: 기울임·밑줄·색은 글자만 남는다",
+      !/<i|<u|<span/.test(t2) && t2.indexOf("남는글자") >= 0, t2);
+
+    await page.evaluate(() => { window.prompt = () => "https://example.com/문서"; });
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="t"]');
+    await page.waitForTimeout(150);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Control+k");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Shift+Enter");
+    await page.waitForTimeout(250);
+    check("서식: 링크가 <a href> 로 저장된다",
+      /<a href="https:\/\/example\.com/.test(await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t)),
+      await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t));
+
+    /* 위험한 주소는 링크가 되지 않는다 */
+    await page.evaluate(() => { window.prompt = () => "javascript:alert(1)"; });
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="t"]');
+    await page.waitForTimeout(150);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Control+k");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Shift+Enter");
+    await page.waitForTimeout(250);
+    check("서식: javascript: 주소는 거절한다",
+      (await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t)).indexOf("javascript:") < 0);
+
+    /* 이게 이 기능의 계약이다 — 저장 전체에 두 태그 말고는 없다 */
+    const tags = await page.evaluate(() => {
+      const txt = window.ScreenSpec.serialize();
+      return [...new Set((txt.match(/<\/?[a-zA-Z][^>\s"]*/g) || []).map((x) => x.replace("<", "").replace("/", "").toLowerCase()))];
+    });
+    check("서식: 저장 전체에 strong·a 외 태그가 없다",
+      tags.every((t) => t === "strong" || t === "a"), tags);
+  }
+
   /* ============ 번호 찍기 (#43) ============
      지금까지 번호는 프로토타입에 미리 심어 둔 data-spec 이 있어야만 붙었다. 이제 화면에서 고른다.
      여기서 확인하는 것: 후보 판정 · 방향키로 넓히기 · 확정 뒤 «프로토타입에 이름표가 남는가»(동작 불변). */

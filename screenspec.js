@@ -231,6 +231,59 @@
     return String(x == null ? "" : x)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
+  /* ---- 인라인 서식 (#44) — 굵게와 링크, 딱 둘 ----
+     저장 형식을 **컨플루언스 XHTML 의 최소 부분집합**으로 못박는다: <strong> 과 <a href> 뿐.
+     그래서 컨플루언스로 내보낼 때 변환기가 «아예 없다» — 태그를 그대로 실어 보내면 된다.
+     노션처럼 형태가 다른 곳으로 갈 때만 얇은 변환기 하나가 필요하다.
+     서식을 늘리고 싶은 유혹도 이 한 줄이 막는다: 허용 목록 밖은 애초에 만들 수 없다. */
+  const RICH_OK = { STRONG: 1, A: 1 };
+  /* 화면에 그릴 글자 — 허용한 두 태그만 살리고 나머지는 글자로 만든다(살균).
+     사용자가 붙여넣은 서식이든 남의 스크립트든, 우리 패널에서 실행될 길을 남기지 않는다 */
+  function rich(x) {
+    const src = String(x == null ? "" : x);
+    if (src.indexOf("<") < 0) return esc(src);
+    const box = document.createElement("div");
+    box.innerHTML = src;
+    let out = "";
+    const walk = (node) => {
+      node.childNodes.forEach((n) => {
+        if (n.nodeType === 3) { out += esc(n.nodeValue); return; }
+        if (n.nodeType !== 1) return;
+        const tag = n.tagName;
+        if (tag === "A") {
+          const href = n.getAttribute("href") || "";
+          /* 주소는 http(s)·mailto 만 — javascript: 같은 것이 링크를 타고 들어오지 못하게 */
+          const ok = /^(https?:|mailto:)/i.test(href);
+          out += ok ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' : "";
+          walk(n);
+          out += ok ? "</a>" : "";
+          return;
+        }
+        if (RICH_OK[tag]) { out += "<" + tag.toLowerCase() + ">"; walk(n); out += "</" + tag.toLowerCase() + ">"; return; }
+        walk(n); /* 허용 밖 태그는 껍데기만 버리고 안의 글자는 살린다 */
+      });
+    };
+    walk(box);
+    return out;
+  }
+  /* 편집한 결과를 설정에 담을 때 — 브라우저가 만든 <b>·<i> 를 컨플루언스 이름으로 바꾼다.
+     입구에서 한 번만 하면 그 뒤로는 어디로 내보내든 손댈 것이 없다 (PM 2026-08-29) */
+  function richIn(el) {
+    const box = document.createElement("div");
+    box.innerHTML = el.innerHTML;
+    box.querySelectorAll("b,strong,i,em,u,span,font,div,p,br").forEach((n) => {
+      const t = n.tagName;
+      if (t === "B" || t === "STRONG") { const w = document.createElement("strong"); w.innerHTML = n.innerHTML; n.replaceWith(w); return; }
+      if (t === "BR") { n.replaceWith(document.createTextNode(" ")); return; }
+      if (t === "I" || t === "EM" || t === "U" || t === "SPAN" || t === "FONT" || t === "DIV" || t === "P") {
+        /* 기울임·밑줄은 «최소한의 노션» 밖이다 — 글자만 살린다 */
+        const f = document.createDocumentFragment();
+        while (n.firstChild) f.appendChild(n.firstChild);
+        n.replaceWith(f);
+      }
+    });
+    return rich(box.innerHTML).replace(/\s+/g, " ").trim();
+  }
   /* 모션 감소 설정 반영 */
   const SB = (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) ? "auto" : "smooth";
 
@@ -833,19 +886,19 @@ ${HL_CSS}
          걸러도 di 는 «원래 배열 인덱스» 그대로다 — 편집 모드가 이 값으로 설정에 쓴다 */
       if (want === "plan" && d.layer) return;
       if (want === "dev" && d.layer !== "dev") return;
-      const t = EDIT ? '<span class="ss-dt"' + edMark("t", di) + ">" + esc(d.t) + "</span>" : esc(d.t);
+      const t = EDIT ? '<span class="ss-dt"' + edMark("t", di) + ">" + rich(d.t) + "</span>" : rich(d.t);
       /* 이유는 «비어 있어도» 편집 중에는 자리를 내준다 — 방금 만든 빈 이유에 이어 써야 하기 때문이다.
          읽는 화면에서는 내용이 있을 때만 보인다 (비운 이유는 저장 때 사라진다) */
       const why = d.why || (EDIT && d.why != null)
-        ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + esc(d.why) + "</span>" : "";
+        ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + rich(d.why) + "</span>" : "";
       items += "<li>" + t + why + edLineCtl(di) + "</li>";
       (d.subs || []).forEach((sub, si) => {
         /* 하위 줄은 «글자» 이거나 «글자 + 그 아래 한 단» 이다 (0-6).
            번호는 2단(1a)까지만 붙인다 — 3단까지 번호를 매기면 화면 위 마커와 어긋난다 (PM 결정 2026-08-28) */
-        const st = EDIT ? '<span class="ss-dt"' + edMark("sub", di, si) + ">" + esc(subT(sub)) + "</span>" : esc(subT(sub));
+        const st = EDIT ? '<span class="ss-dt"' + edMark("sub", di, si) + ">" + rich(subT(sub)) + "</span>" : rich(subT(sub));
         items += '<li class="ss-sub">' + st + edSubCtl(di, si) + "</li>";
         ((sub && sub.subs) || []).forEach((s3, ti) => {
-          const t3 = EDIT ? '<span class="ss-dt"' + edMark("sub3", di, si, ti) + ">" + esc(s3) + "</span>" : esc(s3);
+          const t3 = EDIT ? '<span class="ss-dt"' + edMark("sub3", di, si, ti) + ">" + rich(s3) + "</span>" : rich(s3);
           items += '<li class="ss-sub ss-sub3">' + t3 + edSubCtl(di, si, ti) + "</li>";
         });
       });
@@ -1568,7 +1621,7 @@ ${HL_CSS}
        ============================================================ */
     let prDlg = null;
     function prLine(d) {
-      return "<li>" + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + esc(d.t) +
+      return "<li>" + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) +
         (d.why ? '<span class="ss-pr-why">' + esc(d.why) + "</span>" : "") + "</li>" +
         (d.subs || []).map((sb) => '<li class="ss-pr-sub">' + esc(sb) + "</li>").join("");
     }
@@ -1954,7 +2007,7 @@ ${HL_CSS}
       if (edEl === el) return;
       if (edEl) edFinish(true);
       edEl = el;
-      edWas = el.textContent;
+      edWas = richIn(el);
       el.contentEditable = "true";
       el.classList.add("ss-ed-on");
       el.focus();
@@ -1971,9 +2024,9 @@ ${HL_CSS}
       edEl = null;
       el.contentEditable = "false";
       el.classList.remove("ss-ed-on");
-      const next = el.textContent.replace(/\s+/g, " ").trim();
+      const next = richIn(el); /* <b>→<strong> 정규화 + 허용 목록 밖 서식 제거 (#44) */
       if (!commit || next === edWas) {
-        el.textContent = edWas;
+        el.innerHTML = rich(edWas);
         /* 갓 만든 빈 줄에서 그냥 빠져나오면 «안 쓰기로 한 것» 이다 — 빈 껍데기를 남기지 않는다 (0-6).
            el.isConnected 를 보는 이유: 다시 그리면 옛 요소가 떨어져 나간 채 여기로 오는데,
            그건 사용자가 그만둔 게 아니라 우리가 화면을 갈아 끼운 것이다 (그걸 «취소» 로 읽으면 방금 만든 줄을 지운다) */
@@ -1981,7 +2034,7 @@ ${HL_CSS}
         return;
       }
       const it = itemOf(edKeyOf(el));
-      if (!it) { el.textContent = edWas; return; }
+      if (!it) { el.innerHTML = rich(edWas); return; }
       const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di), si = Number(el.dataset.si), ti = Number(el.dataset.ti);
       let redraw = false;
       edSnap();
@@ -2007,6 +2060,9 @@ ${HL_CSS}
         else { x.subs.splice(ti, 1); if (!x.subs.length) delete x.subs; redraw = true; }
       }
       edTouched();
+      /* 화면을 «저장된 형태» 로 맞춘다 — 브라우저는 굵게를 <b> 로 만드는데 우리가 담는 것은 <strong> 이다.
+         여기서 안 맞추면 눈에 보이는 것과 저장된 것이 갈라진 채 다음 편집이 시작된다 (#44) */
+      if (!redraw && el.isConnected && el.innerHTML !== rich(next)) el.innerHTML = rich(next);
       if (redraw) render();
     }
 
@@ -2156,6 +2212,16 @@ ${HL_CSS}
       }
       edTouched();
     }
+    /* 링크 (#44) — 고른 글자에 주소를 건다. 고른 것이 없으면 주소를 글자로 넣는다 */
+    function edLink() {
+      const sel = getSelection();
+      const had = sel && !sel.isCollapsed ? String(sel) : "";
+      const url = prompt("링크 주소", "https://");
+      if (!url || !/^(https?:|mailto:)/i.test(url)) { if (url) edSay("http(s) 나 mailto 주소만 걸 수 있습니다"); return; }
+      if (had) document.execCommand("createLink", false, url);
+      else document.execCommand("insertHTML", false, '<a href="' + esc(url) + '">' + esc(url) + "</a>");
+    }
+
     /* 슬래시 메뉴 (#42) — 항목은 셋뿐이다: 번호 · 불릿 · 이유.
        「설명 줄 / 하위 줄」로 나눴던 것은 우리 데이터 구조(defs·subs)를 그대로 메뉴로 내보낸 실수였다 —
        둘은 같은 불릿이고 층은 Tab 이 정한다(노션과 같음). 개발 정의·유형·하위 요소는 아카이브(#46).
@@ -2572,6 +2638,9 @@ ${HL_CSS}
         /* 메뉴 오른쪽에 적힌 단축키 — 슬래시를 안 열고도 바로 (노션과 같은 관습) */
         else if (k === "-" && empty) { eat(); edIndent(true); }
         else if (k === "?" && empty) { eat(); edPick("why", edPos()); }
+        /* 굵게·링크 — 저장에는 <strong>·<a href> 로만 남는다 (#44) */
+        else if ((e.ctrlKey || e.metaKey) && (k === "b" || k === "B")) { eat(); document.execCommand("bold"); }
+        else if ((e.ctrlKey || e.metaKey) && (k === "k" || k === "K")) { eat(); edLink(); }
       }, true);
       /* 되돌리기는 문서 전체에서 받는다 — 커서가 어느 줄에 있든 같은 손짓이어야 한다 */
       document.addEventListener("keydown", (e) => {
