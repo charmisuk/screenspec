@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.23 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.24 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -432,7 +432,15 @@
   .ss-doc-body{flex:1;display:flex;min-height:0;background:var(--ss-canvas)}
   .ss-stage{flex:1;min-width:0;overflow:auto;padding:24px}
   .ss-fit{position:relative;margin:0 auto;transition:width .15s,height .15s}
-  .ss-defs{width:460px;flex-shrink:0;background:#fff;border-left:1px solid var(--ss-line2);display:flex;flex-direction:column;min-height:0}
+  .ss-defs{width:var(--ss-panel-w,460px);flex-shrink:0;background:#fff;border-left:1px solid var(--ss-line2);
+    display:flex;flex-direction:column;min-height:0;position:relative}
+  /* 폭 조절 (#53) — 왼쪽 가장자리를 잡아 끈다. 고른 폭은 그 사람 브라우저에 남는다 */
+  /* 손잡이는 «패널 안쪽» 에 둔다 — 밖으로 나오면 시트의 폭 조절 손잡이를 가로챈다 (2026-08-30 실측) */
+  .ss-defs-resize{position:absolute;left:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2}
+  .ss-defs-resize::after{content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%);
+    width:2px;height:34px;border-radius:2px;background:transparent;transition:background .12s}
+  .ss-defs-resize:hover::after,.ss-defs-resize.ss-on::after{background:var(--ss-accent)}
+  body.ss-resizing{cursor:col-resize;user-select:none}
   .ss-defs-head{padding:12px 18px;border-bottom:1px solid var(--ss-line);display:flex;align-items:center;gap:8px}
   .ss-defs-head h2{font-size:13px;font-weight:800;margin:0;color:var(--ss-ink)}
   .ss-defs-head .ss-cnt{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);font-weight:700}
@@ -476,33 +484,30 @@
   .ss-edbar .ss-edsave{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
   .ss-edmsg{flex-basis:100%;color:var(--ss-ink2);line-height:1.6}
   .ss-edmsg:empty{display:none}
-  /* 고칠 수 있는 글자 — 밑줄 한 겹으로만 알린다. 읽을 때의 인상을 바꾸지 않기 위해 */
-  body.ss-editing [data-ed]{cursor:text;border-radius:4px;box-shadow:inset 0 -1px 0 var(--ss-line2)}
-  body.ss-editing [data-ed]:hover{background:#FFF8E1;box-shadow:inset 0 -1px 0 var(--ss-ink3)}
-  body.ss-editing [data-ed].ss-ed-on{background:#fff;box-shadow:0 0 0 2px var(--ss-accent);outline:none}
-  .ss-grip{display:none;cursor:grab;color:var(--ss-line2);font-size:12px;line-height:1;padding:0 3px;user-select:none}
-  .ss-grip:active{cursor:grabbing}
-  body.ss-editing .ss-items li:hover > .ss-grip,body.ss-editing .ss-row:hover .ss-edrow .ss-grip{display:inline-block}
-  body.ss-editing .ss-items li:hover > .ss-grip:hover{color:var(--ss-ink3)}
+  /* ---- 블록 에디터 (#52) ----
+     PM: 「편집 누르면 노션처럼 빈칸 쭉 나오고 플러스 버튼 있고 드래그할 수 있는 점 6개 보이고.
+     편집모드 들어간다고 밑에 쉐이드 있고 이런 거 싫어.」
+     그래서 «편집 중» 을 알리는 장식(노란 배경·밑줄)을 전부 뺐다. 편집은 상태가 아니라 그냥 쓸 수 있는 것이다.
+     손잡이(＋·⠿)는 블록 왼쪽 거터에 있고, 마우스를 올린 블록에만 나온다. */
+  body.ss-editing [data-ed]{cursor:text;border-radius:3px}
+  body.ss-editing [data-ed].ss-ed-on{outline:none;background:transparent}
+  .ss-gut{position:absolute;left:-40px;top:0;display:flex;gap:1px;opacity:0;transition:opacity .1s}
+  .ss-blk:hover > .ss-gut,.ss-blk:focus-within > .ss-gut{opacity:1}
+  .ss-gut button{width:18px;height:21px;display:grid;place-items:center;border-radius:4px;
+    color:var(--ss-line2);font-size:12px;line-height:1;cursor:pointer;background:none;border:0;padding:0}
+  .ss-gut button:hover{background:var(--ss-canvas);color:var(--ss-ink2)}
+  .ss-gut .ss-g-grip{cursor:grab;letter-spacing:-2px}
+  .ss-gut .ss-g-grip:active{cursor:grabbing}
+  .ss-blk{position:relative}
+  /* 번호 블록 = 하나의 덩어리 (노션 콜아웃처럼). PM 확인: 「콜아웃 느낌 난 좋아」 */
+  body.ss-editing .ss-row{padding-left:0}
   .ss-drop-line{height:2px;background:var(--ss-accent);border-radius:2px;margin:0}
   .ss-dragging{opacity:.45}
   /* 지우기는 «지금 고치는 칸» 에만 (#49) */
   .ss-wipe{display:none;margin-left:6px;border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);
-    font-size:10.5px;border-radius:5px;padding:1px 6px;cursor:pointer}
+    font-size:10.5px;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit}
   .ss-items li:has(> .ss-ed-on) > .ss-wipe,.ss-title:has(.ss-ed-on) .ss-wipe{display:inline-block}
   .ss-wipe:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
-  .ss-edrow{display:none;gap:5px;margin-top:9px;flex-wrap:wrap}
-  body.ss-editing .ss-row:hover .ss-edrow,body.ss-editing .ss-row:focus-within .ss-edrow{display:flex}
-  .ss-edrow button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);font-size:11px;
-    font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;font-family:inherit}
-  .ss-edrow button:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
-  .ss-edline{display:none;gap:4px;margin-left:6px}
-  /* 흐리게 늘 보인다 → 있는 줄 모르는 일이 없고, 얹으면 또렷해진다 */
-  body.ss-editing .ss-edline{display:inline-flex;opacity:.4;transition:opacity .12s}
-  body.ss-editing .ss-items li:hover .ss-edline{opacity:1}
-  .ss-edline button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);font-size:10.5px;
-    font-weight:700;padding:0 6px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1.7}
-  .ss-edline button:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
   .ss-draft{display:none;align-items:center;gap:8px;padding:9px 18px;background:#FFF8E1;
     border-bottom:1px solid #F0E4B8;font-size:11.5px;color:#7A5B00;line-height:1.6}
   .ss-draft.ss-show{display:flex}
@@ -856,11 +861,15 @@ ${HL_CSS}
      지우기는 빈 줄 Backspace 가 한다. 마우스를 쓰는 사람을 위해 «올렸을 때만» 나타나는 ⋮ 하나만 남긴다 */
   /* 줄 손잡이 (#49) — 잡아서 옮기는 «손잡이» 하나뿐이다. 지우기는 지금 고치는 칸에서만 나온다.
      ⋮ 를 지우기로 쓰던 것이 무슨 뜻인지 알 수 없었다는 PM 지적을 따랐다 */
-  function edGrip(kind, di, si, ti) {
+  /* 블록 손잡이 (#52) — 노션처럼 «블록 왼쪽» 거터에 ＋ 와 ⠿.
+     PM: 「지금은 점 6개가 맨 아래에 나와서 말이 안 돼. 하나의 블럭처럼 해줬으면 좋겠어.」 */
+  function edGut(kind, di, si, ti) {
     if (!EDIT) return "";
-    return '<span class="ss-grip ss-ui" draggable="true" title="잡아서 옮기기" data-g="' + kind + '"' +
-      (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
-      (ti == null ? "" : ' data-ti="' + ti + '"') + ">⠿</span>";
+    const at = (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
+      (ti == null ? "" : ' data-ti="' + ti + '"');
+    return '<span class="ss-gut ss-ui">' +
+      '<button type="button" class="ss-g-add" title="여기에 넣기" data-add="' + kind + '"' + at + ">＋</button>" +
+      '<button type="button" class="ss-g-grip" title="잡아서 옮기기" draggable="true" data-g="' + kind + '"' + at + ">⠿</button></span>";
   }
   function edWipe(cmd, di, si, ti) {
     if (!EDIT) return "";
@@ -868,15 +877,14 @@ ${HL_CSS}
       (di == null ? "" : ' data-di="' + di + '"') + (si == null ? "" : ' data-si="' + si + '"') +
       (ti == null ? "" : ' data-ti="' + ti + '"') + ' title="이 줄 지우기">지우기</button>';
   }
-  function edLineCtl(di) { return edGrip("line", di) + edWipe("delline", di); }
+  function edLineCtl(di) { return edGut("line", di) + edWipe("delline", di); }
   function edSubCtl(di, si, ti) {
-    return edGrip(ti == null ? "sub" : "sub3", di, si, ti) + edWipe(ti == null ? "delsub" : "delsub3", di, si, ti);
+    return edGut(ti == null ? "sub" : "sub3", di, si, ti) + edWipe(ti == null ? "delsub" : "delsub3", di, si, ti);
   }
   /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
   function edRowCtl() {
     if (!EDIT) return "";
-    return '<div class="ss-edrow ss-ui">' + edGrip("item") +
-      edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
+    return '<div class="ss-edrow ss-ui">' + edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
   }
   /* 아카이브 (#46) — 하위 요소(1a·1b)를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
      1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
@@ -897,15 +905,15 @@ ${HL_CSS}
          읽는 화면에서는 내용이 있을 때만 보인다 (비운 이유는 저장 때 사라진다) */
       const why = d.why || (EDIT && d.why != null)
         ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + rich(d.why) + "</span>" : "";
-      items += "<li>" + t + why + edLineCtl(di) + "</li>";
+      items += '<li class="ss-blk">' + edLineCtl(di) + t + why + "</li>";
       (d.subs || []).forEach((sub, si) => {
         /* 하위 줄은 «글자» 이거나 «글자 + 그 아래 한 단» 이다 (0-6).
            번호는 2단(1a)까지만 붙인다 — 3단까지 번호를 매기면 화면 위 마커와 어긋난다 (PM 결정 2026-08-28) */
         const st = EDIT ? '<span class="ss-dt"' + edMark("sub", di, si) + ">" + rich(subT(sub)) + "</span>" : rich(subT(sub));
-        items += '<li class="ss-sub">' + st + edSubCtl(di, si) + "</li>";
+        items += '<li class="ss-sub ss-blk">' + edSubCtl(di, si) + st + "</li>";
         ((sub && sub.subs) || []).forEach((s3, ti) => {
           const t3 = EDIT ? '<span class="ss-dt"' + edMark("sub3", di, si, ti) + ">" + rich(s3) + "</span>" : rich(s3);
-          items += '<li class="ss-sub ss-sub3">' + t3 + edSubCtl(di, si, ti) + "</li>";
+          items += '<li class="ss-sub ss-sub3 ss-blk">' + edSubCtl(di, si, ti) + t3 + "</li>";
         });
       });
     });
@@ -964,8 +972,8 @@ ${HL_CSS}
     let out = "";
     (specs || []).forEach((s) => {
       const type = annoOf(s);
-      out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
-        <div class="ss-no">${s.n}</div>
+      out += `<div class="ss-row ss-blk" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
+        ${edGut("item")}<div class="ss-no">${s.n}</div>
         <div class="ss-main">
           <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-nowtag">현재 미표시</span></div>
           <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${edRowCtl()}
@@ -2424,7 +2432,8 @@ ${HL_CSS}
         if (!EDIT || !info) return;
         if (edEl) edFinish(true);
         dragFrom = info;
-        (info.kind === "item" ? info.row : info.li).classList.add("ss-dragging");
+        const box = info.kind === "item" ? info.row : info.li;
+        if (box) box.classList.add("ss-dragging");
         e.dataTransfer.effectAllowed = "move";
         try { e.dataTransfer.setData("text/plain", info.kind); } catch (x) { /* 일부 브라우저는 필요 */ }
       });
@@ -2688,6 +2697,17 @@ ${HL_CSS}
       /* 패널 안의 편집 상호작용 — 기존 클릭 위임(행 활성화·▶·스위치)보다 «먼저» 잡는다 */
       ctx.listEl.addEventListener("click", (e) => {
         if (!EDIT) return;
+        const add = e.target.closest("[data-add]");
+        if (add) { /* 거터의 ＋ — 그 블록에 커서를 두고 같은 메뉴를 연다 (#52) */
+          e.preventDefault(); e.stopPropagation();
+          edSlashClose();
+          const li = add.closest("li"), row = add.closest(".ss-row");
+          const target = li ? li.querySelector("[data-ed]")
+            : (row ? row.querySelector(".ss-items [data-ed]") || row.querySelector(".ss-t") : null);
+          if (target) { edBegin(target); edNewLine(); }
+          setTimeout(edSlash, 0); /* 새 줄이 그려진 뒤에 연다 */
+          return;
+        }
         edSlashClose();
         const cmd = e.target.closest("[data-ec]");
         if (cmd && cmd.tagName !== "SELECT") { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }
@@ -2882,9 +2902,10 @@ ${HL_CSS}
       <div class="ss-doc-body">
         <div class="ss-stage" id="ss-stage"><div class="ss-fit" id="ss-fit"><div class="ss-holder" id="ss-docHolder"></div></div></div>
         <aside class="ss-defs" aria-label="기능 설명">
+          <div class="ss-defs-resize" title="좌우로 끌어 폭 조절"></div>
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.23</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.24</div>
         </aside>
       </div>`);
 
@@ -3157,6 +3178,70 @@ ${HL_CSS}
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
 
     /* ---- 공개 API ---- */
+    /* ---- 기능 설명 패널 폭 조절 (#53) ----
+       왼쪽 가장자리를 잡아 끈다. 고른 폭은 그 사람 브라우저에만 남는다(다음에 열어도 그대로).
+       폭이 바뀌면 시트 배율이 달라지므로 마커를 다시 놓는다 — 안 그러면 번호가 어긋난 채 남는다. */
+    const PANEL_MIN = 320, PANEL_MAX = 720, PANEL_KEY = "ss-panel-w";
+    function panelSet(px, save) {
+      const w = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Math.round(px)));
+      document.documentElement.style.setProperty("--ss-panel-w", w + "px");
+      if (save) { try { localStorage.setItem(PANEL_KEY, String(w)); } catch (e) { /* 사생활 보호 모드 */ } }
+      return w;
+    }
+    function panelMount() {
+      const grip = document.querySelector(".ss-defs-resize");
+      const panel = document.querySelector(".ss-defs");
+      if (!grip || !panel) return;
+      let saved = null;
+      try { saved = localStorage.getItem(PANEL_KEY); } catch (e) { saved = null; }
+      if (saved) {
+        panelSet(Number(saved), false);
+        /* 저장된 폭으로 시작하면 시트 배율이 달라진다 — 첫 배치를 그 폭 기준으로 다시 잡는다 */
+        requestAnimationFrame(() => { layout(); core.placeMarkers(); });
+      }
+
+      let from = 0, base = 0;
+      const move = (e) => {
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        panelSet(base + (from - x), false);
+        layout(); /* 시트 배율이 바뀐다 */
+      };
+      const up = () => {
+        removeEventListener("mousemove", move);
+        removeEventListener("mouseup", up);
+        removeEventListener("touchmove", move);
+        removeEventListener("touchend", up);
+        document.body.classList.remove("ss-resizing");
+        grip.classList.remove("ss-on");
+        panelSet(panel.getBoundingClientRect().width, true);
+        layout();
+        core.placeMarkers();
+      };
+      const down = (e) => {
+        from = e.touches ? e.touches[0].clientX : e.clientX;
+        base = panel.getBoundingClientRect().width;
+        document.body.classList.add("ss-resizing");
+        grip.classList.add("ss-on");
+        addEventListener("mousemove", move);
+        addEventListener("mouseup", up);
+        addEventListener("touchmove", move, { passive: true });
+        addEventListener("touchend", up);
+        e.preventDefault();
+      };
+      grip.addEventListener("mousedown", down);
+      grip.addEventListener("touchstart", down, { passive: false });
+      /* 키보드로도 — 손잡이에 초점을 두고 좌우 화살표 */
+      grip.tabIndex = 0;
+      grip.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        panelSet(panel.getBoundingClientRect().width + (e.key === "ArrowLeft" ? 20 : -20), true);
+        layout();
+        core.placeMarkers();
+      });
+    }
+    panelMount();
+
     core.prMount(toolbar);
     core.edMount();
     core.lyMount();
@@ -3170,7 +3255,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.23] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.24] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -3201,7 +3286,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.23</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.24</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -3305,7 +3390,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.23] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.24] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

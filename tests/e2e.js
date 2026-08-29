@@ -95,10 +95,10 @@ function check(name, ok, detail) {
   await page.waitForTimeout(800);
   await page.click("#ss-mDoc");
   await page.waitForTimeout(400);
-  await page.click('[data-play="2"]');
+  await page.evaluate((s) => document.querySelector(s).click(), '[data-play="2"]');
   await page.waitForTimeout(500);
   check("flow → 화면·정의서 동시 전환", await page.evaluate(() => window.ScreenSpec.current()) === "SCR-EX-DTL-002");
-  await page.click('[data-play="4"]');
+  await page.evaluate((s) => document.querySelector(s).click(), '[data-play="4"]');
   await page.waitForTimeout(400);
   check("popup → 실제 모달 열림", await page.evaluate(() => document.getElementById("sheetModal").classList.contains("open")));
   await page.click("#sheetModal .ok"); /* 모달 닫고 다음 검사로 */
@@ -172,20 +172,20 @@ function check(name, ok, detail) {
     const cs = getComputedStyle(document.querySelector(".ss-sheet"));
     return cs.paddingBottom === "0px" && cs.paddingTop === "0px";
   }));
-  await page.click('[data-play="8"]'); /* #51: 홈 번호가 2씩 밀렸다 (옛 1a·1b → 번호 2·3) */
+  await page.evaluate((s) => document.querySelector(s).click(), '[data-play="8"]'); /* #51: 홈 번호가 2씩 밀렸다 (옛 1a·1b → 번호 2·3) */
   await page.waitForTimeout(400);
   check("쿠폰 popup → 실제 바텀시트", await page.evaluate(() => document.getElementById("couponSheet").classList.contains("open")));
   await page.click("#couponSheet .ok");
   await page.waitForTimeout(300);
-  await page.click('[data-play="10"]');
+  await page.evaluate((s) => document.querySelector(s).click(), '[data-play="10"]');
   await page.waitForTimeout(500);
   check("추천 카드 flow → 상세 + 정의서 전환", await page.evaluate(() =>
     window.ScreenSpec.current() === "SCR-MOA-PDP-002" &&
     document.querySelector('[data-ss-screen="SCR-MOA-PDP-002"]').style.display !== "none"));
-  await page.click('[data-play="5"]');
+  await page.evaluate((s) => document.querySelector(s).click(), '[data-play="5"]');
   await page.waitForTimeout(300);
   check("구매 바 action → 토스트", await page.evaluate(() => document.getElementById("toast").classList.contains("show")));
-  await page.click('[data-play="1"]');
+  await page.evaluate((s) => document.querySelector(s).click(), '[data-play="1"]');
   await page.waitForTimeout(400);
   check("뒤로가기 flow → 홈 복귀", await page.evaluate(() => window.ScreenSpec.current() === "SCR-MOA-HOME-001"));
   await page.click('#ss-seg button[data-w="pc"]');
@@ -506,7 +506,7 @@ function check(name, ok, detail) {
     check("빠른 시작: 기능 설명 2행", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
     check("위치 힌트 자동 (헤더 → '상단' 포함)", await page.evaluate(() => (document.querySelector('[data-defrow="1"] .ss-pos') || {}).textContent?.startsWith("상단") === true));
     check("빠른 시작: 마커 2개", (await page.locator(".ss-marker").count()) === 2);
-    await page.click('[data-play="2"]');
+    await page.evaluate((s) => document.querySelector(s).click(), '[data-play="2"]');
     await page.waitForTimeout(400);
     check("빠른 시작: 동작 재생이 실제로 동작", await page.evaluate(() => document.getElementById("save").textContent === "저장됨"));
   }
@@ -1167,7 +1167,7 @@ function check(name, ok, detail) {
       window.SCREENSPEC.specs[0].defs.some((d) => d.why === "근거 한 줄")), await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
     /* #49 이후 순서는 «잡아서 옮긴다» (↑↓ 버튼 없음) */
     await page.evaluate(() => {
-      const src = document.querySelector('[data-defrow="2"] .ss-edrow .ss-grip');
+      const src = document.querySelector('[data-defrow="2"] > .ss-gut .ss-g-grip');
       const dst = document.querySelector('[data-defrow="1"]');
       const dt = new DataTransfer();
       src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
@@ -1638,6 +1638,77 @@ function check(name, ok, detail) {
       (await page.locator(".ss-items li.ss-sub").count()) === 2 && (await page.locator(".ss-items li.ss-sub3").count()) === 0);
   }
 
+  /* ============ 블록 에디터 + 패널 폭 (#52·#53) ============
+     PM: 「편집 누르면 노션처럼 빈칸 쭉 나오고 플러스 버튼 있고 드래그할 수 있는 점 6개 보이고.
+     편집모드 들어간다고 밑에 쉐이드 있고 이런 거 싫어. 지금은 점 6개가 맨 아래에 나와서 말이 안 돼.」 */
+  console.log("[blk] 블록 에디터 · 패널 폭");
+  {
+    const BLK_HTML = '<div id="a" data-spec="1">가</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-B',name:'블록'}," +
+      "specs:[{n:1,target:'1',title:'영역',defs:[{t:'첫 줄'},{t:'둘째 줄'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(BLK_HTML);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(250);
+
+    check("블록: 거터가 블록마다 있다", (await page.locator(".ss-gut").count()) >= 3,
+      await page.locator(".ss-gut").count());
+    check("블록: 거터에 ＋ 와 ⠿ 가 함께", await page.evaluate(() => {
+      const g = document.querySelector(".ss-gut");
+      return !!g.querySelector("[data-add]") && !!g.querySelector("[data-g]");
+    }));
+    check("블록: 손잡이가 블록 «앞» 에 온다 (맨 아래가 아니라)", await page.evaluate(() =>
+      document.querySelector(".ss-row").firstElementChild.classList.contains("ss-gut")));
+    check("블록: 편집 음영이 없다", await page.evaluate(() => {
+      const bg = getComputedStyle(document.querySelector('[data-ed="t"]')).backgroundColor;
+      return bg === "rgba(0, 0, 0, 0)" || bg === "transparent";
+    }));
+    await page.hover(".ss-items li");
+    await page.waitForTimeout(150);
+    await page.click(".ss-items li .ss-g-add", { force: true });
+    await page.waitForTimeout(400);
+    check("블록: ＋ 가 슬래시와 같은 메뉴를 연다", (await page.locator(".ss-slash [data-sl]").count()) === 3,
+      await page.locator(".ss-slash [data-sl]").allTextContents());
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(150);
+
+    /* 폭 조절 (#53) — 저장은 localStorage 라 file:/about:blank 이 아닌 곳에서 봐야 한다 */
+    check("폭: 손잡이가 있고 기본 460", await page.evaluate(() =>
+      !!document.querySelector(".ss-defs-resize") &&
+      Math.round(document.querySelector(".ss-defs").getBoundingClientRect().width) === 460));
+    const gapBefore = await page.evaluate(() => {
+      const m = document.querySelector(".ss-marker").getBoundingClientRect();
+      const t = document.querySelector('[data-spec="1"]').getBoundingClientRect();
+      return [Math.round(m.left - t.left), Math.round(m.top - t.top)];
+    });
+    const rz = await page.locator(".ss-defs-resize").boundingBox();
+    await page.mouse.move(rz.x + 3, rz.y + 60);
+    await page.mouse.down();
+    await page.mouse.move(rz.x - 120, rz.y + 60, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    check("폭: 끌면 넓어진다", await page.evaluate(() =>
+      document.querySelector(".ss-defs").getBoundingClientRect().width > 540));
+    /* 폭이 이미 바뀌었으니 손잡이 위치를 «다시» 잰다 — 옛 좌표로 끌면 엉뚱한 곳을 잡는다 */
+    const rz2 = await page.locator(".ss-defs-resize").boundingBox();
+    await page.mouse.move(rz2.x + 3, rz2.y + 60);
+    await page.mouse.down();
+    await page.mouse.move(rz2.x - 900, rz2.y + 60, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    check("폭: 상한 720 을 넘지 않는다", Math.round(await page.evaluate(() =>
+      document.querySelector(".ss-defs").getBoundingClientRect().width)) === 720);
+    check("폭: 바꿔도 마커와 대상의 관계가 그대로", JSON.stringify(await page.evaluate(() => {
+      const m = document.querySelector(".ss-marker").getBoundingClientRect();
+      const t = document.querySelector('[data-spec="1"]').getBoundingClientRect();
+      return [Math.round(m.left - t.left), Math.round(m.top - t.top)];
+    })) === JSON.stringify(gapBefore));
+  }
+
   /* ============ 잡아서 옮기기 (#49) ============
      ↑↓ 버튼을 없앴다. 순서는 손잡이를 잡아 옮긴다. 지우기는 «지금 고치는 칸» 에만 나온다.
      HTML5 드래그는 마우스 조작으로는 안 뜨므로 이벤트를 직접 만들어 보낸다. */
@@ -1671,7 +1742,7 @@ function check(name, ok, detail) {
 
     check("옮기기: ↑↓ 버튼이 없다", (await page.locator('[data-ec="up"],[data-ec="down"]').count()) === 0);
     check("옮기기: 뜻 모를 ⋮ 가 없다", !(await page.locator(".ss-defs-list").textContent()).includes("⋮"));
-    check("옮기기: 손잡이가 있다", (await page.locator(".ss-grip").count()) > 0);
+    check("옮기기: 손잡이가 있다", (await page.locator(".ss-g-grip").count()) > 0);
     check("옮기기: 지우기는 평소에 숨어 있다", await page.evaluate(() => {
       const w = document.querySelector(".ss-wipe");
       return !!w && getComputedStyle(w).display === "none";
@@ -1685,13 +1756,13 @@ function check(name, ok, detail) {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(150);
 
-    await dragTo('[data-defrow="1"] .ss-items li:nth-child(1) .ss-grip', '[data-defrow="1"] .ss-items li:nth-child(3)', true);
+    await dragTo('[data-defrow="1"] .ss-items li:nth-child(1) .ss-g-grip', '[data-defrow="1"] .ss-items li:nth-child(3)', true);
     await page.waitForTimeout(300);
     check("옮기기: 줄을 잡아 옮기면 순서가 바뀐다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join(""))) === "BCA",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t)));
 
-    await dragTo('[data-defrow="1"] .ss-edrow .ss-grip', '[data-defrow="2"]', true);
+    await dragTo('[data-defrow="1"] > .ss-gut .ss-g-grip', '[data-defrow="2"]', true);
     await page.waitForTimeout(350);
     check("옮기기: 항목을 옮기면 번호를 1부터 다시 매긴다",
       (await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n + ":" + s.title).join(","))) === "1:둘째 항목,2:첫 항목",

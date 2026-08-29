@@ -328,5 +328,27 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
     ("한글 " + EM + " 있음").indexOf(EM) >= 0 && "한글 : 없음".indexOf(EM) < 0);
 }
 
+/* 22) CSS 중괄호 균형 — 한 줄만 잘못 지워도 «그 뒤 규칙 전부» 가 조용히 죽는다.
+       2026-08-30 실측: .ss-wipe 규칙의 둘째 줄이 사라져 닫는 괄호가 없어졌고, 그 뒤의
+       .ss-defs-list{overflow-y:auto} 가 적용되지 않아 패널이 스크롤되지 않았다.
+       화면은 «그럴듯하게» 보여서 눈으로는 못 잡는다 — 기계가 센다 */
+{
+  const lib = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+  const m = lib.match(/const CSS = `([^`]*)`/);
+  check("CSS 블록 추출", !!m);
+  if (m) {
+    const css = m[1];
+    let d = 0, bad = 0;
+    for (const ch of css) { if (ch === "{") d++; else if (ch === "}") { d--; if (d < 0) bad++; } }
+    check("CSS 중괄호 균형 (열림 = 닫힘)", d === 0 && bad === 0, "깊이 " + d + " · 초과닫힘 " + bad);
+    const open = (css.match(/\/\*/g) || []).length, close = (css.match(/\*\//g) || []).length;
+    check("CSS 주석 짝 맞음", open === close, open + " ↔ " + close);
+    /* 음성 테스트 — 검사가 실제로 잡는지 */
+    let dd = 0;
+    for (const ch of "a{b:c;") { if (ch === "{") dd++; else if (ch === "}") dd--; }
+    check("(자체검사) 중괄호 검사가 안 닫힌 규칙을 잡는다", dd === 1);
+  }
+}
+
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
 process.exit(fail ? 1 : 0);
