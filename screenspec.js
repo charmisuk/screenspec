@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.22 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.23 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -659,14 +659,6 @@
   /* overlay: 설명 패널(400px, 더 위 대역)이 오른쪽을 덮으므로 앱 영역까지만 — 「끄기」가 패널 밑에 깔리면 못 끈다 */
   body.ss-ov-doc .ss-pvbar.ss-show{display:flex;top:48px;right:400px;z-index:2147483005}
   body.ss-ov-doc.ss-pv-on{padding-top:76px!important} /* 헤더 48 + 띠 28 */
-  /* 하위 요소(parts) — 상위 행 안쪽에 한 단 들여쓴 블록. 라벨(1a·1b)은 라이브러리가 매긴다 (#25) */
-  .ss-part{margin:10px 0 0 18px;padding:2px 0 5px 12px;border-left:2px solid var(--ss-line2);transition:background .12s}
-  .ss-part.ss-active{background:var(--ss-accent-soft);border-left-color:var(--ss-accent);border-radius:0 6px 6px 0}
-  .ss-part .ss-title{margin-bottom:4px}
-  .ss-part .ss-t{font-size:12.5px}
-  .ss-part-no{font-family:var(--ss-mono);font-size:11.5px;font-weight:800;color:var(--ss-ink3)}
-  .ss-part.ss-active .ss-part-no{color:var(--ss-accent)}
-  .ss-part .ss-play{margin:7px 0 0 16px}
   /* transform 이 있으면 자손의 position:fixed 기준이 뷰포트가 아니라 이 상자가 된다 — 기기 화면이 곧 뷰포트다.
      없으면 프로토타입의 플로팅 버튼·바텀시트·전면 모달이 폰을 탈출해 브라우저 창 구석에 뜨고, 우리 툴바까지 덮는다.
      정의서 모드는 축소 scale() 때문에 이미 갇혀 있었다 — 프로토타입 모드만 새던 것을 같은 규칙으로 맞춘다 */
@@ -840,25 +832,12 @@ ${HL_CSS}
     document.head.appendChild(style);
   }
 
-  /* parts[i] → a·b … z·aa. 라벨은 라이브러리가 매긴다 — 사람이 번호를 쥐면 항목 하나 끼울 때마다 뒤가 전부 밀린다 (#25) */
-  const PART_LETTERS = "abcdefghijklmnopqrstuvwxyz";
-  function partSuffix(i) {
-    let out = "";
-    for (let v = i; v >= 0; v = Math.floor(v / 26) - 1) out = PART_LETTERS[v % 26] + out;
-    return out;
-  }
-  /* 렌더 단위 평탄화 — 상위(spec)와 하위(part)를 같은 모양의 항목으로 편다 (#25).
-     key = 상위 "1" · 하위 "1a" (문자열). 마커·활성화·배치·화살표·재생이 전부 이 key 로 돈다. */
+  /* 번호는 숫자만이다 (#51, PM 2026-08-30: 「1a 1b 는 너무 규격화되지 않은 것 같다」).
+     하위 요소(parts)로 «1a» 를 매기던 규칙을 없앴다 — 1a 로 쓸 것은 새 번호로 전부 되고,
+     깊이가 필요하면 그 번호 안의 불릿이 한다. 옛 문서에 parts 가 있어도 조용히 무시한다(안 깨진다).
+     key = "1" · "2" … 마커·활성화·배치·화살표·재생이 전부 이 key 로 돈다. */
   function flatItems(specs) {
-    const out = [];
-    (specs || []).forEach((s) => {
-      out.push({ key: String(s.n), label: String(s.n), isPart: false, parent: null, spec: s });
-      (s.parts || []).forEach((p, i) => {
-        const key = String(s.n) + partSuffix(i);
-        out.push({ key: key, label: key, isPart: true, parent: s, spec: p });
-      });
-    });
-    return out;
+    return (specs || []).map((s) => ({ key: String(s.n), label: String(s.n), spec: s }));
   }
   /* 편집 모드는 «켜야 보이는» 것이다 (#37) — 꺼져 있으면 아래 함수들이 빈 문자열을 내므로
      정의서 DOM 은 편집 기능이 없던 때와 한 글자도 다르지 않다. 회귀 위험을 0 으로 두려는 배치다 */
@@ -901,7 +880,6 @@ ${HL_CSS}
   }
   /* 아카이브 (#46) — 하위 요소(1a·1b)를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
      1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
-  function edPartCtl() { return ""; }
   /* 정의 불렛(공통) — 근거는 사양과 분리한다. 구현자는 사양만, 검토자는 이유까지 (#24) */
   /* 하위 줄 한 개의 글자 — 예전 문서는 문자열, 3단을 쓰면 객체다. 둘 다 그대로 유효하다 */
   function subT(x) { return typeof x === "string" ? x : (x && x.t) || ""; }
@@ -951,7 +929,7 @@ ${HL_CSS}
      layer 를 안 쓰는 기존 문서의 화면이 한 픽셀도 안 바뀌게 하려는 것이다 */
   function anyDev() {
     return SCREENS.some((sc) => (sc.dev || []).length ||
-      (sc.specs || []).some((sp) => hasDev(sp.defs) || (sp.parts || []).some((p) => hasDev(p.defs))));
+      (sc.specs || []).some((sp) => hasDev(sp.defs)));
   }
   /* ▶ 버튼(공통) — key 는 상위 "1" · 하위 "1a" */
   function playBtnHTML(sp, key) {
@@ -986,19 +964,11 @@ ${HL_CSS}
     let out = "";
     (specs || []).forEach((s) => {
       const type = annoOf(s);
-      let parts = "";
-      (s.parts || []).forEach((p, i) => {
-        const key = String(s.n) + partSuffix(i);
-        parts += `<div class="ss-part" data-part="${key}">
-          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span></div>
-          <ul class="ss-items ss-plan">${defItemsHTML(p.defs, "plan")}</ul>${devBlockHTML(p.defs)}${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
-        </div>`;
-      });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
           <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-nowtag">현재 미표시</span></div>
-          <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
+          <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${edRowCtl()}
         </div></div>`;
     });
     return out;
@@ -1107,11 +1077,7 @@ ${HL_CSS}
     /* 상위·하위를 편 목록. 하위(part)는 parent 를 갖고, target 이 없으면 패널에만 산다 (#25) */
     function items() { return flatItems(specs()); }
     function itemOf(key) { return items().find((it) => it.key === key); }
-    /* 패널에서 그 항목의 블록 — 상위는 행 자체, 하위는 행 안의 .ss-part */
-    function blockOf(it) {
-      return it.isPart ? ctx.listEl.querySelector('[data-part="' + it.key + '"]')
-                       : document.getElementById("ss-def-" + it.key);
-    }
+    function blockOf(it) { return document.getElementById("ss-def-" + it.key); }
 
     function render() {
       ctx.headerEl.innerHTML = headerFieldsHTML(current);
@@ -1123,10 +1089,9 @@ ${HL_CSS}
         markerEls = {};
         return;
       }
-      const subCnt = items().filter((it) => it.isPart).length;
       /* parts 가 있으면 세부를 갈라 적는다 — 「항목 8개」만 세면 정의 밀도가 실제보다 얇아 보인다 (#25).
          「상위·하위」는 관계를 가리키는 말이라 무엇의 위인지 모르면 읽히지 않아 「항목 N개 · 세부 M개」로 (#30) */
-      ctx.cntEl.textContent = "항목 " + specs().length + "개" + (subCnt ? " · 세부 " + subCnt + "개" : "");
+      ctx.cntEl.textContent = "항목 " + specs().length + "개";
       if (specs().length === 0) {
         /* 등록은 했지만 아직 정의를 안 쓴 화면 — 처음 붙이는 사람이 가장 오래 머무는 자리. 백지 대신 다음 할 일 (#19) */
         const r = rootEl();
@@ -1146,7 +1111,6 @@ ${HL_CSS}
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
       items().forEach((it) => {
-        if (it.isPart && !it.spec.target) return; /* target 없는 하위 요소는 패널에만 (#25) */
         const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + it.label + ": " + (it.spec.title || "") });
         if (it.label.length > 1) el.classList.add("ss-marker-sub");
         el.textContent = it.label;
@@ -1190,7 +1154,6 @@ ${HL_CSS}
         const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
         items().forEach((it) => { /* 하위 요소도 target 이 있으면 센다 — 보고는 #1a (#25) */
           const sp = it.spec;
-          if (it.isPart && !sp.target) return;
           if (!targetOf(sp)) (sp.anno === "state" || sp.optional ? cond : missing).push(it); /* optional:true — anno 와 무관하게 조건부 (#23) */
         });
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
@@ -1262,16 +1225,15 @@ ${HL_CSS}
       let moved = false;
       wireMoves();
       items().forEach((it) => {
-        if (it.isPart && !it.spec.target) return;
         const t = targetOf(it.spec), m = markerEls[it.key];
         const hidden = !t || t.getClientRects().length === 0;
         const blk = blockOf(it);
-        if (blk && !it.isPart) { /* 정의는 있는데 지금 화면엔 없음 — 패널에서 구분 (#27) */
+        if (blk) { /* 정의는 있는데 지금 화면엔 없음: 패널에서 구분 (#27) */
           blk.classList.toggle("ss-now-hidden", hidden);
           pvTagWire(blk.querySelector(".ss-main > .ss-title > .ss-nowtag"), it, hidden);
         }
         if (blk && !hidden) { /* 위치 힌트는 상위·하위 각자의 블록에 (#25) */
-          const ph = blk.querySelector(it.isPart ? ".ss-pos" : ".ss-main > .ss-title > .ss-pos");
+          const ph = blk.querySelector(".ss-main > .ss-title > .ss-pos");
           if (ph) ph.textContent = posHint(t);
         }
         if (!m) return;
@@ -1354,7 +1316,7 @@ ${HL_CSS}
     function showTip(it, m) {
       const s = it.spec;
       ctx.tip.innerHTML =
-        '<div class="ss-tn">' + (it.isPart ? esc(it.label) : "NO." + it.label) + " · " + esc(annoOf(s).label) + "</div>" +
+        '<div class="ss-tn">NO.' + esc(it.label) + " · " + esc(annoOf(s).label) + "</div>" +
         '<div class="ss-tt">' + esc(s.title || "") + "</div>" +
         '<div class="ss-td">' + esc((s.defs && s.defs[0] && s.defs[0].t) || "") + "</div>";
       ctx.tip.style.display = "block";
@@ -1391,7 +1353,7 @@ ${HL_CSS}
       if (blk) blk.classList.add("ss-active");
       if (from === "panel" && t) t.scrollIntoView({ block: "center", behavior: SB });
       if (from === "marker") {
-        const row = it.isPart ? document.getElementById("ss-def-" + it.parent.n) : blk;
+        const row = blk;
         if (row) row.scrollIntoView({ block: "center", behavior: SB });
       }
       drawArrow();
@@ -1669,7 +1631,7 @@ ${HL_CSS}
       items().forEach((it) => {
         let li = "";
         (it.spec.defs || []).filter((d) => prKeep(d, layer)).forEach((d) => { li += prLine(d); });
-        out += '<tr class="' + (it.isPart ? "ss-pr-part" : "") + '"><td class="ss-pr-no">' + esc(it.label) + "</td>" +
+        out += '<tr><td class="ss-pr-no">' + esc(it.label) + "</td>" +
           '<td class="ss-pr-ttl">' + esc(it.spec.title || "") + "</td>" +
           '<td class="ss-pr-tag">' + esc(annoOf(it.spec).label) + "</td>" +
           "<td>" + (li ? "<ul>" + li + "</ul>" : "—") + "</td></tr>";
@@ -2577,7 +2539,7 @@ ${HL_CSS}
         }
       };
       SCREENS.forEach((sc) => {
-        (sc.specs || []).forEach((sp) => { one(sp); (sp.parts || []).forEach(one); });
+        (sc.specs || []).forEach(one);
         if (sc.dev) one({ defs: sc.dev });
       });
       if (JSON.stringify(RAW) !== before) render();
@@ -2830,9 +2792,9 @@ ${HL_CSS}
       seen[s.id] = 1;
     });
     SCREENS.forEach((sc) => (sc.specs || []).forEach((sp) => {
-      [sp].concat(sp.parts || []).forEach((it, i) => { /* 하위 요소(parts)의 flowTo 도 검사 */
+      [sp].forEach((it, i) => {
         if (it.flowTo && !SCREENS.some((x) => x.id === it.flowTo))
-          console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + (i ? partSuffix(i - 1) : "") + ": flowTo \"" + it.flowTo + "\" 화면이 screens에 없습니다: 이동 버튼이 동작하지 않습니다");
+          console.warn("[ScreenSpec] " + sc.id + " n=" + sp.n + ": flowTo \"" + it.flowTo + "\" 화면이 screens에 없습니다: 이동 버튼이 동작하지 않습니다");
       });
     }));
     /* 상태 점검이 켜져 있으면 그 사실을 알린다 — 설정을 직접 넣지 않은 사람도 «저 ⚠ 가 뭔지» 를 알 수 있게 */
@@ -2922,7 +2884,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.22</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.23</div>
         </aside>
       </div>`);
 
@@ -3208,7 +3170,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.22] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.23] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -3239,7 +3201,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.22</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.23</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -3343,7 +3305,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.22] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.23] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

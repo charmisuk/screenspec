@@ -67,7 +67,7 @@ window.SCREENSPEC = {
 - 다중 화면이면 화면(root) 안에서만 찾으므로 화면마다 1부터 다시 시작 가능.
 - **목록처럼 반복 렌더되는 요소**(할 일 행, 상품 카드 등)는 **첫 번째 항목 하나에만** 붙인다. 값은 화면 안에서 고유해야 한다. 재렌더 후에도 마커가 따라온다.
 - **화면 위에 뜨는 전역 요소**(토스트·모달·바텀시트, `position:fixed`)는 `<body>` 직계에 두고 `data-ss-ignore` 속성을 붙인다. 안 붙이면 시뮬레이터 시트 안에 갇혀 위치가 틀어진다.
-- **영역 안의 이름 있는 하위 요소**(항목 수·더보기 버튼·팝업 등)는 번호를 새로 따지 말고 상위 영역의 `parts` 로 넣는다. **번호는 적지 않는다** — 라이브러리가 `1a`·`1b` 로 매긴다. 하위 요소에 자기 마커를 주려면 `data-spec="1a"` 처럼 라벨과 같은 값을 붙인다(마커가 필요 없으면 `target` 생략). 조건·분기는 여전히 `subs`.
+- **번호는 숫자만이다.** 영역 안의 부품에 따로 설명이 필요하면 **새 번호**를 준다. 깊이가 필요하면 그 번호 안의 `subs`(조건·분기)로 쓴다.
 - **팝업·패널 안의 하위 요소에는 `optional: true` 를 함께 준다.** 닫혀 있는 것이 정상인데 안 주면 「못 찾은 정의」 경고가 난다. 하위 요소는 `n` 을 빼면 Spec 과 같은 필드(`optional`·`why` 등)를 쓴다.
 
 ### 3. `window.SCREENSPEC` 설정 작성
@@ -124,7 +124,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.22.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.23.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -237,7 +237,7 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 */ ] };
 <!-- 2) 프로토타입에 리스너 — 이 최소 스니펫을 그대로 심는다 -->
 <script>
 addEventListener("screenspec:preview", (e) => {
-  if (e.detail.n !== "9") return;                        // 항목 라벨(문자열). 하위 요소면 "1a"
+  if (e.detail.n !== "9") return;                        // 항목 라벨(문자열)
   document.getElementById("list").hidden = e.detail.on;  // 원래 화면 감추기
   document.getElementById("empty").hidden = !e.detail.on; // 빈 상태 보이기
   e.detail.handled = true;                               // 「내가 처리했다」 — 이 줄이 없으면 버튼이 켜지지 않는다
@@ -321,7 +321,7 @@ addEventListener("screenspec:preview", (e) => {
 | 수단을 지시함 | `구분선으로 분리` → `구분하여 제시` · `스켈레톤 표시` → `조회 중임을 표시` |
 | 위치를 지시함 | `같은 줄에 표시` → `동일하게 선택 가능` |
 | 근거가 본문에 | `취소됨 제외 — 답이 아니라서` → `t` + `why` 분리 |
-| 동작이 뭉뚱그려짐 | `표시 열 / 열 순서 / 고정 열 지정` → `parts` 로 쪼갬 |
+| 동작이 뭉뚱그려짐 | `표시 열 / 열 순서 / 고정 열 지정` → 번호를 나눠 쪼갬 |
 
 **세 층을 섞지 않는다.** 하위 요소를 `subs` 에 밀어 넣으면 그 요소의 동작(`Tap :`)이 조건 분기처럼 읽힌다.
 
@@ -329,18 +329,15 @@ addEventListener("screenspec:preview", (e) => {
 |---|---|---|
 | `defs[].t` | 이 영역의 사양 한 줄 | 화면 상단에 고정 |
 | `defs[].subs[]` | **그 줄의** 조건·분기 | 항목 없으면 표시하지 않음 |
-| `parts[]` | **이 영역 안의** 이름 있는 하위 요소 | 1a. 항목 수 |
+| `subs[].subs[]` | 그 조건의 세부 | 최대 20자 |
 
 ```js
-{ n:2, target:"2", title:"목록 영역", defs:[{ t:"등록순 정렬" }],
-  parts:[
-    { title:"목록 행", target:"2a", defs:[{ t:"클릭 : 없음" }] },
-    { title:"더보기 버튼", target:"2b", anno:"popup",
-      play:{ selector:'[data-spec="2b"]', label:"팝업 열기" }, defs:[{ t:"클릭 : 팝업을 버튼 아래에 표시" }] },
-  ]}
+{ n:2, target:"2", title:"목록 영역", defs:[{ t:"등록순 정렬" }] },
+{ n:3, target:"3", title:"더보기 버튼", anno:"popup",
+  play:{ selector:'[data-spec="3"]', label:"팝업 열기" }, defs:[{ t:"클릭 : 팝업을 버튼 아래에 표시" }] }
 ```
 
-**하위 요소로 쪼갤 기준**: 그 영역 안에서 **각각 이름을 갖고 따로 설명할 것**이 있으면 `parts`. 이름을 붙일 수 없거나 설명이 한 줄이면 `defs` 한 줄로 둔다.
+**번호를 나눌 기준**: 그 영역 안에서 **각각 이름을 갖고 따로 설명할 것**이 있으면 **새 번호**를 준다. 이름을 붙일 수 없거나 설명이 한 줄이면 `defs` 한 줄로 둔다.
 
 ### 4-B. 화면 유형별로 채울 것
 

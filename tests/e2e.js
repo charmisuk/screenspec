@@ -161,23 +161,23 @@ function check(name, ok, detail) {
   await page.waitForTimeout(1200);
   await page.click("#ss-mDoc");
   await page.waitForTimeout(500);
-  check("MOA 홈 기능 설명 9행", (await page.locator(".ss-defs-list .ss-row").count()) === 9); /* parts 는 행을 늘리지 않는다 — 상위 행 안의 블록 (#25) */
-  check("상단 바 parts 2개 → 헤더 '항목 9개 · 세부 2개' + 마커 1a·1b (#25·#30)", await page.evaluate(() => {
+  check("MOA 홈 기능 설명 11행", (await page.locator(".ss-defs-list .ss-row").count()) === 11);
+  /* #51: 번호는 숫자만이다 — 1a·1b 라벨도, 하위 블록도 없다 */
+  check("번호는 숫자만 (1a·1b 없음)", await page.evaluate(() => {
     const labels = [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent);
-    return document.getElementById("ss-cnt").textContent === "항목 9개 · 세부 2개" &&
-      labels.includes("1a") && labels.includes("1b") &&
-      [...document.querySelectorAll(".ss-part")].map((e) => e.dataset.part).join(",") === "1a,1b";
-  }));
+    return document.getElementById("ss-cnt").textContent === "항목 11개" &&
+      labels.every((x) => /^\d+$/.test(x)) && document.querySelectorAll(".ss-part").length === 0;
+  }), await page.evaluate(() => document.getElementById("ss-cnt").textContent));
   check("앱형 시트 여백 0 (탭바 하단 밀착)", await page.evaluate(() => {
     const cs = getComputedStyle(document.querySelector(".ss-sheet"));
     return cs.paddingBottom === "0px" && cs.paddingTop === "0px";
   }));
-  await page.click('[data-play="6"]');
+  await page.click('[data-play="8"]'); /* #51: 홈 번호가 2씩 밀렸다 (옛 1a·1b → 번호 2·3) */
   await page.waitForTimeout(400);
   check("쿠폰 popup → 실제 바텀시트", await page.evaluate(() => document.getElementById("couponSheet").classList.contains("open")));
   await page.click("#couponSheet .ok");
   await page.waitForTimeout(300);
-  await page.click('[data-play="8"]');
+  await page.click('[data-play="10"]');
   await page.waitForTimeout(500);
   check("추천 카드 flow → 상세 + 정의서 전환", await page.evaluate(() =>
     window.ScreenSpec.current() === "SCR-MOA-PDP-002" &&
@@ -250,8 +250,8 @@ function check(name, ok, detail) {
       return r.right <= pan.left + 1;
     });
   }));
-  /* 상위 5 + 하위 5a·5b + 지금 닫혀 있는 시트 6 (optional — 패널에 「현재 미표시」) */
-  check("정의서 모드: 마커 8개", (await page.locator(".ss-marker").count()) === 8);
+  /* #51 이후 번호는 숫자만이다 — 옛 하위 5a·5b 는 줄로 합쳤다 */
+  check("정의서 모드: 마커 6개", (await page.locator(".ss-marker").count()) === 6);
 
   /* PC 폭(1920 시트 → 축소 배치)에서도 같은 규칙 */
   await page.click('#ss-seg button[data-w="pc"]');
@@ -580,60 +580,30 @@ function check(name, ok, detail) {
   }
 
 
-  /* ============ parts: 영역 안의 이름 있는 하위 요소 + 자동 라벨 (#25) ============ */
-  console.log("[docs] parts");
+  /* ============ 번호는 숫자만 (#51) ============
+     하위 요소(parts, 라벨 1a·1b)를 제품에서 없앴다. 옛 문서에 남아 있어도 «조용히 무시» 해야 한다 —
+     열자마자 깨지면 그건 없앤 게 아니라 부순 것이다. */
+  console.log("[nums] 번호는 숫자만");
   {
-    const partsCfg = (extra) => '<div data-spec="1">상단<span data-spec="1a" onclick="document.getElementById(\'pop\').hidden=false">3</span></div>' +
-      '<div id="pop" hidden>팝업</div><script>window.SCREENSPEC={screen:{id:"S-P",name:"parts"},specs:[' +
-      '{n:1,target:"1",title:"상단 타이틀 영역",defs:[{t:"화면 상단에 고정"}],parts:[' +
-      '{title:"항목 수",target:"1a",anno:"popup",play:{selector:"[data-spec=\'1a\']",label:"팝업 열기"},defs:[{t:"항목 개수를 1~99까지 표시"}]},' +
-      '{title:"더보기 버튼",defs:[{t:"팝업을 버튼 아래에 표시"}]}' + extra + ']}]}<\/script>';
     await page.goto("about:blank");
-    await page.setContent(partsCfg(""));
+    await page.setContent('<div data-spec="1">상단</div><div data-spec="1a">뱃지</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-N',name:'n'},specs:[" +
+      '{n:1,target:"1",title:"상단 타이틀 영역",defs:[{t:"화면 상단에 고정"}],parts:[' +
+      '{title:"뱃지",target:"1a",defs:[{t:"숫자 표시"}]}]}]};<' + "/script>");
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(400);
-    check("parts: 상위 행 1개 안에 하위 블록 1a·1b 순서대로 (라벨은 라이브러리가 매김)", await page.evaluate(() => {
-      const rows = document.querySelectorAll(".ss-defs-list .ss-row").length;
-      const parts = [...document.querySelectorAll(".ss-part")];
-      return rows === 1 && parts.length === 2 &&
-        parts.map((e) => e.dataset.part).join(",") === "1a,1b" &&
-        parts.map((e) => e.querySelector(".ss-part-no").textContent).join(",") === "1a,1b" &&
-        parts[0].closest(".ss-row").dataset.defrow === "1" &&
-        parts[0].querySelector(".ss-t").textContent === "항목 수";
-    }));
-    check("parts: 마커는 1 · 1a 만 (target 없는 1b 는 패널 전용)", await page.evaluate(() => {
-      const ms = [...document.querySelectorAll(".ss-marker")];
-      const vis = ms.filter((m) => m.style.display !== "none").map((m) => m.textContent);
-      return vis.join(",") === "1,1a" && !ms.some((m) => m.textContent === "1b");
-    }));
-    await page.click(".ss-marker.ss-marker-sub");
-    await page.waitForTimeout(300);
-    check("parts: 하위 마커 클릭 → 대상 강조 + 하위 블록 활성", await page.evaluate(() =>
-      document.querySelector('[data-spec="1a"]').classList.contains("ss-hl") &&
-      document.querySelector('.ss-part[data-part="1a"]').classList.contains("ss-active")));
-    await page.click('[data-play="1a"]');
-    await page.waitForTimeout(300);
-    check("parts: 하위 ▶ 가 실제 팝업을 연다", await page.evaluate(() => !document.getElementById("pop").hidden));
-    check("parts: 헤더 항목 수 '항목 1개 · 세부 2개' (#30)", await page.evaluate(() => document.getElementById("ss-cnt").textContent === "항목 1개 · 세부 2개"));
-
-    const pWarns = [];
-    const onPMsg = (msg) => { if (msg.type() === "warning") pWarns.push(msg.text()); };
-    page.on("console", onPMsg);
-    await page.goto("about:blank");
-    await page.setContent(partsCfg(',{title:"없는 하위",target:"1c-none"}'));
-    await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
-    await page.click("#ss-mDoc");
-    /* 못 찾은 게 있으면 경고는 상한(5초)에 나온다 — 조용해졌다고 다 온 것은 아니므로 (#23 개정).
-       고정 대기 대신 «도착할 때까지» 로 잡는다 (경합 방지) */
-    const missP = () => pWarns.filter((x) => x.includes("못 찾은 정의"));
-    for (let i = 0; i < 80 && missP().length === 0; i++) await page.waitForTimeout(100);
-    const pw = missP();
-    check("parts: target 없는 하위 요소도 누락 경고에 #1c 로 나온다", pw.length === 1 && pw[0].includes('#1c target="1c-none"') && pw[0].includes("1건"), pw.join(" | ").slice(0, 200));
-    page.off("console", onPMsg);
+    check("번호: 옛 parts 문서를 열어도 깨지지 않는다", await page.evaluate(() => !!window.ScreenSpec));
+    check("번호: 마커는 숫자 하나뿐 (1a 없음)", await page.evaluate(() => {
+      const l = [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent);
+      return l.length === 1 && l[0] === "1";
+    }), await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent)));
+    check("번호: 패널에 하위 블록이 없다", (await page.locator(".ss-part").count()) === 0);
+    check("번호: 헤더에 «세부» 표기가 없다",
+      !(await page.locator("#ss-cnt").textContent()).includes("세부"));
   }
+
 
   /* ============ accent = CSS 변수 참조 (#18) ============ */
   console.log("[docs] accent var(--x)");
@@ -943,22 +913,22 @@ function check(name, ok, detail) {
     check("preview: 화면이 바뀌면 재현 중 띠도 사라진다", await page.evaluate(() =>
       getComputedStyle(document.querySelector(".ss-pvbar")).display === "none"));
 
-    /* 5) 하위 요소(part)도 같은 파이프라인 — 라벨은 "1a" */
+    /* 5) 영역 «안» 의 작은 요소도 같은 파이프라인 — #51 이후 그것도 그냥 번호다 */
     await page.goto("about:blank");
     await page.setContent('<div data-spec="1">목록<span data-spec="1a">3</span></div>' +
-      '<script>window.SCREENSPEC={screen:{id:"S-PV3",name:"목록"},specs:[{n:1,target:"1",title:"목록 영역",parts:[' +
-      '{title:"항목 수",target:"1a",anno:"state",preview:{label:"0건 보기"}}]}]};' +
+      '<script>window.SCREENSPEC={screen:{id:"S-PV3",name:"목록"},specs:[{n:1,target:"1",title:"목록 영역"},' +
+      '{n:2,target:"1a",title:"항목 수",anno:"state",preview:{label:"0건 보기"}}]};' +
       'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on+":"+e.detail.title);' +
-      'if(e.detail.n==="1a"){document.querySelector("[data-spec=\'1a\']").textContent=e.detail.on?"0":"3";e.detail.handled=true;}});<\/script>');
+      'if(e.detail.n==="2"){document.querySelector("[data-spec=\'1a\']").textContent=e.detail.on?"0":"3";e.detail.handled=true;}});<' + "/script>");
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
-    check("preview: 하위 요소 버튼이 하위 블록 안에 붙는다 (key 1a)", await page.evaluate(() => {
-      const b = document.querySelector('[data-preview="1a"]');
-      return !!b && b.closest(".ss-part").dataset.part === "1a" && !document.querySelector('[data-preview="1"]');
+    check("preview: 그 번호의 행에 스위치가 붙는다", await page.evaluate(() => {
+      const b = document.querySelector('[data-preview="2"]');
+      return !!b && b.closest(".ss-row").dataset.defrow === "2" && !document.querySelector('[data-preview="1"]');
     }));
-    await page.click('[data-preview="1a"]');
+    await page.click('[data-preview="2"]');
     await page.waitForTimeout(300);
     /* 띠가 정의서 헤더를 덮지 않는다 — 뜨면 그 높이(28px)만큼 아래를 민다 (#29 QA 실측) */
     check("preview: 재현 중 띠가 정의서 헤더를 덮지 않는다", await page.evaluate(() => {
@@ -966,10 +936,10 @@ function check(name, ok, detail) {
       const dh = document.querySelector(".ss-dh").getBoundingClientRect();
       return getComputedStyle(document.querySelector(".ss-pvbar")).display !== "none" && bar.bottom <= dh.top + 0.5;
     }));
-    check("preview: 하위 요소도 실제로 동작 (detail.n = \"1a\")", await page.evaluate(() =>
-      window.__pv.join("|") === "1a:true:항목 수" &&
+    check("preview: 실제로 동작 (detail.n = 2)", await page.evaluate(() =>
+      window.__pv.join("|") === "2:true:항목 수" &&
       document.querySelector('[data-spec="1a"]').textContent === "0" &&
-      document.querySelector('[data-preview="1a"]').getAttribute("aria-pressed") === "true"));
+      document.querySelector('[data-preview="2"]').getAttribute("aria-pressed") === "true"));
 
     /* 6) overlay 모드 — 띠는 정의서 헤더(48px) 바로 아래, 설명 패널에 깔리지 않아 「끄기」가 실제로 눌린다 (#29 ③) */
     await page.goto("about:blank");
@@ -1989,7 +1959,7 @@ function check(name, ok, detail) {
       !blocked.some((u) => /screenspec/i.test(u)), JSON.stringify(blocked.slice(0, 3)));
     await page.click("#ss-mDoc");
     await page.waitForTimeout(500);
-    check("인라인: 화면정의서 모드 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 9);
+    check("인라인: 화면정의서 모드 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 11);
     await page.unroute("**");
     fs.unlinkSync(out);
   }

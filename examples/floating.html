@@ -137,11 +137,10 @@ window.SCREENSPEC = {
       { t: "화면 우하단 고정 — 목록 길이와 무관하게 늘 같은 자리", why: "한 손으로 닿는 자리에 고정돼야 주 동작이 산다" },
       { t: "클릭 : 할 일 추가 시트 열림" }
     ]},
-    { n: 5, target: "5", anno: "box", title: "하단 탭바", parts: [
-      { title: "할 일 탭", target: "5a", defs: [{ t: "기본 선택 탭" }] },
-      { title: "내 정보 탭", target: "5b", defs: [{ t: "클릭 : 내 정보 화면으로 이동" }] }
-    ], defs: [
-      { t: "화면 하단 고정 · 3개 탭" }
+    { n: 5, target: "5", anno: "box", title: "하단 탭바", defs: [
+      { t: "화면 하단 고정 · 3개 탭" },
+      { t: "할 일 탭이 기본 선택" },
+      { t: "내 정보 탭 클릭 : 내 정보 화면으로 이동" }
     ]},
     { n: 6, target: "6", anno: "popup", title: "할 일 추가 시트", optional: true,
       play: { selector: "#fab", label: "동작 재생: 시트 열기" }, defs: [

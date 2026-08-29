@@ -47,24 +47,13 @@ type Spec = {
   title?:   string,     // 영역명 (위치 힌트는 자동)
   optional?: boolean,   // 조건부 요소 — 누락 경고 제외
   defs?:    Def[],      // 기능 설명 줄
-  parts?:   Part[],     // 이 영역 안의 이름 있는 하위 요소. 라벨(1a·1b)은 라이브러리가 매긴다
   play?:    { selector: string, label: string },  // anno action·popup·flow: 재생 버튼
   preview?: { label?: string },  // 상태 재현 버튼. 누르면 앱에 screenspec:preview 이벤트를 쏜다
   flowTo?:  string,     // anno flow: 이동할 화면 id
   arrowTo?: string,     // anno arrow: 관계선을 그을 상대 요소 CSS 셀렉터
 }
 
-type Part = {           // 라벨은 적지 않는다 — parts[0] → "1a", parts[1] → "1b"
-  title:    string,     // 하위 요소명
-  target?:  string,     // 있으면 자기 마커를 갖는다. 없으면 패널에만
-  anno?:    (Spec 과 동일 8종),
-  optional?: boolean,   // 조건부 — 팝업·패널 안처럼 닫혀 있을 때는 없는 요소
-  defs?:    Def[],
-  play?:    { selector: string, label: string },
-  preview?: { label?: string },  // Spec 과 동일 — 하위 요소도 상태 재현 버튼을 갖는다
-  flowTo?:  string,
-  arrowTo?: string,
-}
+
 
 type Style  = {           // 온보딩 인터뷰(SKILL §0)의 답이 남는 자리
   vocab?:    { prefixes?: string[], endings?: string[] },  // 생략 = SKILL §4 기본 한 벌
@@ -281,11 +270,21 @@ window.SCREENSPEC = {
 | `title` | string | | 영역명. 패널에서는 제목 옆에 마커 실제 위치에서 계산한 위치 힌트(상단·하단 / 좌측·우측·전체폭)가 자동으로 붙는다 — 화면 없이 읽어도 어디인지 알 수 있게 |
 | `optional` | boolean | | 조건부 요소(예: 특정 상태에서만 서는 버튼). `anno`와 무관하게 「못 찾은 정의」 경고에서 제외 |
 | `defs` | Def[] | | 기능 설명. 항목당 1~4줄 권장 |
-| `parts` | Part[] | | 영역 안의 이름 있는 하위 요소. 라벨 `1a`·`1b`는 라이브러리가 자동으로 매긴다(설정에 적지 않는다). 항목: `title`·`target`(선택)·`anno`·`defs`·`play`·`flowTo`·`arrowTo`. 아래 [Part](#part) 참조 |
 | `play` | `{selector, label}` | anno에 따라 | `action`·`popup`은 필수, `flow`는 선택. `selector`는 실제로 클릭할 요소, `label`은 버튼 문구 |
 | `preview` | `{label?}` | | 지금 화면에 없는 상태(빈 상태·오류…)를 앱에 재현시키는 **토글 스위치**. 누르면 `screenspec:preview` 이벤트가 앱 창으로 날아간다. `label` 생략 시 「{title} 보기」. **앱에 리스너가 있어야 동작한다** — 아래 [상태 재현](#상태-재현-preview) 참조 |
 | `flowTo` | string | `flow`면 ✔ | 이동할 화면 `id`. 없는 id면 콘솔 경고 |
 | `arrowTo` | string | | `arrow`에서만. 지정하면 대상 요소에서 이 요소로 관계선을 긋는다 |
+
+### Def (기능 설명 한 줄)
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `t` | string | ✔ | 사양 한 줄. 굵게·링크는 `<strong>`·`<a href>` 로 담긴다(그 밖의 태그는 저장되지 않는다) |
+| `subs` | Sub[] | | 그 줄의 조건·분기. 항목당 0~3줄. **글자**(2단) 또는 **`{t, subs}`**(3단). 3단은 번호 없이 글머리표로 그린다 |
+| `why` | string | | 그 줄의 근거. 패널에서 「↳ 이유:」로 분리 렌더 |
+| `layer` | `"dev"` | | 개발 정의. 생략하면 기획. 만드는 길은 아카이브됐고 렌더는 그대로 (#46) |
+
+깊이가 더 필요하면 **새 번호**를 준다. 예전의 하위 요소(`parts`, 라벨 `1a`·`1b`)는 없앴다 — 번호는 숫자만이다 (#51).
 
 ### anno 8종
 
@@ -335,7 +334,7 @@ window.SCREENSPEC = {
 | 이름 | `screenspec:preview` |
 | 쏘는 곳 | **앱이 사는 창** — overlay·wrap 은 `window`, frame 은 액자(iframe) 안의 `window` |
 | `detail.screen` | 현재 화면 `id` |
-| `detail.n` | 항목 라벨. 상위는 `"9"`, 하위(part)는 `"1a"` — **문자열** |
+| `detail.n` | 항목 라벨(`"9"`). **문자열** |
 | `detail.title` | 그 항목의 `title` |
 | `detail.on` | `true` = 켜기, `false` = 끄기 |
 | `detail.handled` | **앱이 채운다.** 처리했으면 리스너 안에서 `true` 로 (아래) |
@@ -376,52 +375,6 @@ useEffect(() => {
 - **한 번에 하나만 켜진다.** 다른 항목을 켜면 켜져 있던 항목에 먼저 `on:false` 가 간다 (상태 두 개가 겹쳐 뜨지 않게).
 - **화면이 바뀌면 자동으로 꺼진다** — 켜져 있던 항목에 `on:false` 가 가고 재현 중 띠도 사라진다. 앱이 가짜 상태에 갇힌 채 다른 화면으로 넘어가지 않는다.
 - 리스너를 심을 수 없는 상태(그 프로토타입이 못 만드는 상태)에는 `preview` 를 주지 않는다. 정의만 남기면 된다.
-
-### Part
-
-영역 안의 **이름 있는 하위 요소** (항목 수·더보기 버튼·팝업 등). 「그 줄의 조건·분기」인 `Def.subs`와 성격이 다르다.
-라벨은 라이브러리가 매긴다 — `parts[0]` → `1a`, `parts[1]` → `1b` … `1z` 다음은 `1aa`. 설정에 번호를 적지 않는다.
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---|---|
-| `title` | string | ✔ | 하위 요소명. 패널에서 라벨(`1a`) 옆에 굵게 |
-| `target` | string | | 대상 요소의 `data-spec` 속성값. 있으면 자기 마커(`1a`)를 갖고, 없으면 패널에만 렌더된다 |
-| `anno` | 8종 중 하나 | | Spec 과 동일. 생략하면 `box` |
-| `optional` | boolean | | Spec 과 동일. **팝업·패널 안의 하위 요소에는 사실상 필수** — 닫혀 있는 동안 「못 찾은 정의」 경고가 나기 때문이다 (닫힌 것이 정상이므로) |
-| `defs` | Def[] | | Spec 과 동일 (`subs`·`why` 포함) |
-| `play` | `{selector, label}` | anno에 따라 | Spec 과 동일. ▶ 버튼이 하위 블록 안에 붙는다 |
-| `preview` | `{label?}` | | Spec 과 동일. 스위치가 하위 블록 안에 붙고, 이벤트의 `n` 은 하위 라벨(`"1a"`)로 간다 |
-| `flowTo` | string | `flow`면 ✔ | Spec 과 동일 |
-| `arrowTo` | string | | Spec 과 동일 |
-
-```js
-{ n:1, target:"1", title:"상단 타이틀 영역", defs:[{ t:"화면 상단에 고정" }],
-  parts:[
-    { title:"항목 수", target:"1a", defs:[{ t:"항목 개수를 1~99까지 표시" }] },
-    { title:"더보기 버튼", target:"1b", anno:"popup", play:{ selector:'[data-spec="1b"]', label:"팝업 열기" } },
-  ]}
-```
-
-**하위 요소는 `n`을 빼면 Spec 과 같은 필드를 쓴다** (`optional`·`why` 포함). 팝업·패널 안을 가리키는 하위 요소는
-`optional: true` 를 함께 준다 — 안 주면 패널이 닫혀 있는 동안 경고가 난다.
-
-```js
-{ n:5, target:"5", title:"표 설정", anno:"popup", play:{ selector:'[data-spec="5"]', label:"패널 열기" },
-  parts:[
-    { title:"열 표시", target:"5a", optional:true, defs:[{ t:"열 16개의 표시 여부" }] },
-    { title:"열 고정", target:"5b", optional:true, defs:[{ t:"어느 열까지 고정할지" }] },
-  ]}
-```
-
-`parts`가 하나라도 있으면 패널 헤더의 항목 수가 `항목 11개 · 세부 4개`로 갈라진다(없으면 `항목 11개`). 목차의 커버리지(`N/M 정의됨`)는 화면 단위 그대로다.
-
-### Def
-
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `t` | string | 설명 한 줄. 명사형 종결 권장 |
-| `subs` | Sub[] | 조건·분기를 하위 불렛으로. 항목당 0~3줄. **글자**(2단) 또는 **`{t, subs}`**(3단) — 3단은 번호 없이 글머리표로 그린다 |
-| `why` | string | 그 줄의 근거. 본문에 대시로 이어 붙이지 말고 여기에 — 패널에서 「↳ 이유:」로 작게 따라붙는다. 구현자는 `t`만 읽고 검토자는 `why`까지 읽는다 |
 
 ## HTML 속성
 

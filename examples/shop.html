@@ -440,43 +440,42 @@ window.SCREENSPEC = {
       skip: { "오류": "홈은 정적 구성이라 서버 오류 분기가 없음 — 오류는 상세(PDP)에서 다룬다" },
       specs: [
         { n:1, target:"1", anno:"box", title:"상단 바", defs:[
-          { t:"로고 + 알림·장바구니 아이콘 상시 노출" }],
-          parts:[
-            { title:"장바구니 뱃지", target:"1a", anno:"state", defs:[
-              { t:"담긴 수량 표시 · 99 초과 시 99+ 표기", subs:[
-                "수량 0이면 뱃지 미노출"]}]},
-            { title:"알림 버튼", target:"1b", anno:"action",
-              play:{ selector:'[data-spec="1b"]', label:"동작 재생 — 알림함 이동" }, defs:[
-              { t:"탭 시 알림함으로 이동" },
-              { t:"읽지 않은 알림이 있으면 점 표시" }]}]},
-        { n:2, target:"2", anno:"input", title:"검색창", defs:[
+          { t:"로고 + 알림·장바구니 아이콘 상시 노출" }]},
+        { n:2, target:"1a", anno:"state", title:"장바구니 뱃지", defs:[
+          { t:"담긴 수량 표시 · 99 초과 시 99+ 표기", subs:[
+            "수량 0이면 뱃지 미노출"]}]},
+        { n:3, target:"1b", anno:"action",  title:"알림 버튼",
+          play:{ selector:'[data-spec="1b"]', label:"동작 재생 : 알림함 이동" }, defs:[
+          { t:"탭 시 알림함으로 이동" },
+          { t:"읽지 않은 알림이 있으면 점 표시" }]},
+        { n:4, target:"2", anno:"input", title:"검색창", defs:[
           { t:"플레이스홀더 \"어떤 상품을 찾으세요?\" 고정" },
           { t:"입력 최대 30자 · 자동완성은 2자부터 표시", subs:[
             "빈 검색어 엔터 시 무반응 — 빈 결과 페이지 진입 방지"]}]},
-        { n:3, target:"3", anno:"motion", title:"히어로 배너", defs:[
+        { n:5, target:"3", anno:"motion", title:"히어로 배너", defs:[
           { t:"3장 캐러셀 · 3.5초 자동 슬라이드, 0.45초 이징 전환" },
           { t:"인디케이터 좌하단, 현재 장은 길게 확장" }]},
-        { n:4, target:"4", anno:"box", title:"카테고리", defs:[
+        { n:6, target:"4", anno:"box", title:"카테고리", defs:[
           { t:"8종 고정 노출 · 탭 시 해당 카테고리 목록 이동" }]},
-        { n:5, target:"5", anno:"state", title:"오늘의 딜", preview:{ label:"딜 마감 상태 보기" }, defs:[
+        { n:7, target:"5", anno:"state", title:"오늘의 딜", preview:{ label:"딜 마감 상태 보기" }, defs:[
           { t:"카운트다운 HH:MM:SS · 1초 단위 갱신" },
           { t:"상품 4개 가로 스크롤 · 할인율 뱃지 좌상단", subs:[
             "마감(00:00:00) 시 타이머를 \"오늘 딜 종료\"로 교체",
             "재고 소진 상품은 카드 흐림 + \"품절\" 오버레이"]}]},
-        { n:6, target:"6", anno:"popup", title:"쿠폰 배너",
+        { n:8, target:"6", anno:"popup", title:"쿠폰 배너",
           play:{ selector:"#couponGet", label:"팝업 열기 — 쿠폰 바텀시트" }, defs:[
           { t:"첫 구매 15% 쿠폰 · [받기] 클릭 시 바텀시트 표시" },
           { t:"시트 바깥 탭으로 닫힘", subs:[
             "이미 발급받은 사용자에겐 배너 미노출"]}]},
-        { n:7, target:"7", anno:"box", title:"실시간 랭킹", defs:[
+        { n:9, target:"7", anno:"box", title:"실시간 랭킹", defs:[
           { t:"판매량 기준 상위 4개 · 10분 주기 갱신" },
           { t:"순위 변동(▲N) 전일 대비 표기" }]},
-        { n:8, target:"8", anno:"flow", title:"취향 추천 그리드", flowTo:"SCR-MOA-PDP-002",
+        { n:10, target:"8", anno:"flow", title:"취향 추천 그리드", flowTo:"SCR-MOA-PDP-002",
           play:{ selector:"#recoGrid [data-pid]", label:"이동 — 상품 상세" }, defs:[
           { t:"개인화 추천 4개 · 2열 그리드 (PC 4열)" },
           { t:"카드 탭 시 상품 상세로 이동" },
           { t:"별점·리뷰 수 노출 — 리뷰 0건이면 미표기" }]},
-        { n:9, target:"9", anno:"box", title:"하단 탭바", defs:[
+        { n:11, target:"9", anno:"box", title:"하단 탭바", defs:[
           { t:"홈·카테고리·찜·마이 4탭 고정" },
           { t:"현재 탭 진한 색 활성 표시 · PC에서는 미노출" }]}
       ]
