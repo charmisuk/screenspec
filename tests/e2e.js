@@ -1139,14 +1139,22 @@ function check(name, ok, detail) {
     await page.waitForTimeout(200);
     check("편집: 설명 줄도 고쳐진다", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t === "고친 첫 줄"));
 
-    /* --- Esc 는 취소 --- */
+    /* --- Esc 는 «여기서 그만» (PM 2026-08-29) ---
+       치는 즉시 반영되는 이상 Esc 로 없던 일을 만들 수 없다. 되돌리기는 Ctrl+Z 가 한다.
+       그리고 «한 칸을 고친 것» 은 글자 수와 상관없이 한 걸음이어야 한다 */
     await page.click('[data-defrow="2"] .ss-t');
     await page.keyboard.press("Control+a");
-    await page.keyboard.type("버릴 값");
+    await page.keyboard.type("바꾼 값");
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
-    check("편집: Esc 는 설정을 안 바꾼다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"));
-    check("편집: Esc 는 화면도 되돌린다", await page.evaluate(() => document.querySelector('[data-defrow="2"] .ss-t').textContent === "몸통"));
+    await page.waitForTimeout(250);
+    check("편집: Esc 는 쓴 것을 지우지 않는다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "바꾼 값"),
+      await page.evaluate(() => window.SCREENSPEC.specs[1].title));
+    check("편집: Esc 는 그 칸에서 빠져나온다", await page.evaluate(() => !document.querySelector(".ss-ed-on")));
+    await page.keyboard.press("Control+z");
+    await page.waitForTimeout(250);
+    check("편집: Ctrl+Z 한 번이 그 칸 전체를 되돌린다 (글자 하나씩 X)",
+      await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"),
+      await page.evaluate(() => window.SCREENSPEC.specs[1].title));
 
     /* --- 구조 — #45 이후 넣기는 버튼이 아니라 Enter·슬래시가 한다 --- */
     await page.click('[data-defrow="2"] [data-ed="b"][data-di="0"]');
@@ -1303,6 +1311,8 @@ function check(name, ok, detail) {
       return !document.body.classList.contains("ss-editing");
     }));
     check("readonly: 정의서 자체는 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
+    /* 서버를 닫기 «전» 에 그 서버에서 떠나야 한다 — 요청이 남아 있으면 다음 이동이 취소된다 (플래키) */
+    await page.goto("about:blank");
     srv.close();
   }
 
@@ -2141,6 +2151,76 @@ function check(name, ok, detail) {
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join("|"))) === "누르면 결제 화면으로|불릿 줄",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
     check("FTUE: 도중에 JS 에러 0건", errs.length === 0, errs);
+    page.off("pageerror", onErr);
+  }
+
+  /* ============ 자동저장 ============
+     PM 2026-08-29: 「번호 넣고 입력하면 구글 시트 자동저장되듯이 로컬에 계속 저장되면서 가면
+     그게 프로토타입 파일에 반영되고 그걸 또 클로드가 픽스하고 핑퐁이 되지 않을까.」
+     브라우저 파일 고르기는 사람 손이 필요하므로 «가짜 손잡이» 로 그 자리를 대신한다. */
+  console.log("[auto] 자동저장");
+  {
+    const errs = [];
+    const onErr = (e) => errs.push(String(e.message));
+    page.on("pageerror", onErr);
+    const PROTO = '<h1 id="t">홈</h1><button id="buy" data-spec="1" style="margin:40px">구매하기</button>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-1',name:'홈'},specs:[{n:1,target:'1',title:'구매',defs:[{t:'첫 줄'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(PROTO);
+    await page.evaluate((src) => {
+      window.__file = "<html><body>" + src + "</body></html>";
+      window.__writes = 0;
+      window.showOpenFilePicker = async () => [{
+        name: "proto.html",
+        queryPermission: async () => "granted",
+        requestPermission: async () => "granted",
+        getFile: async () => ({ text: async () => window.__file }),
+        createWritable: async () => ({
+          write: async (t) => { window.__file = t; window.__writes++; },
+          close: async () => {},
+        }),
+      }];
+    }, PROTO);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+
+    const st = () => page.locator(".ss-savest").textContent();
+    const writes = () => page.evaluate(() => window.__writes);
+    check("자동저장: 처음에는 꺼져 있다고 «오른쪽 위» 에 말한다", (await st()) === "자동저장 꺼짐" &&
+      (await page.locator(".ss-svbtn").textContent()) === "자동저장 켜기", await st());
+    await page.click(".ss-svbtn");
+    await page.waitForTimeout(500);
+    check("자동저장: 파일을 한 번 고르면 켜진다", (await st()).indexOf("저장됨") === 0 &&
+      (await page.locator(".ss-svbtn").textContent()) === "지금 저장" && (await writes()) === 1, await st());
+
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.type(" 추가한 글");
+    await page.waitForTimeout(250);
+    check("자동저장: 치는 동안 «저장 대기» 로 보인다", (await st()) === "저장 대기", await st());
+    await page.waitForTimeout(1500);
+    check("자동저장: 손이 멈추면 저장된다", (await st()).indexOf("저장됨") === 0 && (await writes()) === 2, [await st(), await writes()]);
+    /* 이게 핵심이다 — 저장하려고 편집을 끊으면 커서가 튄다 */
+    check("자동저장: 커서를 뺏지 않는다 (치던 자리 그대로)", await page.evaluate(() =>
+      document.activeElement && document.activeElement.dataset.ed === "b"));
+    check("자동저장: 파일 안 설정이 실제로 바뀐다", await page.evaluate(() =>
+      window.__file.indexOf("첫 줄 추가한 글") >= 0));
+
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("둘째 줄");
+    await page.waitForTimeout(1600);
+    check("자동저장: 새 줄도 파일까지 간다", await page.evaluate(() => window.__file.indexOf("둘째 줄") >= 0));
+    check("자동저장: 저장한 파일을 다시 읽으면 같은 설정이다", await page.evaluate(() => {
+      const m = window.__file.match(/window\.SCREENSPEC\s*=\s*[\s\S]*?;\n/);
+      if (!m) return false;
+      const w = {};
+      new Function("window", m[0])(w);
+      return JSON.stringify(w.SCREENSPEC.specs[0].defs.map((d) => d.t)) ===
+        JSON.stringify(window.SCREENSPEC.specs[0].defs.map((d) => d.t));
+    }));
+    check("자동저장: 도중에 JS 에러 0건", errs.length === 0, errs);
     page.off("pageerror", onErr);
   }
 

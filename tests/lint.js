@@ -100,7 +100,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 
 /* 7) 문서 드리프트 — 폐기된 설계의 용어·클래스가 살아 있으면 에이전트가 옛 구조를 믿는다 */
 {
-  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"(?![^\n]*(폐기|deprecated))|상위 \d+ · 하위|패널 ⇄|SpecLayer(?![^\n]*(별칭|alias|호환|legacy))/g;
+  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"(?![^\n]*(폐기|deprecated))|상위 \d+ · 하위|패널 ⇄|SpecLayer(?![^\n]*(별칭|alias|호환|legacy))|`1a`|1a·1b|↳ 이유|편집 모드로 들어|편집 버튼|자동 번호를 매긴/g;
   for (const f of ["README.md", "SKILL.md", "screenspec.js"]) {
     const d = fs.readFileSync(path.join(REPO, f), "utf8");
     const hits = [...d.matchAll(STALE)].map((m) => m[0]);
@@ -195,15 +195,42 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("README 빠른 시작 = 완성 HTML", ok, "doctype·설정·스크립트·data-spec 중 누락");
 }
 
-/* 12) 코드가 가리키는 README 앵커가 실제로 존재하는지 (안내 카드의 "복붙용 최소 예제" 링크) */
+/* 12) 가리키는 곳이 실제로 있는가 — 코드→README, 그리고 문서→문서 안쪽 링크 전부.
+       2026-08-29: README 의 (#로드맵) 은 로드맵 절을 노션으로 옮긴 뒤에도 남아 있었고,
+       docs/config.md 의 (#편집-모드-readonly) 는 편집 모드를 없앤 뒤에도 남아 있었다.
+       죽은 링크는 «문서가 관리되고 있다» 는 신뢰를 조용히 갉는다 */
 {
-  const lib = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
-  const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
   const slug = (h) => h.trim().toLowerCase().replace(/[^\p{L}\p{N} -]/gu, "").replace(/ +/g, "-");
-  const anchors = [...readme.matchAll(/^#{2,3} +(.+)$/gm)].map((m) => slug(m[1]));
-  const links = [...lib.matchAll(/screenspec#([^"\s]+)/g)].map((m) => decodeURIComponent(m[1]));
-  const dead = links.filter((a) => !anchors.includes(a));
-  check("코드→README 앵커 유효", dead.length === 0, "없는 앵커: " + JSON.stringify(dead) + " / 있는 앵커: " + JSON.stringify(anchors));
+  const heads = (md) => [...md.matchAll(/^#{1,6} +(.+)$/gm)].map((m) => slug(m[1]));
+  const read = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
+  const DOCS = ["README.md", "SKILL.md", "AGENTS.md", "CHANGELOG.md", "docs/config.md"];
+  const anchorsOf = {};
+  DOCS.forEach((f) => (anchorsOf[f] = heads(read(f))));
+
+  const lib = read("screenspec.js");
+  const codeLinks = [...lib.matchAll(/screenspec#([^"\s]+)/g)].map((m) => decodeURIComponent(m[1]));
+  const deadCode = codeLinks.filter((a) => !anchorsOf["README.md"].includes(a));
+  check("코드→README 앵커 유효", deadCode.length === 0,
+    "없는 앵커: " + JSON.stringify(deadCode) + " / 있는 앵커: " + JSON.stringify(anchorsOf["README.md"]));
+
+  let deadDoc = [];
+  DOCS.forEach((f) => {
+    const md = read(f);
+    [...md.matchAll(/\]\(([^)\s]*)#([^)\s]+)\)/g)].forEach((m) => {
+      const rel = m[1], a = decodeURIComponent(m[2]);
+      /* 같은 문서 안이면 자기 제목, 다른 문서면 그 문서의 제목을 본다. 바깥 주소는 건너뛴다 */
+      if (/^https?:/.test(rel)) return;
+      let target = f;
+      if (rel) {
+        target = path.posix.normalize(path.posix.join(path.posix.dirname(f), rel));
+        if (!anchorsOf[target]) return; /* 우리가 안 보는 파일 */
+      }
+      if (!anchorsOf[target].includes(a)) deadDoc.push(f + " → " + (rel || "(자기)") + "#" + a);
+    });
+  });
+  check("문서→문서 앵커 유효 (죽은 링크 0)", deadDoc.length === 0, JSON.stringify(deadDoc));
+  /* 음성 테스트 — 검사가 실제로 잡는지 */
+  check("(자체검사) 앵커 검사가 없는 제목을 잡는다", !anchorsOf["README.md"].includes("있을리-없는-제목-zzz"));
 }
 
 /* 13) 라이브러리 파일 안의 라이선스 표기 — 인라인으로 배포되면 LICENSE 파일이 따라가지 않는다 */

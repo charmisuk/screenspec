@@ -86,7 +86,7 @@
     return RAW.off === true ? "off" : "on";
   })();
   /* 편집 잠금 (#37) — 전달본을 못 고치게 한다. 「보여 주기만」 하는 사본에 건다.
-     숨김이 아니라 미생성이다: 편집 버튼도 저장 경로도 아예 만들지 않는다 */
+     숨김이 아니라 미생성이다: 고칠 수 있는 표식도 저장 경로도 아예 만들지 않는다 */
   const READONLY = RAW.readonly === true;
   /* 저장은 «원본 HTML 의 설정 블록만» 갈아끼운다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 원본이 아니므로,
      손대기 전 사본을 부팅 직전에 떠 둔다 — file:// 처럼 fetch 가 막힌 자리에서는 이게 유일한 원본이다 */
@@ -475,6 +475,12 @@
   .ss-headbtn{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);
     font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap}
   .ss-headbtn:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
+  /* 저장 상태 — 사람이 «저장했나?» 를 궁금해하지 않아도 되게 늘 오른쪽 위에 (PM 2026-08-29) */
+  .ss-savest{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+    color:var(--ss-ink3);white-space:nowrap}
+  .ss-savest::before{content:"";width:6px;height:6px;border-radius:99px;background:currentColor;flex:none}
+  .ss-savest.ss-st-on{color:#2F8F5B}
+  .ss-savest.ss-st-busy{color:#B8862B}
   .ss-wipeall:hover{border-color:#E0522F;color:#E0522F}
   .ss-edbar{display:none;align-items:center;gap:6px;padding:8px 18px;border-bottom:1px solid var(--ss-line);
     background:#FAFAF9;font-size:11.5px;color:var(--ss-ink3);flex-wrap:wrap}
@@ -556,9 +562,13 @@
   .ss-pr-table tr.ss-pr-part .ss-pr-no{padding-left:16px;color:var(--ss-ink3)}
   .ss-pr-table ul{margin:0;padding-left:14px}
   .ss-pr-table li{margin:1px 0}
-  .ss-pr-table .ss-pr-why{display:block;color:var(--ss-ink3);font-size:11px}
-  .ss-pr-table .ss-pr-why::before{content:"↳ 이유: "}
-  .ss-pr-table li.ss-pr-sub{list-style:circle;color:#37352F}
+  /* 그림 속 블록도 화면과 같은 규칙으로 — 들여쓰기 한 단 = 글머리 칸 (#55·#61) */
+  .ss-pr-table li.ss-pr-b{color:#37352F}
+  .ss-pr-table li.ss-pr-in1{margin-left:16px}
+  .ss-pr-table li.ss-pr-in2{margin-left:32px}
+  .ss-pr-table li.ss-pr-text{list-style:none;margin-left:-14px}
+  .ss-pr-table li.ss-pr-why{list-style:none;color:var(--ss-ink3);font-size:11px}
+  .ss-pr-table li.ss-pr-why::before{content:"↳ "}
   .ss-pr-table tr.ss-pr-dev .ss-pr-no,.ss-pr-table tr.ss-pr-dev .ss-pr-tag{color:#8E4EC6}
   .ss-pr-table .ss-pr-devtag{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:#8E4EC6;
     border:1px solid #D9C3EE;border-radius:3px;padding:0 3px;margin-right:4px}
@@ -740,7 +750,7 @@
     font-size:12px;font-weight:800;font-family:var(--ss-mono);
     display:grid;place-items:center;box-shadow:0 2px 8px rgba(17,24,39,.28);cursor:pointer}
   .ss-marker.ss-hot{background:var(--ss-accent);color:#fff;border-color:var(--ss-accent)}
-  .ss-marker.ss-marker-sub{font-size:10.5px;letter-spacing:-.03em} /* 1a·1b — 크기는 그대로, 글자만 줄여 맞춘다 */
+  .ss-marker.ss-marker-sub{font-size:10.5px;letter-spacing:-.03em} /* 두 자리 번호 — 크기는 그대로, 글자만 줄여 맞춘다 */
   .ss-markers,.ss-anno{position:absolute;top:0;left:0;width:100%;height:100%;z-index:8040;pointer-events:none}
   .ss-anno{z-index:8030;overflow:visible}
   body.ss-mode-proto .ss-marker,body.ss-mode-proto .ss-anno{display:none}
@@ -910,7 +920,7 @@ ${HL_CSS}
     if (!EDIT) return "";
     return '<button type="button" class="ss-rowdel ss-ui" data-ec="delitem" title="이 항목을 통째로 삭제">×</button>';
   }
-  /* 아카이브 (#46) — 하위 요소(1a·1b)를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
+  /* 아카이브 (#46) — 하위 요소를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
      1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
   /* ---- 블록 모델 (#55, PM 2026-08-30) ----
      「기능 설명 밑이 전체가 에디터고 그 안에서 다 블록이다. 1번 2번도 블록(콜아웃)이고
@@ -1677,9 +1687,10 @@ ${HL_CSS}
        ============================================================ */
     let prDlg = null;
     function prLine(d) {
-      return "<li>" + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) +
-        (d.why ? '<span class="ss-pr-why">' + esc(d.why) + "</span>" : "") + "</li>" +
-        (d.subs || []).map((sb) => '<li class="ss-pr-sub">' + esc(sb) + "</li>").join("");
+      const kind = blkKind(d), ind = Math.max(0, Math.min(2, d.indent || 0));
+      const cls = "ss-pr-b" + (ind ? " ss-pr-in" + ind : "") + (kind === B_WHY ? " ss-pr-why" : "") +
+        (kind === B_TEXT ? " ss-pr-text" : "");
+      return '<li class="' + cls + '">' + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) + "</li>";
     }
     function prKeep(d, layer) {
       if (layer === "plan") return d.layer !== "dev";
@@ -1979,7 +1990,7 @@ ${HL_CSS}
       if (prDlg.showModal) prDlg.showModal();
     }
 
-    /* 패널 머리의 도구 자리 — 편집 버튼이 여기 산다 (wrap·overlay 공용).
+    /* 패널 머리의 도구 자리 — 전부 삭제·저장 상태가 여기 산다 (wrap·overlay 공용).
        내보내기는 여기가 아니라 툴바로 갔다: 패널이 아니라 화면 전체에 작용하는 동작이기 때문이다 */
     function headTools() {
       if (!ctx.cntEl || !ctx.cntEl.parentNode) return null;
@@ -1994,14 +2005,19 @@ ${HL_CSS}
     function prMount(box) {
       if (!box) return;
       /* 저장은 툴바로 (#58) — 패널 머리는 «쓰는 자리» 라 서식이 온다.
-         고친 것을 어디에 남길지는 문서 전체에 대한 일이므로 위가 맞다 */
+         고친 것을 어디에 남길지는 문서 전체에 대한 일이므로 위가 맞다.
+         상태(자동저장 꺼짐·저장 중·저장됨)를 «오른쪽 위» 에 늘 띄운다 (PM 2026-08-29) */
       if (!READONLY) {
-        const sv = h("button", { class: "ss-headbtn ss-svbtn ss-ui", type: "button", title: "고친 내용을 파일로" }, "저장");
+        edStat = h("span", { class: "ss-savest ss-ui" });
+        box.appendChild(edStat);
+        const sv = h("button", { class: "ss-headbtn ss-svbtn ss-ui", type: "button" }, "저장");
+        edSvBtn = sv;
         sv.onclick = () => {
           if (typeof window.showOpenFilePicker === "function") edSaveFile();
           else edSaveDownload();
         };
         box.appendChild(sv);
+        edSync();
         const cp = h("button", { class: "ss-headbtn ss-ui", type: "button", title: "설정 블록을 클립보드로" }, "설정 복사");
         cp.onclick = edCopyBlock;
         box.appendChild(cp);
@@ -2059,19 +2075,57 @@ ${HL_CSS}
       render();
       edSay("전부 지웠습니다 (Ctrl+Z 로 되돌리기)");
     }
-    let edSavedAt = "";
+    let edSavedAt = "", edStat = null, edSvBtn = null, edSaving = false, edAutoT = null, edSnapped = false;
+    const AUTO_MS = 1200; /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
+    function edCanFile() { return typeof window.showOpenFilePicker === "function"; }
+    /* 오른쪽 위 한 줄로 «지금 어떤 상태인가» 를 말한다. 사람이 저장을 신경 쓰지 않아도 되게 */
     function edSync() {
       if (edWhen) edWhen.textContent = edDirty ? "저장 안 됨" : (edSavedAt ? "마지막 저장 " + edSavedAt : "");
+      if (!edStat) return;
+      let cls = "ss-savest ss-ui", txt;
+      if (!edCanFile()) { cls += " ss-st-off"; txt = "자동저장 안 됨 (크롬·엣지에서 됩니다)"; }
+      else if (!edHandle) { cls += " ss-st-off"; txt = "자동저장 꺼짐"; }
+      else if (edSaving) { cls += " ss-st-busy"; txt = "저장 중…"; }
+      else if (edDirty) { cls += " ss-st-busy"; txt = "저장 대기"; }
+      else { cls += " ss-st-on"; txt = "저장됨" + (edSavedAt ? " · " + edSavedAt : ""); }
+      edStat.className = cls;
+      edStat.textContent = txt;
+      if (edSvBtn) {
+        edSvBtn.textContent = edHandle ? "지금 저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");
+        edSvBtn.title = edHandle ? "「" + edHandle.name + "」 에 바로 씁니다"
+          : edCanFile() ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다" : "고친 내용을 파일로 내려받습니다";
+      }
     }
     function edTouched() {
       edDirty = true;
       edStore(() => localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), cfg: RAW })));
       edSync();
+      edAutoPlan();
     }
     function edSavedNow() {
       edDirty = false;
       edSavedAt = new Date().toLocaleTimeString();
       edStore(() => localStorage.removeItem(DRAFT_KEY));
+      edSync();
+    }
+    /* ---- 자동저장 (PM 2026-08-29) ----
+       「번호 넣고 입력하면 구글 시트 자동저장되듯이 로컬에 계속 저장되면서 가면
+        그게 프로토타입 파일에 반영되고 그걸 또 클로드가 픽스하고 핑퐁이 되지 않을까.」
+       파일을 한 번 고르면(브라우저가 권한을 그때 받는다) 그 뒤로는 손이 멈출 때마다 조용히 쓴다. */
+    function edAutoPlan() {
+      if (!edHandle) return;
+      clearTimeout(edAutoT);
+      edAutoT = setTimeout(edAutoSave, AUTO_MS);
+    }
+    async function edAutoSave() {
+      if (!edHandle || edSaving) return;
+      edPickUp(); /* 치는 중이어도 지금까지 친 글은 담는다 */
+      if (!edDirty) return;
+      edSaving = true; edSync();
+      const bad = await edWriteFile();
+      edSaving = false;
+      if (bad) { edHandle = null; edSay(bad + " 자동저장을 껐습니다."); }
+      else edSavedNow();
       edSync();
     }
 
@@ -2086,6 +2140,7 @@ ${HL_CSS}
       if (edEl === el) return;
       if (edEl) edFinish(true);
       edEl = el;
+      edSnapped = false; /* 이 칸을 고치는 동안은 «한 걸음» 이다 — Ctrl+Z 가 통째로 되돌린다 */
       edWas = richIn(el);
       el.contentEditable = "true";
       el.classList.add("ss-ed-on");
@@ -2120,7 +2175,7 @@ ${HL_CSS}
       if (!it) { el.innerHTML = rich(edWas); return; }
       const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di);
       let redraw = false;
-      edSnap();
+      edSnapOnce();
       if (f === "title") s.title = next;
       else if (f === "b") {
         if (!s.defs || !s.defs[di]) return;
@@ -2145,6 +2200,9 @@ ${HL_CSS}
       if (edUndoS.length > ED_UNDO_MAX) edUndoS.shift();
       edRedoS.length = 0;
     }
+    /* 글자를 치는 동안 값이 계속 모델로 넘어가므로(실시간 저장), 기준점은 «칸에 들어간 순간» 한 번만
+       찍는다. 키를 칠 때마다 찍으면 Ctrl+Z 가 글자 하나씩 되돌아가 쓸모가 없다 */
+    function edSnapOnce() { if (edSnapped) return; edSnap(); edSnapped = true; }
     function edStep(back) {
       if (edEl) edFinish(true);
       const from = back ? edUndoS : edRedoS, to = back ? edRedoS : edUndoS;
@@ -2654,6 +2712,25 @@ ${HL_CSS}
     function edBlockText() { edPrune(); return serializeConfig(RAW); }
     /* 편집 중인 글자를 먼저 확정하고 나서 저장한다 — 안 그러면 방금 친 줄이 빠진다 */
     function edFlush() { if (edEl) edFinish(true); }
+    /* 자동저장은 «치는 중» 에도 돌아야 하는데, 편집을 끝내면 커서가 튄다.
+       그래서 값만 조용히 모델로 옮긴다 — 화면도 커서도 건드리지 않는다 */
+    function edPickUp() {
+      const el = edEl;
+      if (!el || !el.isConnected) return;
+      const next = richIn(el);
+      if (next === edWas) return;
+      const it = itemOf(edKeyOf(el));
+      if (!it) return;
+      const f = el.dataset.ed, di = Number(el.dataset.di), sp = it.spec;
+      edSnapOnce();
+      if (f === "title") sp.title = next;
+      else if (f === "b") {
+        if (!sp.defs || !sp.defs[di]) return;
+        sp.defs[di].t = next; /* 빈 칸도 그대로 — 빈 줄 «정리» 는 편집이 끝날 때 한다 */
+      } else return;
+      edWas = next; /* 나중에 edFinish 가 «안 바뀌었다» 로 읽게 */
+      edTouched();  /* 초안·자동저장이 같은 길을 탄다 */
+    }
     async function edSourceHTML() {
       /* 원본 HTML 이 필요하다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 그대로 쓰면 안 된다.
          ① 주소에서 다시 받아 보고 ② 막히면(file:// 등) 부팅 직전에 떠 둔 사본을 쓴다 */
@@ -2671,6 +2748,20 @@ ${HL_CSS}
       if (!src) return null;
       return replaceConfigBlock(src, edBlockText());
     }
+    /* 실제로 쓰는 곳 — 문제가 있으면 «사람에게 할 말» 을 돌려준다 (없으면 null) */
+    async function edWriteFile() {
+      try {
+        const html = await edHandle.getFile().then((file) => file.text());
+        const out = replaceConfigBlock(html, edBlockText());
+        if (out == null) return "그 파일에서 window.SCREENSPEC 설정 블록을 찾지 못했습니다.";
+        const w = await edHandle.createWritable();
+        await w.write(out);
+        await w.close();
+        return null;
+      } catch (e) {
+        return "저장하지 못했습니다: " + ((e && e.message) || e);
+      }
+    }
     async function edSaveFile() {
       edFlush();
       try {
@@ -2682,23 +2773,19 @@ ${HL_CSS}
         }
         let perm = await edHandle.queryPermission({ mode: "readwrite" });
         if (perm !== "granted") perm = await edHandle.requestPermission({ mode: "readwrite" });
-        if (perm !== "granted") { edSay("파일에 쓸 권한을 받지 못했습니다. 「내려받기」로 저장하세요."); return; }
-        const html = await edHandle.getFile().then((file) => file.text());
-        const out = replaceConfigBlock(html, edBlockText());
-        if (out == null) {
-          edHandle = null;
-          edSay("그 파일에서 window.SCREENSPEC 설정 블록을 찾지 못했습니다. 지금 보고 있는 프로토타입 HTML 을 골라 주세요.");
-          return;
-        }
-        const w = await edHandle.createWritable();
-        await w.write(out);
-        await w.close();
-        edSavedNow();
-        edSay("「" + edHandle.name + "」 에 저장했습니다.");
+        if (perm !== "granted") { edHandle = null; edSync(); edSay("파일에 쓸 권한을 받지 못했습니다. 「내려받기」로 저장하세요."); return; }
       } catch (e) {
         if (e && e.name === "AbortError") return; /* 사용자가 취소 — 알릴 것 없다 */
-        edSay("저장하지 못했습니다: " + ((e && e.message) || e) + " · 「내려받기」로 저장하세요.");
+        edSay("파일을 고르지 못했습니다: " + ((e && e.message) || e));
+        return;
       }
+      edSaving = true; edSync();
+      const bad = await edWriteFile();
+      edSaving = false;
+      if (bad) { edHandle = null; edSay(bad + " 지금 보고 있는 프로토타입 HTML 을 골라 주세요."); edSync(); return; }
+      edSavedNow();
+      edSync();
+      edSay("「" + edHandle.name + "」 에 저장합니다. 이제 고칠 때마다 알아서 저장됩니다.");
     }
     async function edSaveDownload() {
       edFlush();
@@ -2839,6 +2926,22 @@ ${HL_CSS}
         if (t.closest && t.closest(".ss-slash,.ss-edbar,.ss-gut")) return;
         edFinish(true);
       }, true);
+      /* 치는 동안에도 값을 모델에 옮기고 자동저장을 예약한다 (PM 2026-08-29).
+         Enter 나 바깥 클릭을 기다리면 「실시간 저장」 이 아니다 */
+      ctx.listEl.addEventListener("input", () => {
+        if (!edEl) return;
+        edPickUp();
+        edSync();
+        edAutoPlan();
+      });
+      /* 탭을 덮거나 닫을 때 — 파일에 쓰는 건 못 기다리지만, 초안은 남길 수 있다 */
+      const edPark = () => {
+        if (!edEl) return;
+        edPickUp();
+        if (edDirty) edStore(() => localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), cfg: RAW })));
+      };
+      addEventListener("pagehide", edPark);
+      document.addEventListener("visibilitychange", () => { if (document.hidden) edPark(); });
       /* 글 쓰듯 고치는 키 (0-6) — Enter 가 «반영» 이 아니라 «새 줄» 이다.
          반영은 치는 즉시 일어나고, 파일로 남기는 것은 위의 「저장」 이다 (PM 결정 2026-08-28) */
       ctx.listEl.addEventListener("keydown", (e) => {
@@ -2849,12 +2952,14 @@ ${HL_CSS}
         const eat = () => { e.preventDefault(); e.stopPropagation(); };
         if (k === "Enter" && !e.shiftKey) { eat(); edNewLine(); }
         else if (k === "Enter") { eat(); edFinish(true); } /* Shift+Enter = 여기서 그만 */
-        else if (k === "Escape") { eat(); edSlashClose(); edFinish(false); }
+        /* 치는 즉시 반영되는 이상 Esc 로 «없던 일» 을 만들 수 없다 (구글 문서와 같다).
+           Esc 는 그 칸에서 빠져나오는 것이고, 되돌리기는 Ctrl+Z 다 (PM 2026-08-29) */
+        else if (k === "Escape") { eat(); edSlashClose(); edFinish(true); }
         else if (k === "Tab") { eat(); edIndent(!e.shiftKey); }
         else if (k === "Backspace" && empty) { eat(); edKillLine(); }
         else if (k === "/" && empty) { eat(); edSlash(); }
         /* 노션과 같은 마크다운 단축키 — 빈 줄에서 «-» + 스페이스면 불릿, «>» 면 화살표 (#56) */
-        else if (k === " " && edEl.textContent === "-") { eat(); edEl.textContent = ""; edSetKind(B_BULLET); }
+        else if (k === " " && edEl.textContent === "-") { eat(); edEl.textContent = ""; edPickUp(); edSetKind(B_BULLET); }
         else if (k === ">" && empty) { eat(); edSetKind(B_WHY); }
         /* 굵게·링크 — 저장에는 <strong>·<a href> 로만 남는다 (#44) */
         else if ((e.ctrlKey || e.metaKey) && (k === "b" || k === "B")) { eat(); document.execCommand("bold"); }

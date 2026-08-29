@@ -272,7 +272,7 @@ addEventListener("screenspec:preview", (e) => {
 **뽑아서 넘기기** — 툴바의 «내보내기» 로 화면 한 장을 PNG 로 뽑는다(번호·머리말·기능 설명 선택).
 컨플·노션에 붙일 산출물이 여기서 나오므로, 항목 제목은 표의 한 칸에 들어갈 길이로 짧게 쓴다.
 
-규격: [docs/config.md](docs/config.md#편집-모드-readonly) · [내보내기](docs/config.md#내보내기-png)
+규격: [docs/config.md](docs/config.md#최상위-필드) · [내보내기](docs/config.md#내보내기-png)
 
 ### 4. 기능 설명 텍스트 작성 룰 (하네스 핵심 — 반드시 준수)
 
