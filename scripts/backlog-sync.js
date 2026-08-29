@@ -136,12 +136,19 @@ async function main() {
   const msCards = new Map(parsed.filter((c) => msNo(c.url)).map((c) => [msNo(c.url), c]));
   for (const g of groups.values()) {
     g.issues.sort((a, b) => a.number - b.number);
+    g.closing = closing;
     g.done = g.issues.filter(isDone).length;
     g.desc = "진행 " + g.done + "/" + g.issues.length;
     const c = msCards.get(g.no);
     if (!c) { drift.push({ kind: "묶음 카드 없음", group: g, msg: g.title + " (세부 " + g.issues.length + "건)" }); continue; }
     if (c.status === "보류" || c.status === "완료") continue; /* 사람 칸은 기계가 안 건드린다 */
-    if ((c.desc || "") !== g.desc) drift.push({ kind: "체크 갱신", group: g, card: c, msg: g.title + " · " + g.desc });
+    /* 진행 문구만 비교하면 안 된다 — 푸시 훅이 «곧 닫힘» 으로 문구를 먼저 써버리면
+       나중에 진짜 닫혔을 때 문구가 그대로라 체크가 영영 안 켜진다 (2026-08-30 실측) */
+    const want = g.issues.map((i) => (isDone(i) ? "1" : "0")).join("");
+    const have = await msMarks(c.id);
+    if ((c.desc || "") !== g.desc || have !== want) {
+      drift.push({ kind: "체크 갱신", group: g, card: c, msg: g.title + " · " + g.desc });
+    }
     const all = g.done === g.issues.length && g.issues.length > 0;
     if (all && c.status !== "검수") drift.push({ kind: "묶음 검수로", group: g, card: c, msg: g.title });
     if (!all && c.status === "검수") drift.push({ kind: "묶음 되돌리기", group: g, card: c, msg: g.title + " · " + g.desc });
@@ -177,12 +184,17 @@ async function main() {
 /* 카드 본문 = 세부 태스크 체크 목록. PM 은 보드에서 시나리오만 보고, 눌러야 이게 나온다.
    줄줄 읽는 글이 아니라 «체크체크체크» 여야 하므로 to_do 블록 한 줄씩만 쓴다.
    매번 통째로 다시 써서(지우고 새로) 이슈 상태와 어긋날 여지를 없앤다. */
+/* 카드에 이미 그려진 체크 상태를 «1/0» 문자열로 — 무엇이 달라졌는지 판정하는 근거 */
+async function msMarks(pageId) {
+  const r = await nApi("GET", "/blocks/" + pageId + "/children?page_size=100");
+  return (r.results || []).filter((b) => b.type === "to_do").map((b) => (b.to_do.checked ? "1" : "0")).join("");
+}
 async function msChecklist(pageId, g) {
   const old = await nApi("GET", "/blocks/" + pageId + "/children?page_size=100");
   for (const b of old.results || []) {
     try { await nApi("DELETE", "/blocks/" + b.id); } catch { /* 이미 지워졌으면 통과 */ }
   }
-  const done = (i) => i.state === "closed";
+  const done = (i) => i.state === "closed" || (g.closing && g.closing.has(i.number));
   const rows = g.issues.map((i) => ({
     object: "block", type: "to_do",
     to_do: {
