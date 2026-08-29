@@ -24,8 +24,10 @@ const REPO=path.resolve(__dirname,".."); const LIB=fs.readFileSync(REPO+"/screen
     for (let i=0;i<markers;i++){ const m=p.locator(".ss-marker").nth(i); if(await m.isVisible()) { await m.click({force:true}); await p.waitForTimeout(80);} }
     const plays = await p.locator("[data-play]").count();
     for (let i=0;i<plays;i++){ const el=p.locator("[data-play]").nth(i); if(await el.isVisible()) { await el.click({force:true}); await p.waitForTimeout(150);} }
-    if (await p.locator(".ss-toc-btn").count()) { await p.click(".ss-toc-btn"); await p.waitForTimeout(200); const rows=await p.locator("[data-toc]").count();
-      for (let i=0;i<Math.min(rows,6);i++){ if(!(await p.locator(".ss-toc").isVisible())) { await p.click(".ss-toc-btn"); await p.waitForTimeout(150);} await p.locator("[data-toc]").nth(i).click({force:true}); await p.waitForTimeout(200);} }
+    /* 재생 단추가 프로토타입의 «전체 화면 모달» 을 열어 둔 채로 올 수 있다 (shop.html 쿠폰 시트 등).
+       그건 프로토타입 사정이지 우리 잘못이 아니므로, 마커와 같이 force 로 누른다 */
+    if (await p.locator(".ss-toc-btn").count()) { await p.click(".ss-toc-btn",{force:true}); await p.waitForTimeout(200); const rows=await p.locator("[data-toc]").count();
+      for (let i=0;i<Math.min(rows,6);i++){ if(!(await p.locator(".ss-toc").isVisible())) { await p.click(".ss-toc-btn",{force:true}); await p.waitForTimeout(150);} await p.locator("[data-toc]").nth(i).click({force:true}); await p.waitForTimeout(200);} }
     await p.setViewportSize({width:480,height:800}); await p.waitForTimeout(300); await p.setViewportSize({width:1440,height:900}); await p.waitForTimeout(300);
     const cur = await p.evaluate(()=>window.ScreenSpec&&window.ScreenSpec.current());
     out.push({ex, markers, plays, cur, errors:errs.length, warnings:warns.map(w=>w.slice(0,90))});

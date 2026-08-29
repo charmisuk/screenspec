@@ -124,7 +124,7 @@ Next.js 등 프레임워크 기반이면 화면을 감싸지 않는 오버레이
 import Script from "next/script";
 // <body> 안:
 <Script id="screenspec-config" strategy="afterInteractive">{`window.SCREENSPEC = {...}`}</Script>
-<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.24.0/screenspec.js" strategy="afterInteractive" />
+<Script src="https://cdn.jsdelivr.net/gh/charmisuk/screenspec@v0.25.0/screenspec.js" strategy="afterInteractive" />
 ```
 
 - `data-spec` 속성은 JSX 요소에 그대로 (`data-spec="1"`)
@@ -263,7 +263,7 @@ addEventListener("screenspec:preview", (e) => {
   화면 사이 이동은 `flowTo`(화면 id)로, 요소 지목은 `target`(data-spec 값)으로 건다 — 둘 다 번호와 무관하다.
 - **고칠 자리를 남겨 둔다.** 확실치 않은 값을 그럴듯하게 지어내지 말고 「`정책 미정 — 확인 필요`」처럼 적는다.
   기획자가 그 줄만 눌러 고치면 끝난다.
-- 넘겨주기만 할 사본이면 설정에 `readonly: true` 를 넣는다 — 편집 버튼 자체가 생기지 않는다.
+- 넘겨주기만 할 사본이면 설정에 `readonly: true` 를 넣는다 — 고칠 수 있는 표식 자체가 생기지 않는다.
 
 **개발 정의는 개발 PM 의 몫이다** — `layer:"dev"` 줄과 화면의 `dev` 는 개발 정의 자리다.
 네가 프로토타입 코드에서 읽어낸 것을 개발 정의처럼 적지 않는다. API 경로·정책은 사람이 정하는 것이고,

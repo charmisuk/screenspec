@@ -17,7 +17,7 @@ window.SCREENSPEC = {
   checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
   style?:   Style,                // 이 프로젝트의 «쓰는 법» — AI 가 읽는 계약. 라이브러리 렌더는 바뀌지 않는다
   off?:     boolean,              // true = 완전 정지. 원본 프로토타입 그대로 (주소에 ?screenspec=1 이면 켜진다)
-  readonly?: boolean,             // true = 편집 잠금. 편집 버튼·저장 경로를 아예 만들지 않는다 (전달본용)
+  readonly?: boolean,             // true = 편집 잠금. 고칠 수 있는 표식·저장 경로를 아예 만들지 않는다 (전달본용)
 
   // 화면이 하나면 screen + specs
   screen?:  Screen,               // specs 없이 메타만
@@ -60,8 +60,7 @@ type Style  = {           // 온보딩 인터뷰(SKILL §0)의 답이 남는 자
   idScheme?: string,      // 화면 ID 체계. 예: "SCR-{영역}-{번호}"
   notes?:    string,      // 자유 서술 — 「존댓말 금지」 같은 프로젝트 규칙
 }
-type Def    = { t: string, subs?: Sub[], why?: string, layer?: "dev" }  // why = 그 줄의 근거 (「↳ 이유:」로 분리 렌더) · layer 생략 = 기획
-type Sub    = string | { t: string, subs?: string[] }  // 글자만 쓰면 2단, 객체로 쓰면 그 아래 한 단 더 (총 3단)
+type Def    = { t: string, kind?: "text"|"why", indent?: 1|2, layer?: "dev" }  // 블록 하나. kind 생략 = 불릿
 type Device = { w: number, h: number }
 ```
 
@@ -275,14 +274,18 @@ window.SCREENSPEC = {
 | `flowTo` | string | `flow`면 ✔ | 이동할 화면 `id`. 없는 id면 콘솔 경고 |
 | `arrowTo` | string | | `arrow`에서만. 지정하면 대상 요소에서 이 요소로 관계선을 긋는다 |
 
-### Def (기능 설명 한 줄)
+### Def (블록 하나)
+
+기능 설명은 **블록 목록**이다. 노션과 같다 — 종류와 들여쓰기가 블록의 성질이고, 중첩 구조가 아니다 (#55).
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `t` | string | ✔ | 사양 한 줄. 굵게·링크는 `<strong>`·`<a href>` 로 담긴다(그 밖의 태그는 저장되지 않는다) |
-| `subs` | Sub[] | | 그 줄의 조건·분기. 항목당 0~3줄. **글자**(2단) 또는 **`{t, subs}`**(3단). 3단은 번호 없이 글머리표로 그린다 |
-| `why` | string | | 그 줄의 근거. 패널에서 「↳ 이유:」로 분리 렌더 |
+| `t` | string | ✔ | 블록의 글. 굵게는 `<strong>` 으로 담긴다. `<a href>` 도 살아남는다(만드는 단추는 없다). 그 밖의 태그는 저장되지 않는다 |
+| `kind` | `"text"` \| `"why"` | | 생략 = **불릿**. `text` = 글머리표 없는 줄 · `why` = 화살표(↳) 줄 |
+| `indent` | 1 \| 2 | | 들여쓰기 깊이. 생략 = 0. Tab / Shift+Tab 이 이 숫자를 올리고 내린다 |
 | `layer` | `"dev"` | | 개발 정의. 생략하면 기획. 만드는 길은 아카이브됐고 렌더는 그대로 (#46) |
+
+**옛 문서는 그대로 열린다.** 부팅할 때 `subs` 중첩은 `indent` 를 가진 형제 블록으로, `why` 속성은 화살표 블록으로 펴서 읽는다. 저장하면 새 모양으로 나간다.
 
 깊이가 더 필요하면 **새 번호**를 준다. 예전의 하위 요소(`parts`, 라벨 `1a`·`1b`)는 없앴다 — 번호는 숫자만이다 (#51).
 
