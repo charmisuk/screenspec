@@ -4,10 +4,11 @@
  *   node scripts/backlog-sync.js            드리프트만 보고 (기본 = dry-run). 어긋나면 exit 1
  *   node scripts/backlog-sync.js --apply    노션 쪽을 실제로 맞춤 + 실행 후 재검증
  *
- * 보드는 3칸 컨베이어다: 백로그 → 완료. «안 한다» 로 뺀 것만 보류.
- *   백로그에 넣는 규칙 = GitHub 이슈를 연다. 이슈가 원본이고 카드는 이 스크립트가 만든다.
- *   완료로 보내는 규칙 = 이슈가 닫힌다(= 커밋 메시지의 fix #N). 사람이 옮기지 않는다.
- *   보류는 사람 영역 — 이 스크립트가 건드리지 않는다.
+ * 보드는 컨베이어다: 백로그 → 검수 → 완료. «안 한다» 로 뺀 것만 보류.
+ *   백로그  = GitHub 이슈를 연다. 이슈가 원본이고 카드는 이 스크립트가 만든다.
+ *   검수    = 이슈가 닫힌다(= 커밋 메시지의 fix #N). 기계는 «여기까지» 만 옮긴다.
+ *   완료    = PM 이 직접 QA 하고 통과시킨다. 기계가 대신 눌러 주면 검수 단계가 사라진다 (2026-08-29 PM).
+ *   보류    = 사람 영역 — 이 스크립트가 건드리지 않는다.
  *
  * 잡는 드리프트 4종:
  *   1) 열린 이슈인데 노션 카드가 없음        → 우선순위 판단에서 누락된다
@@ -123,9 +124,13 @@ async function main() {
     const i = byNo.get(n);
     if (!i) { drift.push({ kind: "죽은 링크", card: c, msg: `${c.name} → #${n} 없음` }); return; }
     if (c.status === "보류") return; /* 보류는 사람이 «안 한다» 고 정한 칸 — 기계가 되돌리지 않는다 */
+    if (c.status === "완료") { /* 완료는 PM 이 QA 하고 누른 칸이다. 기계는 되돌리지도 다시 밀지도 않는다 */
+      if (!(i.state === "closed" || closing.has(n))) drift.push({ kind: "완료인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
+      return;
+    }
     const done = i.state === "closed" || closing.has(n);
-    if (done && c.status !== "완료") drift.push({ kind: "완료 반영 안 됨", card: c, msg: `${c.name} (#${n} ${i.state === 'closed' ? '닫힘' : '곧 닫힘'} · 카드 ${c.status})` });
-    if (!done && c.status === "완료") drift.push({ kind: "완료인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
+    if (done && c.status !== "검수") drift.push({ kind: "검수로 보낼 것", card: c, msg: `${c.name} (#${n} ${i.state === 'closed' ? '닫힘' : '곧 닫힘'} · 카드 ${c.status})` });
+    if (!done && c.status === "검수") drift.push({ kind: "검수인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
   });
 
   console.log(`이슈 ${issues.length}건(열림 ${issues.filter((i) => i.state === "open").length}) · 카드 ${parsed.length}장`);
@@ -158,9 +163,9 @@ async function main() {
         },
       });
       console.log("  + 카드 생성: #" + i.number);
-    } else if (d.kind === "완료 반영 안 됨") {
-      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "완료" } } } });
-      console.log("  ~ 완료 처리: " + d.card.name);
+    } else if (d.kind === "검수로 보낼 것") {
+      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "검수" } } } });
+      console.log("  ~ 검수로: " + d.card.name + "  (완료는 PM 이 QA 후 직접)");
     } else {
       console.log("  ! 수동 확인 필요: [" + d.kind + "] " + d.msg);
     }
