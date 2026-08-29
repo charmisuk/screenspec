@@ -10,6 +10,9 @@
  *   완료    = PM 이 직접 QA 하고 통과시킨다. 기계가 대신 눌러 주면 검수 단계가 사라진다 (2026-08-29 PM).
  *   보류    = 사람 영역 — 이 스크립트가 건드리지 않는다.
  *
+ * 묶음(시나리오): GitHub 마일스톤 = 카드 1장, 그 안의 이슈 = 카드 속 체크 1줄 (2026-08-30 PM).
+ *   보드에는 큰 시나리오만 보이고 눌러야 세부가 나온다. 체크·진행(n/m)은 이슈 상태로 기계가 맞춘다.
+ *
  * 잡는 드리프트 4종:
  *   1) 열린 이슈인데 노션 카드가 없음        → 우선순위 판단에서 누락된다
  *   2) 닫힌 이슈인데 카드가 '완료'가 아님     → 보드가 실제보다 밀린 것처럼 보인다
@@ -60,6 +63,7 @@ const NH = { "Notion-Version": "2022-06-28", "Content-Type": "application/json" 
 const rt = (t) => [{ type: "text", text: { content: t } }];
 const txt = (arr) => (arr || []).map((x) => x.plain_text).join("");
 const issueNo = (url) => { const m = (url || "").match(/\/issues\/(\d+)/); return m ? Number(m[1]) : null; };
+const msNo = (url) => { const m = (url || "").match(/\/milestone\/(\d+)/); return m ? Number(m[1]) : null; };
 
 async function main() {
   ensureHook();
@@ -98,13 +102,14 @@ async function main() {
     name: txt(c.properties["이름"] && c.properties["이름"].title),
     status: (c.properties["상태"] && c.properties["상태"].select || {}).name || "",
     url: (c.properties["GitHub"] || {}).url || "",
+    desc: txt(c.properties["설명"] && c.properties["설명"].rich_text),
   });
   const parsed = cards.map(card);
   const linked = new Map(parsed.filter((c) => issueNo(c.url)).map((c) => [issueNo(c.url), c]));
 
   /* ---- 판정 ---- */
   const drift = [];
-  issues.filter((i) => i.state === "open").forEach((i) => {
+  issues.filter((i) => i.state === "open" && !i.milestone).forEach((i) => {
     if (!linked.has(i.number)) drift.push({ kind: "카드 없음", issue: i, msg: `#${i.number} ${i.title}` });
   });
   /* 푸시될 커밋이 «fix #N» 으로 닫을 이슈들 — GitHub 이 닫기 전이라 아직 open 으로 보인다.
@@ -118,6 +123,31 @@ async function main() {
     while ((m = re.exec(log))) closing.add(Number(m[1]));
     console.log("푸시 범위: 커밋 " + (log.trim() ? log.trim().split(/^commit /m).length : 0) + "덩이 · 닫을 이슈 " + (closing.size ? [...closing].map((n) => "#" + n).join(" ") : "없음"));
   }
+  /* ---- 묶음(마일스톤) 판정 — 보드에는 시나리오만, 세부는 카드 안 체크 목록 (2026-08-30 PM) ---- */
+  const isDone = (i) => i.state === "closed" || closing.has(i.number);
+  const groups = new Map();
+  issues.forEach((i) => {
+    if (!i.milestone) return;
+    const g = groups.get(i.milestone.number) ||
+      { no: i.milestone.number, title: i.milestone.title, url: i.milestone.html_url, issues: [] };
+    g.issues.push(i);
+    groups.set(i.milestone.number, g);
+  });
+  const msCards = new Map(parsed.filter((c) => msNo(c.url)).map((c) => [msNo(c.url), c]));
+  for (const g of groups.values()) {
+    g.issues.sort((a, b) => a.number - b.number);
+    g.done = g.issues.filter(isDone).length;
+    g.desc = "진행 " + g.done + "/" + g.issues.length;
+    const c = msCards.get(g.no);
+    if (!c) { drift.push({ kind: "묶음 카드 없음", group: g, msg: g.title + " (세부 " + g.issues.length + "건)" }); continue; }
+    if (c.status === "보류" || c.status === "완료") continue; /* 사람 칸은 기계가 안 건드린다 */
+    if ((c.desc || "") !== g.desc) drift.push({ kind: "체크 갱신", group: g, card: c, msg: g.title + " · " + g.desc });
+    const all = g.done === g.issues.length && g.issues.length > 0;
+    if (all && c.status !== "검수") drift.push({ kind: "묶음 검수로", group: g, card: c, msg: g.title });
+    if (!all && c.status === "검수") drift.push({ kind: "묶음 되돌리기", group: g, card: c, msg: g.title + " · " + g.desc });
+  }
+
+
   parsed.forEach((c) => {
     const n = issueNo(c.url);
     if (n === null) return;
@@ -144,6 +174,32 @@ async function main() {
     return 1;
   }
 
+/* 카드 본문 = 세부 태스크 체크 목록. PM 은 보드에서 시나리오만 보고, 눌러야 이게 나온다.
+   줄줄 읽는 글이 아니라 «체크체크체크» 여야 하므로 to_do 블록 한 줄씩만 쓴다.
+   매번 통째로 다시 써서(지우고 새로) 이슈 상태와 어긋날 여지를 없앤다. */
+async function msChecklist(pageId, g) {
+  const old = await nApi("GET", "/blocks/" + pageId + "/children?page_size=100");
+  for (const b of old.results || []) {
+    try { await nApi("DELETE", "/blocks/" + b.id); } catch { /* 이미 지워졌으면 통과 */ }
+  }
+  const done = (i) => i.state === "closed";
+  const rows = g.issues.map((i) => ({
+    object: "block", type: "to_do",
+    to_do: {
+      checked: done(i),
+      rich_text: [
+        { type: "text", text: { content: i.title.replace(/^\[[^\]]+\]\s*/, "") + "  " } },
+        { type: "text", text: { content: "#" + i.number, link: { url: i.html_url } },
+          annotations: { code: true, color: "gray" } },
+      ],
+    },
+  }));
+  if (!rows.length) return;
+  for (let k = 0; k < rows.length; k += 90) {
+    await nApi("PATCH", "/blocks/" + pageId + "/children", { children: rows.slice(k, k + 90) });
+  }
+}
+
   /* ---- 반영 (--apply) ---- */
   console.log("\n반영 중...");
   const label = (i) => (i.labels || []).map((l) => l.name).join(",");
@@ -166,6 +222,32 @@ async function main() {
     } else if (d.kind === "검수로 보낼 것") {
       await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "검수" } } } });
       console.log("  ~ 검수로: " + d.card.name + "  (완료는 PM 이 QA 후 직접)");
+    } else if (d.kind === "묶음 카드 없음") {
+      const g = d.group;
+      const pg = await nApi("POST", "/pages", {
+        parent: { database_id: DB_ID },
+        properties: {
+          "이름": { title: rt(g.title) },
+          "상태": { select: { name: g.done === g.issues.length && g.issues.length ? "검수" : "백로그" } },
+          "유형": { select: { name: "기능" } },
+          "근거": { select: { name: "내부 발견" } },
+          "우선순위": { select: { name: "P1" } },
+          "GitHub": { url: g.url },
+          "설명": { rich_text: rt(g.desc) },
+        },
+      });
+      await msChecklist(pg.id, g);
+      console.log("  + 묶음 카드: " + g.title + " (" + g.desc + ")");
+    } else if (d.kind === "체크 갱신") {
+      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "설명": { rich_text: rt(d.group.desc) } } });
+      await msChecklist(d.card.id, d.group);
+      console.log("  ~ 체크: " + d.group.title + " (" + d.group.desc + ")");
+    } else if (d.kind === "묶음 검수로") {
+      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "검수" } } } });
+      console.log("  ~ 검수로: " + d.group.title + "  (완료는 PM 이 QA 후 직접)");
+    } else if (d.kind === "묶음 되돌리기") {
+      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "백로그" } } } });
+      console.log("  ~ 백로그로: " + d.group.title + " (세부가 다 안 끝났다)");
     } else {
       console.log("  ! 수동 확인 필요: [" + d.kind + "] " + d.msg);
     }
