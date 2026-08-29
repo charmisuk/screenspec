@@ -6,3 +6,4 @@ examples/_*.png
 _*.png
 **/_*.png
 _private/
+_qa/
