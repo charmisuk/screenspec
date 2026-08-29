@@ -412,6 +412,9 @@
   body.ss-wrap{margin:0;background:var(--ss-canvas)}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  /* 프로토타입의 CSS 가 우리 UI 를 흔들면 안 된다 (2026-08-29 실측: 프로토타입의 button{flex:1} 때문에
+     서식 단추가 패널 폭 전체로 늘어났다). :where() 는 특정도가 0 이라 프로토타입 규칙에 진다 */
+  .ss-ui button{flex:none}
   .ss-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
   .ss-modes{display:flex;border:1px solid var(--ss-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
