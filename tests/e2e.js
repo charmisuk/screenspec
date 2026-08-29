@@ -1168,16 +1168,35 @@ function check(name, ok, detail) {
     check("편집: Esc 는 설정을 안 바꾼다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"));
     check("편집: Esc 는 화면도 되돌린다", await page.evaluate(() => document.querySelector('[data-defrow="2"] .ss-t').textContent === "몸통"));
 
-    /* --- 구조 --- */
-    await page.click('[data-defrow="2"] [data-ec="addline"]');
+    /* --- 구조 — #45 이후 넣기는 버튼이 아니라 Enter·슬래시가 한다 --- */
+    await page.click('[data-defrow="2"] [data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.type("보탠 줄");
+    await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(200);
-    check("편집: 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
+    check("편집: Enter 로 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
+    await page.hover('[data-defrow="1"] .ss-items li');
+    await page.waitForTimeout(120);
     await page.click('[data-defrow="1"] [data-ec="delline"][data-di="0"]');
     await page.waitForTimeout(200);
     check("편집: 줄 삭제", await page.evaluate(() => window.SCREENSPEC.specs[0].defs.length === 1 && window.SCREENSPEC.specs[0].defs[0].t === "둘째 줄"));
-    await page.click('[data-defrow="1"] [data-ec="addwhy"][data-di="0"]');
+    /* 이유는 슬래시(또는 «?») 로 — ＋이유 버튼은 없앴다 */
+    await page.click('[data-defrow="1"] [data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("?");
+    await page.waitForTimeout(250);
+    await page.keyboard.type("근거 한 줄");
+    await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(200);
-    check("편집: 이유 붙이기", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].why === "이유"));
+    check("편집: «?» 로 이유 붙이기", await page.evaluate(() =>
+      window.SCREENSPEC.specs[0].defs.some((d) => d.why === "근거 한 줄")), await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
+    /* #45 이후 순서 손잡이는 «마우스를 올렸을 때만» 나타난다 */
+    await page.hover('[data-defrow="2"]');
+    await page.waitForTimeout(120);
     await page.click('[data-defrow="2"] [data-ec="up"]');
     await page.waitForTimeout(250);
     check("편집: 순서 바꾸기", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "몸통"));
@@ -1475,11 +1494,12 @@ function check(name, ok, detail) {
       window.SCREENSPEC.specs[0].defs.map((d) => (d.layer || "plan") + ":" + d.t).join("|") ===
       "plan:기획 한 줄|dev:POST /api/items|plan:기획 둘째 줄"),
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
-    await page.click('[data-defrow="2"] [data-ec="adddev"]');
-    await page.waitForTimeout(200);
-    check("레이어: 「＋ 개발 줄」 이 layer:dev 로 붙는다", await page.evaluate(() => {
-      const d = window.SCREENSPEC.specs[1].defs;
-      return d.length === 2 && d[1].layer === "dev";
+    /* #46: 개발 정의를 «만드는 길» 은 아카이브했다 — 버튼도 슬래시 항목도 없어야 한다 */
+    check("레이어: 개발 줄을 만드는 버튼이 없다 (#46 아카이브)",
+      (await page.locator('[data-ec="adddev"]').count()) === 0);
+    check("레이어: 슬래시에도 개발 항목이 없다", await page.evaluate(() => {
+      const el = document.querySelector('[data-defrow="1"] [data-ed="t"]');
+      return !document.querySelector('.ss-slash [data-sl="dev"]') && !!el;
     }));
     check("레이어: 직렬화가 layer·screen.dev 를 잃지 않는다", await page.evaluate(() => {
       const w = {};
@@ -1609,21 +1629,24 @@ function check(name, ok, detail) {
     await page.waitForTimeout(150);
     await page.keyboard.press("/");
     await page.waitForTimeout(200);
-    check("에디터: 빈 줄에서 / 를 치면 넣을 것을 고른다", (await page.locator(".ss-slash button").count()) === 4);
+    check("에디터: 빈 줄에서 / 를 치면 셋을 고른다 (번호·불릿·이유)",
+      (await page.locator(".ss-slash [data-sl]").count()) === 3,
+      await page.locator(".ss-slash [data-sl]").allTextContents());
+    check("에디터: 오른쪽에 마크다운 단축키가 보인다",
+      (await page.locator(".ss-sl-key").allTextContents()).join(",").includes("-"));
     await page.click('.ss-slash [data-sl="why"]');
     await page.waitForTimeout(250);
     check("에디터: / 메뉴의 «이유» 가 이유 칸을 만든다", (await page.locator('[data-ed="why"]').count()) > 0);
 
-    check("에디터: 유형 드롭다운이 anno 8종", (await page.locator(".ss-annopick option").count()) === 8);
-    await page.selectOption(".ss-annopick", "input");
-    await page.waitForTimeout(250);
-    check("에디터: 유형을 고르면 설정이 바뀐다", (await page.evaluate(() => window.SCREENSPEC.specs[0].anno)) === "input");
+    /* #46: 유형 드롭다운은 아카이브 — 만드는 길은 없고, 값은 라벨로 그대로 보인다 */
+    check("에디터: 유형 드롭다운이 없다 (#46 아카이브)", (await page.locator(".ss-annopick").count()) === 0);
+    check("에디터: 유형 라벨은 그대로 렌더된다 (읽기 하위호환)",
+      (await page.locator('[data-defrow="1"] .ss-tag').textContent()).trim().length > 0);
 
     /* 편집을 끄면 정의서 DOM 이 편집 기능 없던 때와 같아야 한다 — 회귀 위험 0 이 이 기능의 전제다 */
     await page.click(".ss-editbtn");
     await page.waitForTimeout(200);
-    check("에디터: 끄면 드롭다운·손잡이가 남지 않는다",
-      (await page.locator(".ss-annopick").count()) === 0 && (await page.locator("[data-ed]").count()) === 0);
+    check("에디터: 끄면 손잡이가 남지 않는다", (await page.locator("[data-ed]").count()) === 0);
 
     /* 하위 호환 — subs 가 문자열뿐인 옛 문서 */
     await page.goto("about:blank");
@@ -1636,6 +1659,99 @@ function check(name, ok, detail) {
     await page.waitForTimeout(300);
     check("에디터: 문자열 subs 만 쓰는 옛 문서가 그대로 그려진다",
       (await page.locator(".ss-items li.ss-sub").count()) === 2 && (await page.locator(".ss-items li.ss-sub3").count()) === 0);
+  }
+
+  /* ============ 번호 찍기 (#43) ============
+     지금까지 번호는 프로토타입에 미리 심어 둔 data-spec 이 있어야만 붙었다. 이제 화면에서 고른다.
+     여기서 확인하는 것: 후보 판정 · 방향키로 넓히기 · 확정 뒤 «프로토타입에 이름표가 남는가»(동작 불변). */
+  console.log("[pick] 번호를 화면에서 찍는다");
+  {
+    const PICK_HTML =
+      '<div id="a" data-spec="1">본문</div>' +
+      '<div id="target" style="padding:14px;border:1px solid #ccc">' +
+      '<div class="inner" style="padding:8px;background:#eee">안쪽 상자<span class="tiny" style="font-size:9px">작은글자</span></div></div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-P',name:'찍기'}," +
+      "specs:[{n:1,target:'1',title:'영역',defs:[{t:'첫 줄'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(PICK_HTML);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-editbtn");
+    await page.waitForTimeout(200);
+
+    await page.click('.ss-dt[data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("/");
+    await page.waitForTimeout(200);
+    await page.click('.ss-slash [data-sl="num"]');
+    await page.waitForTimeout(300);
+    check("찍기: 슬래시 「번호」 로 찍기 모드에 들어간다",
+      await page.evaluate(() => document.body.classList.contains("ss-picking")));
+
+    await page.hover(".tiny");
+    await page.waitForTimeout(250);
+    const tip1 = await page.locator(".ss-pick-tip").textContent();
+    check("찍기: 작은 글자에 올려도 잡을 만한 것으로 넓혀 잡는다 (이름표에 크기)", /\d+×\d+/.test(tip1), tip1);
+
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(200);
+    const tip2 = await page.locator(".ss-pick-tip").textContent();
+    check("찍기: ↑ 로 부모까지 넓어진다", tip2 !== tip1, { tip1: tip1, tip2: tip2 });
+
+    await page.hover("#target");
+    await page.waitForTimeout(150);
+    await page.click("#target", { force: true });
+    await page.waitForTimeout(400);
+    const after = await page.evaluate(() => ({
+      picking: document.body.classList.contains("ss-picking"),
+      specs: window.SCREENSPEC.specs.length,
+      stamped: [...document.querySelectorAll("[data-spec]")].map((e) => e.getAttribute("data-spec")),
+      markers: document.querySelectorAll(".ss-marker").length,
+    }));
+    check("찍기: 클릭하면 모드가 끝난다", after.picking === false);
+    check("찍기: 항목이 하나 늘어난다", after.specs === 2, after);
+    check("찍기: 프로토타입에 이름표(data-spec)가 남는다 — 동작 불변(D7)", after.stamped.length === 2, after.stamped);
+    check("찍기: 마커가 그 자리에 그려진다", after.markers === 2);
+    check("찍기: 저장 텍스트에도 새 항목이 실린다", await page.evaluate(() => {
+      const w = {};
+      new Function("window", window.ScreenSpec.serialize())(w);
+      return w.SCREENSPEC.specs.length === 2;
+    }));
+
+    /* 이미 번호가 있는 곳을 다시 찍으면 새로 만들지 않는다 */
+    await page.click('.ss-dt[data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("/");
+    await page.waitForTimeout(200);
+    await page.click('.ss-slash [data-sl="num"]');
+    await page.waitForTimeout(250);
+    await page.hover("#a");
+    await page.waitForTimeout(150);
+    await page.click("#a", { force: true });
+    await page.waitForTimeout(350);
+    check("찍기: 이미 번호가 있는 곳은 새로 만들지 않는다",
+      await page.evaluate(() => window.SCREENSPEC.specs.length === 2),
+      await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.target)));
+
+    /* Esc 로 취소하면 아무 일도 없다 */
+    await page.click('.ss-dt[data-ed="t"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("/");
+    await page.waitForTimeout(200);
+    await page.click('.ss-slash [data-sl="num"]');
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(250);
+    check("찍기: Esc 로 취소하면 모드만 끝나고 항목은 그대로",
+      await page.evaluate(() => !document.body.classList.contains("ss-picking") && window.SCREENSPEC.specs.length === 2));
   }
 
   /* ============ 움직이는 요소 추적 (#8) ============

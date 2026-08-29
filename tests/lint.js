@@ -250,11 +250,13 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 }
 
 /* 19) 용량 상한 — 단일 파일·의존성 0 이 이 제품의 약속이다. 상한이 없으면
-       「이것 하나쯤」이 쌓여 어느 날 라이브러리가 두 배가 된다. 참고: html2canvas 48KB ·
-       ProseMirror 코어 40KB — 엔진 하나만 넣어도 우리 전체보다 크다. 넘으면 기능이 아니라
-       상한을 다시 논의한다 (2026-08-28 결정) */
+       「이것 하나쯤」이 쌓여 어느 날 라이브러리가 두 배가 된다.
+       2026-08-30 (#47) 60 → 150KB: 에디터 개편 예산이다. 다만 이 예산은 «엔진 수입» 이 아니라
+       우리 코드에 쓴다 — Editor.js(gzip 64KB)가 유일한 무빌드 후보였으나, 범위가
+       「슬래시 3종 + 볼드·링크」로 줄면서 우리 에디터가 이미 9할을 하고 번호는 어차피 커스텀 블록이다.
+       Tiptap·Lexical 은 npm 번들링이 전제라 「파일 하나 복사」라는 제품 성격이 깨진다 */
 {
-  const LIMIT_KB = 60;
+  const LIMIT_KB = 150;
   const gz = zlib.gzipSync(fs.readFileSync(path.join(REPO, "screenspec.js")), { level: 9 }).length;
   const kb = +(gz / 1024).toFixed(1);
   check("screenspec.js gzip 상한 " + LIMIT_KB + "KB 이하 (지금 " + kb + "KB)", kb <= LIMIT_KB, kb + "KB");

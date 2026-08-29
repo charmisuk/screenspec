@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.21 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.22 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -116,13 +116,9 @@
     flow:   { label: "이동",   mech: "flow" }
   };
   function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
-  /* 유형 고르기 (0-6) — 새 필드가 아니라 이미 있는 anno 8종을 그 자리에서 바꾼다.
-     마커 모양·▶ 버튼이 이 값으로 갈리므로 고르면 바로 다시 그린다 */
-  function annoPick(sp) {
-    let o = "";
-    for (const k in ANNO) o += '<option value="' + k + '"' + (sp.anno === k ? " selected" : "") + ">" + ANNO[k].label + "</option>";
-    return '<select class="ss-tag ss-annopick ss-ui" data-ec="anno" title="이 항목의 유형">' + o + "</select>";
-  }
+  /* 아카이브 (#46, 2026-08-30 PM) — 유형 고르기 드롭다운은 «만드는 길» 을 없앴다.
+     골라도 화면이 거의 안 바뀌었기 때문이다: 실제 동작은 4가지고 그중 넷(영역·입력·상태·모션)은 라벨만 다르다.
+     값이 확실해지면(외부 요청 2건+) 되살린다. anno 는 렌더·마커·▶ 에서 그대로 쓰인다 — 읽기는 하위호환 */
 
   /* 하이라이트·마커·버튼 등 포인트 컬러 — accent: 프리셋명 또는 hex
      window.SCREENSPEC = { accent: "orange" } 또는 { accent: "#7C3AED" } */
@@ -426,7 +422,7 @@
   body.ss-editing [data-ed]:hover{background:#FFF8E1;box-shadow:inset 0 -1px 0 var(--ss-ink3)}
   body.ss-editing [data-ed].ss-ed-on{background:#fff;box-shadow:0 0 0 2px var(--ss-accent);outline:none}
   .ss-edrow{display:none;gap:5px;margin-top:9px;flex-wrap:wrap}
-  body.ss-editing .ss-edrow{display:flex}
+  body.ss-editing .ss-row:hover .ss-edrow,body.ss-editing .ss-row:focus-within .ss-edrow{display:flex}
   .ss-edrow button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink3);font-size:11px;
     font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;font-family:inherit}
   .ss-edrow button:hover{border-color:var(--ss-ink3);color:var(--ss-ink)}
@@ -530,13 +526,27 @@
   .ss-items li .ss-why::before{content:"↳ 이유: "}
   .ss-items li.ss-sub{margin-left:18px}
   .ss-items li.ss-sub::before{background:#fff;border:1.3px solid var(--ss-ink2);left:2px}
-  .ss-annopick{font:inherit;padding:1px 4px;cursor:pointer}
   .ss-defs-list [data-ed]:empty:not(.ss-ed-on)::after{content:"빈 줄 — 눌러서 쓰기";color:var(--ss-ink3);font-style:italic}
   .ss-defs-list [data-ed].ss-ed-on:empty{min-width:120px;display:inline-block}
   .ss-slash{position:fixed;z-index:2147483000;background:var(--ss-bg,#fff);border:1px solid var(--ss-line,#dcdce3);
     border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column;min-width:132px}
-  .ss-slash button{all:unset;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--ss-ink,#22232a)}
-  .ss-slash button:hover{background:var(--ss-soft,#f2f2f6)}
+  .ss-slash{min-width:262px}
+  .ss-slash-g{font-size:10.5px;font-weight:800;color:var(--ss-ink3);letter-spacing:.04em;padding:7px 9px 5px}
+  .ss-slash button{all:unset;display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:7px;
+    cursor:pointer;font-size:13px;color:var(--ss-ink)}
+  .ss-slash button:hover,.ss-slash button.on{background:var(--ss-accent-soft)}
+  .ss-sl-ico{width:24px;height:24px;border-radius:6px;background:var(--ss-canvas);border:1px solid var(--ss-line);
+    display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--ss-ink2);flex:none}
+  .ss-slash button.on .ss-sl-ico{background:#fff;border-color:var(--ss-accent);color:var(--ss-accent)}
+  .ss-sl-nm{font-weight:600}
+  .ss-sl-key{margin-left:auto;font-family:var(--ss-mono);font-size:11.5px;color:var(--ss-ink3)}
+  /* 번호 찍기 (#43) — 찍을 수 있는 곳은 옅게, 잡힌 것만 또렷하게 */
+  body.ss-picking [data-spec]{outline:1px dashed color-mix(in srgb,var(--ss-accent) 40%,#fff);outline-offset:1px}
+  body.ss-picking{cursor:crosshair}
+  .ss-pick-box{position:fixed;z-index:2147483300;pointer-events:none;outline:2px solid var(--ss-accent);
+    outline-offset:1px;background:color-mix(in srgb,var(--ss-accent) 8%,transparent);display:none}
+  .ss-pick-tip{position:fixed;z-index:2147483301;pointer-events:none;background:var(--ss-ink);color:#fff;
+    font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap}
   .ss-items li.ss-sub3{margin-left:34px}
   .ss-items li.ss-sub3::before{width:4px;height:4px;background:var(--ss-ink2);border:0;left:4px;top:9px}
   .ss-play{margin:9px 0 0 16px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;
@@ -792,28 +802,25 @@ ${HL_CSS}
       (si == null ? "" : ' data-si="' + si + '"') + (ti == null ? "" : ' data-ti="' + ti + '"') +
       (title ? ' title="' + title + '"' : "") + ">" + label + "</button>";
   }
-  /* 줄 하나의 손잡이 — 이유가 이미 있으면 「＋ 이유」는 내지 않는다 */
-  function edLineCtl(di, hasWhy) {
+  /* 줄 하나의 손잡이 (#45) — 상시 노출 버튼(＋이유·×)을 걷어냈다. 넣기는 Enter·Tab·슬래시가,
+     지우기는 빈 줄 Backspace 가 한다. 마우스를 쓰는 사람을 위해 «올렸을 때만» 나타나는 ⋮ 하나만 남긴다 */
+  function edLineCtl(di) {
     if (!EDIT) return "";
-    return '<span class="ss-edline ss-ui">' + (hasWhy ? "" : edBtn("addwhy", "＋ 이유", "이 줄에 근거 붙이기", di)) +
-      edBtn("delline", "×", "이 줄 삭제", di) + "</span>";
+    return '<span class="ss-edline ss-ui">' + edBtn("delline", "⋮", "이 줄 지우기", di) + "</span>";
   }
   function edSubCtl(di, si, ti) {
     if (!EDIT) return "";
-    return '<span class="ss-edline ss-ui">' + edBtn(ti == null ? "delsub" : "delsub3", "×", "이 줄 삭제", di, si, ti) + "</span>";
+    return '<span class="ss-edline ss-ui">' + edBtn(ti == null ? "delsub" : "delsub3", "⋮", "이 줄 지우기", di, si, ti) + "</span>";
   }
   /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
   function edRowCtl() {
     if (!EDIT) return "";
-    return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") +
-      edBtn("addsub", "＋ 하위 줄", "마지막 줄에 하위 조건 추가") +
-      edBtn("adddev", "＋ 개발 줄", "개발 정의 한 줄 추가 (DEV)") +
+    return '<div class="ss-edrow ss-ui">' +
       edBtn("up", "↑", "위로") + edBtn("down", "↓", "아래로") + edBtn("delitem", "항목 삭제", "이 항목을 통째로 삭제") + "</div>";
   }
-  function edPartCtl() {
-    if (!EDIT) return "";
-    return '<div class="ss-edrow ss-ui">' + edBtn("addline", "＋ 줄", "설명 한 줄 추가") + edBtn("delpart", "세부 삭제", "이 세부 항목 삭제") + "</div>";
-  }
+  /* 아카이브 (#46) — 하위 요소(1a·1b)를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
+     1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
+  function edPartCtl() { return ""; }
   /* 정의 불렛(공통) — 근거는 사양과 분리한다. 구현자는 사양만, 검토자는 이유까지 (#24) */
   /* 하위 줄 한 개의 글자 — 예전 문서는 문자열, 3단을 쓰면 객체다. 둘 다 그대로 유효하다 */
   function subT(x) { return typeof x === "string" ? x : (x && x.t) || ""; }
@@ -831,7 +838,7 @@ ${HL_CSS}
          읽는 화면에서는 내용이 있을 때만 보인다 (비운 이유는 저장 때 사라진다) */
       const why = d.why || (EDIT && d.why != null)
         ? '<span class="ss-why" title="이유"' + edMark("why", di) + ">" + esc(d.why) + "</span>" : "";
-      items += "<li>" + t + why + edLineCtl(di, !!d.why) + "</li>";
+      items += "<li>" + t + why + edLineCtl(di) + "</li>";
       (d.subs || []).forEach((sub, si) => {
         /* 하위 줄은 «글자» 이거나 «글자 + 그 아래 한 단» 이다 (0-6).
            번호는 2단(1a)까지만 붙인다 — 3단까지 번호를 매기면 화면 위 마커와 어긋난다 (PM 결정 2026-08-28) */
@@ -902,14 +909,14 @@ ${HL_CSS}
       (s.parts || []).forEach((p, i) => {
         const key = String(s.n) + partSuffix(i);
         parts += `<div class="ss-part" data-part="${key}">
-          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span>${EDIT ? annoPick(p) : '<span class="ss-tag">' + esc(annoOf(p).label) + "</span>"}</div>
+          <div class="ss-title ss-part-head"><span class="ss-part-no">${key}</span><span class="ss-t"${edMark("title")}>${esc(p.title || "")}</span><span class="ss-pos"></span><span class="ss-tag">${esc(annoOf(p).label)}</span></div>
           <ul class="ss-items ss-plan">${defItemsHTML(p.defs, "plan")}</ul>${devBlockHTML(p.defs)}${playBtnHTML(p, key)}${previewBtnHTML(p, key)}${edPartCtl()}
         </div>`;
       });
       out += `<div class="ss-row" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         <div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span>${EDIT ? annoPick(s) : '<span class="ss-tag">' + esc(type.label) + "</span>"}<span class="ss-nowtag">현재 미표시</span></div>
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-tag">${esc(type.label)}</span><span class="ss-nowtag">현재 미표시</span></div>
           <ul class="ss-items ss-plan">${defItemsHTML(s.defs, "plan")}</ul>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}${parts}${edRowCtl()}
         </div></div>`;
     });
@@ -2149,23 +2156,32 @@ ${HL_CSS}
       }
       edTouched();
     }
-    /* 슬래시 메뉴 — 빈 줄에서 «/» 를 치면 «여기에 무엇을 넣을까» 를 고른다.
-       정해진 스키마에 항목을 꽂는 것뿐이라 편집 엔진이 필요 없다 (0-6) */
-    let edMenu = null;
+    /* 슬래시 메뉴 (#42) — 항목은 셋뿐이다: 번호 · 불릿 · 이유.
+       「설명 줄 / 하위 줄」로 나눴던 것은 우리 데이터 구조(defs·subs)를 그대로 메뉴로 내보낸 실수였다 —
+       둘은 같은 불릿이고 층은 Tab 이 정한다(노션과 같음). 개발 정의·유형·하위 요소는 아카이브(#46).
+       왼쪽 아이콘+이름, 오른쪽은 마크다운 단축키(없는 항목은 비운다) */
+    const SLASH = [
+      { k: "num", ico: "①", nm: "번호", key: "화면에서 찍기" },
+      { k: "bul", ico: "•", nm: "불릿", key: "-" },
+      { k: "why", ico: "?", nm: "이유", key: "?" },
+    ];
+    let edMenu = null, edMenuAt = 0;
     function edSlashClose() { if (edMenu) { edMenu.remove(); edMenu = null; } }
     function edSlash() {
       const p = edPos();
       if (!p) return;
       edSlashClose();
       edMenu = h("div", { class: "ss-slash ss-ui" },
-        '<button type="button" data-sl="line">설명 줄</button>' +
-        '<button type="button" data-sl="sub">하위 줄</button>' +
-        '<button type="button" data-sl="why">이유</button>' +
-        '<button type="button" data-sl="dev">개발 줄</button>');
+        '<div class="ss-slash-g">넣기</div>' +
+        SLASH.map((x, i) =>
+          '<button type="button" data-sl="' + x.k + '"' + (i === 0 ? ' class="on"' : "") + '>' +
+          '<span class="ss-sl-ico">' + x.ico + "</span><span class=\"ss-sl-nm\">" + x.nm + "</span>" +
+          '<span class="ss-sl-key">' + esc(x.key) + "</span></button>").join(""));
       document.body.appendChild(edMenu);
+      edMenuAt = 0;
       const r = edEl.getBoundingClientRect();
-      edMenu.style.left = Math.round(Math.min(r.left, innerWidth - 150)) + "px";
-      edMenu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - 160)) + "px";
+      edMenu.style.left = Math.round(Math.min(r.left, innerWidth - 300)) + "px";
+      edMenu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - 170)) + "px";
       edMenu.addEventListener("mousedown", (e) => {
         const b = e.target.closest("[data-sl]");
         if (!b) return;
@@ -2173,26 +2189,152 @@ ${HL_CSS}
         edPick(b.dataset.sl, p);
       });
     }
+    /* 메뉴가 떠 있는 동안 ↑↓ 로 고르고 Enter 로 넣는다 — 손이 키보드를 떠나지 않게 */
+    function edMenuKey(e) {
+      if (!edMenu) return false;
+      const btns = [...edMenu.querySelectorAll("[data-sl]")];
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        edMenuAt = (edMenuAt + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length;
+        btns.forEach((b, i) => b.classList.toggle("on", i === edMenuAt));
+        return true;
+      }
+      if (e.key === "Enter") { const p = edPos(); if (p) edPick(btns[edMenuAt].dataset.sl, p); return true; }
+      if (e.key === "Escape") { edSlashClose(); return true; }
+      return false;
+    }
     function edPick(kind, p) {
       edSlashClose();
-      if (kind === "sub") { edIndent(true); return; }
-      if (kind === "line") { if (p.f !== "t") edIndent(false); return; }
+      if (kind === "bul") { if (p.f !== "t" && p.f !== "sub" && p.f !== "sub3") edIndent(false); return; }
+      if (kind === "num") { edFinish(true); pickStart(); return; }
       const d = edLines(p)[p.di];
       if (!d) return;
-      if (kind === "dev") {
-        if (p.f !== "t") { edIndent(false); return; }
-        edSnap();
-        d.layer = "dev";
-        edTouched();
-        edGo(p.key, "t", p.di);
-        return;
-      }
       if (kind === "why") {
         edSnap();
         if (d.why == null) d.why = "";
         edTouched();
         edGo(p.key, "why", p.di);
       }
+    }
+
+    /* ---- 번호 찍기 (#43) ----
+       지금까지 번호는 프로토타입에 미리 심어 둔 data-spec 이 있어야만 붙었다 — 기획자가 쓸 수 있는 길이 아니다.
+       화면에서 직접 고른다: 호버로 잡고, 방향키로 넓히고 좁히고, 클릭으로 확정한다.
+       방향키가 핵심이다 — 클릭 한 번으로 원하는 요소를 정확히 잡는 건 거의 불가능해서(작은 글자가 잡힌다)
+       개발자도구·피그마가 쓰는 관습을 그대로 빌렸다. 배울 것이 없다는 게 이 방식의 값이다.
+
+       저장은 프로토타입에 data-spec 을 «직접 쓴다» (로드맵 D7): 우리 약속은 «코드 불변» 이 아니라
+       «동작 불변» 이다. 보이지 않는 이름표라 프로토타입은 하던 대로 움직인다. */
+    let pickOn = false, pickEl = null, pickBox = null, pickTip = null;
+    const PICK_MIN = 12; /* 이보다 작은 것은 찍을 것이 못 된다 */
+
+    /* 찍을 수 있는 것 = «앱의 요소» 다. 정의서 모드에서는 프로토타입이 우리 껍데기(.ss-docmode.ss-ui) «안» 에
+       들어가 있어서 «ss-ui 조상이 있으면 제외» 로 판정하면 전부 걸린다 (2026-08-30 실측).
+       그래서 위가 아니라 «아래» 를 본다: 앱의 뿌리(시트/오버레이 본문) 안에 있고, 우리 물건이 아니면 후보다 */
+    function pickRoot() {
+      const d = appDoc();
+      return d.querySelector(".ss-sheet") || (ctx.capSource && ctx.capSource() && ctx.capSource().node) || d.body;
+    }
+    function pickOurs(el, root) {
+      /* 훑기는 «루트에서 멈춘다» — 루트 위쪽은 우리 껍데기라 계속 올라가면 무엇이든 우리 것이 된다 */
+      for (let n = el; n && n !== root; n = n.parentElement) {
+        const c = n.className;
+        if (typeof c === "string" && /(^| )ss-(ui|markers|ov-markers|cap|anno|marker)( |$)/.test(c)) return true;
+      }
+      return false;
+    }
+    function pickCandidate(el) {
+      const root = pickRoot();
+      if (!el || !root || el === root || !root.contains(el)) return null;
+      if (pickOurs(el, root)) return null;
+      const r = el.getBoundingClientRect();
+      if (r.width < PICK_MIN || r.height < PICK_MIN) return el.parentElement ? pickCandidate(el.parentElement) : null;
+      return el;
+    }
+    function pickShow(el) {
+      pickEl = el;
+      if (!el) { if (pickBox) pickBox.style.display = "none"; return; }
+      const r = el.getBoundingClientRect();
+      pickBox.style.display = "block";
+      pickBox.style.left = r.left + "px";
+      pickBox.style.top = r.top + "px";
+      pickBox.style.width = r.width + "px";
+      pickBox.style.height = r.height + "px";
+      const nm = el.getAttribute("data-spec") ? "번호 " + el.getAttribute("data-spec") + " 자리"
+        : (el.id ? "#" + el.id : el.tagName.toLowerCase() + (el.className && el.className.split ? "." + el.className.split(" ")[0] : ""));
+      pickTip.textContent = nm + " · " + Math.round(r.width) + "×" + Math.round(r.height);
+      pickTip.style.left = Math.max(6, Math.min(r.left, innerWidth - 240)) + "px";
+      pickTip.style.top = (r.top > 34 ? r.top - 28 : r.bottom + 6) + "px";
+    }
+    function pickMove(e) { const el = pickCandidate(e.target); if (el && el !== pickEl) pickShow(el); }
+    function pickKey(e) {
+      if (!pickOn) return;
+      const k = e.key;
+      if (k === "Escape") { e.preventDefault(); pickStop(); return; }
+      if (!pickEl) return;
+      let next = null;
+      if (k === "ArrowUp") next = pickCandidate(pickEl.parentElement);
+      else if (k === "ArrowDown") next = [...pickEl.children].map(pickCandidate).filter(Boolean)[0];
+      else if (k === "ArrowLeft" || k === "ArrowRight") {
+        const sib = [...(pickEl.parentElement ? pickEl.parentElement.children : [])].filter((x) => pickCandidate(x) === x);
+        const at = sib.indexOf(pickEl);
+        if (at >= 0) next = sib[(at + (k === "ArrowRight" ? 1 : sib.length - 1)) % sib.length];
+      } else if (k === "Enter") { e.preventDefault(); pickTake(pickEl); return; }
+      if (next) { e.preventDefault(); pickShow(next); }
+    }
+    function pickClick(e) { e.preventDefault(); e.stopPropagation(); const el = pickCandidate(e.target); if (el) pickTake(el); }
+
+    /* 찍은 요소를 번호로 만든다 — 이미 번호가 있으면 새로 만들지 않고 그 항목으로 간다 */
+    function pickTake(el) {
+      const had = el.getAttribute("data-spec");
+      pickStop();
+      if (had) {
+        const it = items().find((x) => String(x.spec.target) === String(had));
+        if (it) { activate(it.key, "marker"); edGo(it.key, "title"); return; }
+      }
+      edSnap();
+      const list = specs();
+      let tag = had;
+      if (!tag) { /* 비어 있는 번호를 찾아 붙인다 — 사람이 정하는 값이 아니다 */
+        let n = 1;
+        const used = new Set(list.map((s) => String(s.target)));
+        while (used.has(String(n))) n++;
+        tag = String(n);
+        el.setAttribute("data-spec", tag);
+      }
+      const sp = { n: list.length + 1, target: tag, title: "새 영역", defs: [{ t: "" }] };
+      list.push(sp);
+      edRenumber();
+      edTouched();
+      render();
+      const key = String(sp.n);
+      edGo(key, "title");
+      edSay("번호 " + sp.n + " 을 붙였습니다 — 이름을 쓰세요");
+    }
+    function pickStop() {
+      if (!pickOn) return;
+      pickOn = false;
+      const d = appDoc();
+      d.removeEventListener("mousemove", pickMove, true);
+      d.removeEventListener("click", pickClick, true);
+      removeEventListener("keydown", pickKey, true);
+      document.body.classList.remove("ss-picking");
+      if (pickBox) { pickBox.remove(); pickBox = null; }
+      if (pickTip) { pickTip.remove(); pickTip = null; }
+      pickEl = null;
+    }
+    function pickStart() {
+      if (pickOn) return;
+      pickOn = true;
+      pickBox = h("div", { class: "ss-pick-box ss-ui" });
+      pickTip = h("div", { class: "ss-pick-tip ss-ui" });
+      document.body.appendChild(pickBox);
+      document.body.appendChild(pickTip);
+      document.body.classList.add("ss-picking");
+      const d = appDoc();
+      d.addEventListener("mousemove", pickMove, true);
+      d.addEventListener("click", pickClick, true);
+      addEventListener("keydown", pickKey, true);
+      edSay("번호를 붙일 곳을 고르세요 — ↑↓ 넓게·좁게, ←→ 옆 요소, Esc 취소");
     }
 
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
@@ -2205,13 +2347,8 @@ ${HL_CSS}
       if (!it) return;
       const s = it.spec;
       const list = specs();
-      if (c === "addline") (s.defs || (s.defs = [])).push({ t: "새 줄" });
-      else if (c === "adddev") (s.defs || (s.defs = [])).push({ t: "새 개발 줄", layer: "dev" });
-      else if (c === "addsub") {
-        const d = (s.defs || (s.defs = []))[s.defs.length - 1] || (s.defs.push({ t: "새 줄" }), s.defs[0]);
-        (d.subs || (d.subs = [])).push("새 하위 줄");
-      } else if (c === "addwhy") { if (s.defs && s.defs[di]) s.defs[di].why = "이유"; }
-      else if (c === "delline") { if (s.defs) s.defs.splice(di, 1); }
+      /* addline·addsub·addwhy 는 #45 에서 버튼과 함께 제거 — 넣기는 Enter·Tab·슬래시가 한다 */
+      if (c === "delline") { if (s.defs) s.defs.splice(di, 1); }
       else if (c === "delsub") {
         const d = s.defs && s.defs[di];
         if (d && d.subs) { d.subs.splice(si, 1); if (!d.subs.length) delete d.subs; }
@@ -2229,11 +2366,6 @@ ${HL_CSS}
         if (i < 0) return;
         list.splice(i, 1);
         edRenumber();
-      } else if (c === "delpart") {
-        const par = it.parent;
-        if (!par || !par.parts) return;
-        if (!confirm("세부 " + it.label + " 「" + (s.title || "") + "」 을 지웁니다. 계속할까요?")) return;
-        par.parts.splice(par.parts.indexOf(s), 1);
       } else return;
       edTouched();
       render();
@@ -2427,6 +2559,8 @@ ${HL_CSS}
          반영은 치는 즉시 일어나고, 파일로 남기는 것은 위의 「저장」 이다 (PM 결정 2026-08-28) */
       ctx.listEl.addEventListener("keydown", (e) => {
         if (!edEl) return;
+        /* 슬래시 메뉴가 떠 있으면 그쪽이 먼저 키를 가져간다 (↑↓ 고르기·Enter 넣기·Esc 닫기) */
+        if (edMenu && edMenuKey(e)) { e.preventDefault(); e.stopPropagation(); return; }
         const k = e.key, empty = !edEl.textContent.trim();
         const eat = () => { e.preventDefault(); e.stopPropagation(); };
         if (k === "Enter" && !e.shiftKey) { eat(); edNewLine(); }
@@ -2435,6 +2569,9 @@ ${HL_CSS}
         else if (k === "Tab") { eat(); edIndent(!e.shiftKey); }
         else if (k === "Backspace" && empty) { eat(); edKillLine(); }
         else if (k === "/" && empty) { eat(); edSlash(); }
+        /* 메뉴 오른쪽에 적힌 단축키 — 슬래시를 안 열고도 바로 (노션과 같은 관습) */
+        else if (k === "-" && empty) { eat(); edIndent(true); }
+        else if (k === "?" && empty) { eat(); edPick("why", edPos()); }
       }, true);
       /* 되돌리기는 문서 전체에서 받는다 — 커서가 어느 줄에 있든 같은 손짓이어야 한다 */
       document.addEventListener("keydown", (e) => {
@@ -2443,18 +2580,7 @@ ${HL_CSS}
         if (k === "z") { e.preventDefault(); edStep(!e.shiftKey); }
         else if (k === "y") { e.preventDefault(); edStep(false); }
       }, true);
-      /* 유형 드롭다운 — 고르면 마커 모양·▶ 버튼까지 따라 바뀐다 */
-      ctx.listEl.addEventListener("change", (e) => {
-        if (!EDIT) return;
-        const sel = e.target.closest('select[data-ec="anno"]');
-        if (!sel) return;
-        const it = itemOf(edKeyOf(sel));
-        if (!it) return;
-        edSnap();
-        it.spec.anno = sel.value;
-        edTouched();
-        render();
-      });
+
       /* 붙여넣기는 글자만 — 서식이 딸려 오면 저장 텍스트가 더러워진다 */
       ctx.listEl.addEventListener("paste", (e) => {
         if (!edEl) return;
@@ -2613,7 +2739,7 @@ ${HL_CSS}
         <aside class="ss-defs" aria-label="기능 설명">
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.21</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.22</div>
         </aside>
       </div>`);
 
@@ -2899,7 +3025,7 @@ ${HL_CSS}
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
     applySize(DEVICES[base].w, DEVICES[base].h);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.21] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.22] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -2930,7 +3056,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.21</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.22</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -3034,7 +3160,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.21] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.22] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
