@@ -531,12 +531,10 @@
     border-radius:99px;background:var(--ss-accent)}
   .ss-dragging{opacity:.4}
   /* 하위로 들어갈 때 부모가 될 블록 — 노션과 같은 «통째로 밝히기», 색은 우리 액센트 (PM 2026-08-30) */
-  /* 들어갈 덩어리 — 부모와 그 하위를 «한 박스» 로 감싼다. 자리가 아니라 소속을 말한다 */
-  /* 배경만 칠한다 — 여백을 건드리면 글이 밀리고, 밀리면 표시가 떤다 (2026-08-30) */
-  .ss-drop-in{background:var(--ss-accent-soft)}
-  .ss-drop-in-a{border-radius:6px 6px 0 0}
-  .ss-drop-in-z{border-radius:0 0 6px 6px}
-  .ss-drop-in-a.ss-drop-in-z{border-radius:6px}
+  /* 들어갈 덩어리 — 부모와 그 하위를 «한 박스» 로 감싼다. 자리가 아니라 소속을 말한다.
+     선과 같이 «떠 있는» 판이라 글을 한 픽셀도 안 민다 (철학 1) */
+  .ss-drop-in{position:absolute;z-index:0;background:var(--ss-accent-soft);border-radius:6px;
+    pointer-events:none}
   /* 빈 번호도 «놓을 수 있는 자리» 여야 한다 — 높이가 0 이면 마우스가 닿지 않는다 */
   .ss-kids{min-height:14px}
   /* 항목 삭제 — 제목 줄 오른쪽 끝. 마우스를 올린 블록에만 나온다 */
@@ -647,7 +645,7 @@
   .ss-title .ss-tag{font-size:10px;font-weight:700;color:var(--ss-ink3);border:1px solid var(--ss-line2);border-radius:5px;padding:1px 6px;margin-left:auto;flex-shrink:0}
   .ss-row.ss-active .ss-tag{color:var(--ss-accent);border-color:var(--ss-accent)}
   /* 블록 (#55) — 번호·불릿·화살표·글이 모두 같은 «블록» 이다. 들여쓰기는 블록의 성질이다 */
-  .ss-kids{margin:4px 0 0}
+  .ss-kids{position:relative;margin:4px 0 0}
   .ss-b{position:relative;display:flex;align-items:flex-start;gap:0;font-size:var(--ss-blk-fs);color:#37352F;
     line-height:var(--ss-blk-lh);padding:var(--ss-blk-py) 0;border-radius:4px}
   .ss-b .ss-dt{flex:1;min-width:0;padding-inline:2px}
@@ -2717,19 +2715,29 @@ ${HL_CSS}
 
     /* ---- 2. 그리기 ---- */
     /* 선은 목록 «위에 떠서» 그린다 — 흐름에 넣으면 글이 밀리고, 밀리면 표시가 떤다 (철학 1) */
+    /* 목록 위에 떠 있는 판 하나를 놓는다 — 선도 박스도 같은 길을 쓴다 (철학 1: 자리를 안 차지한다) */
+    /* 판 하나를 «호스트» 안에 띄운다.
+         선   → 목록(listEl) 맨 뒤 = 무엇보다 위. 번호 사이도 가로질러야 하므로 목록이 기준이다
+         박스 → 그 번호 안(.ss-kids) 맨 앞 = 글 뒤·번호 카드 배경 앞.
+                목록에 두면 번호 카드의 배경에 가려진다 (2026-08-30 실측) */
+    function paintPad(cls, host, top, left, w, hgt, behind) {
+      const hr = host.getBoundingClientRect();
+      const el = h("div", { class: cls + " ss-ui" });
+      el.style.top = (top - hr.top + host.scrollTop) + "px";
+      el.style.left = (left - hr.left + host.scrollLeft) + "px";
+      el.style.width = Math.max(0, w) + "px";
+      if (hgt != null) el.style.height = Math.max(0, hgt) + "px";
+      if (behind) host.insertBefore(el, host.firstChild); else host.appendChild(el);
+      dragArt.push(el);
+      return el;
+    }
     function paintLine(y, left, width, ind) {
-      const lr = ctx.listEl.getBoundingClientRect();
-      const el = h("div", { class: "ss-drop-line ss-ui" });
-      el.style.top = (y - lr.top + ctx.listEl.scrollTop - 1) + "px";
-      el.style.left = (left - lr.left + ctx.listEl.scrollLeft) + "px";
-      el.style.width = Math.max(0, width) + "px";
+      const el = paintPad("ss-drop-line", ctx.listEl, y - 1, left, width, null, false);
       el.dataset.ind = String(ind); /* 몇 단인지 — 검사가 픽셀로 되짚지 않게 */
-      ctx.listEl.appendChild(el);
-      dragArt.push({ el: el });
       return el;
     }
     function dragWipe() {
-      dragArt.forEach((a) => { if (a.cls) a.el.classList.remove(a.cls); else a.el.remove(); });
+      dragArt.forEach((el) => el.remove());
       dragArt = [];
       dragPlanNow = null;
     }
@@ -2754,17 +2762,26 @@ ${HL_CSS}
           y = last ? last.getBoundingClientRect().bottom : bx.bottom;
         }
       }
+      /* 소속 박스를 «먼저» 깔고 선을 그 위에 올린다 — 부모 한 줄이 아니라 «부모 + 그 하위 전체» (R6).
+         블록마다 배경을 칠하면 들여쓰기 때문에 왼쪽 끝이 계단처럼 어긋난다 (2026-08-30 실측:
+         789 → 805 → 821). 노션은 하나의 반듯한 사각형이다. 그래서 판 하나로 덮는다 */
+      if (plan.parent >= 0) {
+        let top = null, bot = null;
+        for (let i = plan.parent; i < plan.pEnd; i++) {
+          const el = plan.box.querySelector('.ss-b[data-di="' + i + '"]');
+          if (!el) continue;
+          const q = el.getBoundingClientRect();
+          if (top === null || q.top < top) top = q.top;
+          if (bot === null || q.bottom > bot) bot = q.bottom;
+        }
+        if (top !== null) {
+          const pad = paintPad("ss-drop-in", plan.box, top, bx.left, bx.width, bot - top, true);
+          pad.dataset.parent = String(plan.parent); /* 누구의 하위로 들어가는가 */
+          pad.dataset.to = String(plan.pEnd);       /* 어디까지 감쌌는가 */
+        }
+      }
       const off = plan.ind * markPx();
       paintLine(y, bx.left + off, bx.width - off, plan.ind);
-      /* 소속 박스 — 부모 한 줄이 아니라 «부모 + 그 하위 전체» (R6). 배경만 칠한다(철학 1) */
-      for (let i = plan.parent; i >= 0 && i < plan.pEnd; i++) {
-        const el = plan.box.querySelector('.ss-b[data-di="' + i + '"]');
-        if (!el) continue;
-        const add = (c) => { el.classList.add(c); dragArt.push({ el: el, cls: c }); };
-        add("ss-drop-in");
-        if (i === plan.parent) add("ss-drop-in-a");
-        if (i === plan.pEnd - 1) add("ss-drop-in-z");
-      }
       dragPlanNow = plan;
     }
 

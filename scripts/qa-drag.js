@@ -104,8 +104,8 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
             const y = h === "위" ? r.top + 2 : r.bottom - 2, x = x0 + v * step;
             el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
             const line = document.querySelector(".ss-drop-line"), par = document.querySelector(".ss-drop-in");
-            const o = { show: !!line, ind: line ? Number(line.dataset.ind) : null,
-              par: par ? par.querySelector(".ss-dt").textContent.trim() : null };
+            const pt = par ? (document.querySelector('.ss-b[data-di="' + par.dataset.parent + '"] .ss-dt') || {}).textContent : null;
+            const o = { show: !!line, ind: line ? Number(line.dataset.ind) : null, par: pt ? pt.trim() : null };
             el.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
             src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
             return o;

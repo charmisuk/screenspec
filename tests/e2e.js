@@ -1852,8 +1852,12 @@ function check(name, ok, detail) {
         clientY: h === "top" ? r.top + 2 : r.bottom - 2, clientX: x0 + v * step }));
       const line = document.querySelector(".ss-drop-line");
       const par = document.querySelector(".ss-drop-in");
-      const out = { 선: !!line, 깊이: line ? Number(line.dataset.ind) : null,
-        부모: par ? par.textContent.replace(/[＋⠿]/g, "").trim() : null };
+      const parText = par ? (() => {
+        const i = par.dataset.parent;
+        const el = document.querySelector('.ss-b[data-di="' + i + '"] .ss-dt');
+        return el ? el.textContent.trim() : null;
+      })() : null;
+      const out = { 선: !!line, 깊이: line ? Number(line.dataset.ind) : null, 부모: parText };
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
       return out;
     }, [di, half, dx]);
@@ -2406,8 +2410,9 @@ function check(name, ok, detail) {
               const y = h === "top" ? r.top + 2 : r.bottom - 2, x = x0 + v * step;
               el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
               const line = document.querySelector(".ss-drop-line"), par = document.querySelector(".ss-drop-in");
+              const pt = par ? (document.querySelector('.ss-b[data-di="' + par.dataset.parent + '"] .ss-dt') || {}).textContent : null;
               const o = { show: !!line, ind: line ? Number(line.dataset.ind) : null,
-                par: par ? par.querySelector(".ss-dt").textContent.trim() : null };
+                par: pt ? pt.trim() : null };
               el.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
               src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
               return o;
