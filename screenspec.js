@@ -2598,20 +2598,36 @@ ${HL_CSS}
       edSay("번호를 붙일 곳을 고르세요. ↑↓ 넓게·좁게, ←→ 옆 요소, Esc 취소");
     }
 
-    /* ---- 블록을 잡아 옮긴다 (#55·#61) ----
-       위계 규칙을 노션과 같게 못박는다 (PM 2026-08-29):
-         1) 부모를 끌면 «딸린 하위가 통째로» 따라온다 — 하나만 떨어져 나가지 않는다
-         2) 끄는 동안 좌우로 움직이면 «들어갈 깊이» 가 바뀐다. 드롭선의 왼쪽 끝이 그 깊이다
-         3) 깊이는 바로 앞 블록보다 한 단까지만 — 허공에 두 단 들어가는 자리는 애초에 안 준다
-         4) 블록은 «블록 사이» 로만 간다. 번호와 번호 사이에는 드롭선을 그리지 않는다 (되지도 않는 자리를 보여 주면 안 된다)
-       번호(콜아웃)끼리 옮기는 것은 예전 그대로 — 번호 사이로만 간다. */
-    let dragFrom = null, dropMark = null, dropAt = null, dropParent = null; /* dropParent = 박스로 감싼 블록들 */
-    function dragInfo(el) {
-      const g = el.closest && el.closest("[data-g]");
-      if (!g) return null;
-      return { kind: g.dataset.g, key: edKeyOf(g), di: Number(g.dataset.di),
-        row: g.closest(".ss-row"), blk: g.closest(".ss-b"), x: 0 };
-    }
+    /* ============================================================
+       잡아서 옮기기 (#55·#61·#62) — 계산 · 그리기 · 실행을 가른다
+
+       철학 (PM 과 합의, 2026-08-30):
+         1) 표시는 «자리를 차지하지 않는다». 무엇을 그려도 글은 한 픽셀도 안 움직인다.
+            흐름 안에 그리면 그리는 순간 밀리고 → 커서 밑이 바뀌고 → 다시 그려져 떤다.
+         2) 표시는 «놓으면 무엇이 되는가» 만 말한다.
+            박스 = 어느 덩어리 «안» 인가(소속) · 선 = 그 안 어느 «자리» 인가 · 아무것도 없음 = 안 바뀐다.
+         3) 브라우저의 «놓을 수 없음(🚫)» 표시는 끄는 내내 한 번도 안 나온다.
+            놓을 수 없는 자리는 «아무 일도 안 일어나는 것» 으로 족하다. 🚫 는 「고장」 처럼 읽힌다.
+         4) 커서는 자유롭다. 블록 위에 정확히 올릴 필요 없이 «가장 가까운 자리» 로 붙는다.
+
+       위계 규칙 (여기가 «맞다» 의 정의. scripts/qa-drag.js 가 이 규칙으로 전수 검증한다):
+         R1 자리   : 눈에 보이는 «줄과 줄 사이» 하나. 커서에서 가장 가까운 경계
+         R2 깊이   : 원래 깊이 + 잡은 곳에서 옆으로 간 칸수 (아래로만 끌면 같은 단)
+         R3 상한   : 넣을 자리 바로 앞 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
+         R4 제외   : 끌고 있는 덩어리는 «이미 빠진 셈» — 자기가 자기 부모가 되지 않게
+         R5 무표시 : 자기 하위 안 · 놓아도 자리와 깊이가 그대로일 때
+         R6 소속   : 깊이 1 이상이면 부모 + 그 하위 전체를 박스로
+         R7 이동   : 딸린 하위가 통째로 따라오고 깊이 차이를 유지
+
+       구조: 한 프레임에 딱 세 걸음이다.
+         dragPlan(e)   순수 계산 — DOM 을 «읽기만» 하고 무엇도 바꾸지 않는다. 계획 또는 null
+         dragPaint(p)  그리기만 — 계획을 화면에 옮긴다. 모델은 안 건드린다
+         dragApply(p)  실행만  — 계획대로 모델을 바꾼다. 화면은 render 가 맡는다
+       ============================================================ */
+    let drag = null;      /* 지금 끄는 것 {kind,key,di,x0,row} — 없으면 끄는 중이 아니다 */
+    let dragPlanNow = null; /* 마지막으로 그린 계획 — 놓을 때 이것을 실행한다 */
+    let dragArt = [];     /* 지금 그려 둔 것들 (선·박스) — 지울 때 이 목록만 보면 된다 */
+
     function blkInd(d) { return Math.max(0, Math.min(2, (d && d.indent) || 0)); }
     /* 잡은 블록 + 그보다 깊은 뒤쪽 블록들 = 한 덩어리 */
     function subLen(defs, i) {
@@ -2624,247 +2640,227 @@ ${HL_CSS}
       const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-blk-mark");
       return parseFloat(v) || 16;
     }
-    function dropClear() {
-      if (dropMark) { dropMark.remove(); dropMark = null; }
-      if (dropParent) {
-        dropParent.forEach((el) => el.classList.remove("ss-drop-in", "ss-drop-in-a", "ss-drop-in-z"));
-        dropParent = null;
-      }
-      dropAt = null;
-    }
+    function specOf(key) { return specs().find((sp) => String(sp.n) === String(key)); }
     function moveAt(arr, from, to) {
       if (from < 0 || from >= arr.length) return null;
       const x = arr.splice(from, 1)[0];
       arr.splice(from < to ? to - 1 : to, 0, x);
       return x;
     }
-    function specOf(key) {
-      return specs().find((sp) => String(sp.n) === String(key));
-    }
-    /* 블록을 놓을 자리 계산 — «어느 번호의 몇 번째, 몇 단» 인지까지 한 번에 정한다 */
-    /* 놓을 자리 계산 (#62, 노션 영상 분석 2026-08-30).
-       핵심: «선을 그릴까» 를 «놓으면 무엇이 바뀌나» 로 정한다.
-         · 자리도 깊이도 그대로면 → 안 그린다 (노션은 자기 자리 근처에서 선을 안 띄운다)
-         · 자기 하위 «안» 으로는 못 가므로 → 안 그린다 (전에는 그려 놓고 놓으면 조용히 무시했다.
-           선이 떴는데 아무 일도 안 일어나는 것이 PM 이 「버그 같다」고 한 그것이다)
-       그래서 선이 뜨면 반드시 무언가 바뀐다. */
-    function blockDrop(overBlk, half, e) {
-      const key = edKeyOf(overBlk), sp = specOf(key);
-      if (!sp) return null;
-      const defs = sp.defs || (sp.defs = []);
-      const src = specOf(dragFrom.key);
-      if (!src || !src.defs) return null;
-      const from = dragFrom.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
-      const di = Number(overBlk.dataset.di);
-      /* 넣을 자리는 «눈에 보이는 줄과 줄 사이» 다 (PM 2026-08-30).
-         전에는 「부모의 아래쪽 절반이면 그 하위까지 건너뛴다」 는 규칙이 따로 있었는데,
-         커서에서 가장 가까운 경계로 붙이게 되면서 그 규칙이 오히려 자리를 어긋나게 했다.
-         경계 하나 = 자리 하나 — 규칙이 하나 줄고, 눈에 보이는 것과 결과가 같아진다. */
-      const after = half === "bottom";
-      const at = after ? di + 1 : di;
-      if (src === sp && at > from && at < from + n) return null; /* 자기 하위 안으로는 못 간다 */
 
-      /* 끌고 있는 덩어리는 «이미 빠진 셈» 으로 본다 (2026-08-30 전수 검증에서 잡힌 뿌리).
-         자기 자신을 「앞 블록」으로 세면 자기가 자기 하위가 되고, 그 뒤로 깊이가 어긋난 채
-         굳어서 다음 이동에서 하위가 안 따라오는 것처럼 보였다 (PM 관찰). */
-      const mine = (i) => src === sp && i >= from && i < from + n;
-      let p = at - 1;
-      while (p >= 0 && mine(p)) p--;
-      const cap = p >= 0 ? Math.min(2, blkInd(defs[p]) + 1) : 0; /* 앞 블록보다 한 단까지 */
-      /* 깊이는 «커서가 지금 어디 있나» 가 아니라 «잡은 곳에서 옆으로 몇 칸 갔나» 다 (PM 2026-08-30).
-         손잡이(⠿)는 글 왼쪽 거터에 있어서, 그냥 아래로 끌면 커서 X 가 늘 맨 왼쪽이다.
-         절대 위치로 재면 무엇을 끌든 0단으로 떨어진다 — 아래로만 끌면 «같은 단» 이어야 한다. */
-      const step = markPx();
-      const lvl = was + Math.round((e.clientX - (dragFrom.x || 0)) / step);
-      const ind = Math.max(0, Math.min(cap, lvl));
-
-      /* 놓아도 자리와 깊이가 그대로면 그리지 않는다 */
-      if (src === sp) {
-        const at2 = at > from ? at - n : at;
-        if (at2 === from && ind === was) return null;
-      }
-      /* 깊이가 1 이상이면 «어느 덩어리 안으로 들어가는지» 를 짚어 준다.
-         부모 한 줄이 아니라 «부모 + 그 하위 전체» 다 — 소속을 말하는 표시이므로 (노션도 같다) */
-      let parent = -1, pEnd = -1;
-      if (ind > 0) for (let i = at - 1; i >= 0; i--) {
-        if (mine(i)) continue;
-        if (blkInd(defs[i]) === ind - 1) { parent = i; pEnd = i + subLen(defs, i); break; }
-      }
-      return { sp: sp, defs: defs, at: at, ind: ind, overBlk: overBlk, after: after,
-        parent: parent, pEnd: pEnd, key: key };
-    }
-    /* 커서에서 «가장 가까운 넣을 자리» 를 찾는다 (PM 2026-08-30).
-       전에는 블록 위에 정확히 올려야만 자리가 잡혀서, 조금만 벗어나면 아무 표시도 안 났다.
-       노션처럼 마우스를 자유롭게 움직여도 늘 «가장 그럴듯한 자리» 가 잡혀야 한다. */
-    function nearestDrop(e) {
+    /* ---- 1. 계산 ---- */
+    /* 커서에서 가장 가까운 «줄과 줄 사이» (R1) */
+    function nearestEdge(e) {
       let best = null, bd = Infinity;
       ctx.listEl.querySelectorAll(".ss-b").forEach((el) => {
         const r = el.getBoundingClientRect();
         if (!r.height) return;
-        const d1 = Math.abs(e.clientY - r.top), d2 = Math.abs(e.clientY - r.bottom);
-        if (d1 < bd) { bd = d1; best = { el: el, half: "top" }; }
-        if (d2 < bd) { bd = d2; best = { el: el, half: "bottom" }; }
+        const a = Math.abs(e.clientY - r.top), z = Math.abs(e.clientY - r.bottom);
+        if (a < bd) { bd = a; best = { el: el, after: false }; }
+        if (z < bd) { bd = z; best = { el: el, after: true }; }
       });
-      return best ? blockDrop(best.el, best.half, e) : null;
+      return best;
     }
-    /* 표시는 «자리를 차지하지 않는다» (PM 2026-08-30).
-       선을 목록의 흐름 안에 끼워 넣으면 넣는 순간 블록이 밀리고 → 커서 밑 요소가 바뀌고 →
-       선이 다른 자리로 다시 그려진다. 마우스를 움직이는 내내 이 되먹임이 돌아 표시가 떨었다.
-       그래서 선은 목록 위에 «떠 있는» 채로 그린다 — 무엇을 그려도 글은 한 픽셀도 안 움직인다 */
-    function lineAt(y, left, width) {
+    function planBlock(e) {
+      const src = specOf(drag.key);
+      if (!src || !src.defs) return null;
+      /* 블록이 하나도 없는 번호 안이면 그 번호의 첫 자리 */
+      const kids = e.target.closest && e.target.closest(".ss-kids");
+      if (kids && !kids.querySelector(".ss-b")) {
+        const sp = specOf(edKeyOf(kids));
+        if (!sp) return null;
+        return { kind: "b", sp: sp, defs: sp.defs || (sp.defs = []), at: 0, ind: 0,
+          parent: -1, pEnd: -1, box: kids, empty: true };
+      }
+      const near = nearestEdge(e);
+      if (!near) return null;
+      const overBlk = near.el;
+      const sp = specOf(edKeyOf(overBlk));
+      if (!sp) return null;
+      const defs = sp.defs || (sp.defs = []);
+      const from = drag.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
+      const di = Number(overBlk.dataset.di);
+      const at = near.after ? di + 1 : di;                 /* R1 */
+      if (src === sp && at > from && at < from + n) return null; /* R5: 자기 하위 안 */
+
+      const mine = (i) => src === sp && i >= from && i < from + n; /* R4 */
+      let p = at - 1;
+      while (p >= 0 && mine(p)) p--;
+      const cap = p >= 0 ? Math.min(2, blkInd(defs[p]) + 1) : 0; /* R3 */
+      const step = markPx();
+      const ind = Math.max(0, Math.min(cap, was + Math.round((e.clientX - drag.x0) / step))); /* R2 */
+
+      if (src === sp) {                                     /* R5: 놓아도 그대로 */
+        const at2 = at > from ? at - n : at;
+        if (at2 === from && ind === was) return null;
+      }
+      let parent = -1, pEnd = -1;                           /* R6 */
+      if (ind > 0) for (let i = at - 1; i >= 0; i--) {
+        if (mine(i)) continue;
+        if (blkInd(defs[i]) === ind - 1) { parent = i; pEnd = i + subLen(defs, i); break; }
+      }
+      return { kind: "b", sp: sp, defs: defs, at: at, ind: ind, parent: parent, pEnd: pEnd,
+        box: overBlk.parentNode };
+    }
+    function planRow(e) {
+      const row = e.target.closest && e.target.closest(".ss-row");
+      if (!row) return null;
+      const key = edKeyOf(row);
+      if (!key || String(key) === String(drag.key)) return null; /* 제자리 */
+      const r = row.getBoundingClientRect();
+      return { kind: "item", row: row, after: e.clientY > r.top + r.height / 2 };
+    }
+    function dragPlan(e) {
+      if (!drag) return null;
+      return drag.kind === "item" ? planRow(e) : planBlock(e);
+    }
+
+    /* ---- 2. 그리기 ---- */
+    /* 선은 목록 «위에 떠서» 그린다 — 흐름에 넣으면 글이 밀리고, 밀리면 표시가 떤다 (철학 1) */
+    function paintLine(y, left, width, ind) {
       const lr = ctx.listEl.getBoundingClientRect();
       const el = h("div", { class: "ss-drop-line ss-ui" });
       el.style.top = (y - lr.top + ctx.listEl.scrollTop - 1) + "px";
       el.style.left = (left - lr.left + ctx.listEl.scrollLeft) + "px";
       el.style.width = Math.max(0, width) + "px";
+      el.dataset.ind = String(ind); /* 몇 단인지 — 검사가 픽셀로 되짚지 않게 */
       ctx.listEl.appendChild(el);
+      dragArt.push({ el: el });
       return el;
     }
-    function dropShowBlock(d) {
-      dropClear();
-      /* 선은 «실제로 들어갈 자리» 에 그린다 — 눈과 결과가 어긋나면 안 된다 */
-      const box = d.overBlk.parentNode;
-      const next = box.querySelector('.ss-b[data-di="' + d.at + '"]');
-      const bx = box.getBoundingClientRect();
+    function dragWipe() {
+      dragArt.forEach((a) => { if (a.cls) a.el.classList.remove(a.cls); else a.el.remove(); });
+      dragArt = [];
+      dragPlanNow = null;
+    }
+    function dragPaint(plan) {
+      dragWipe();
+      if (!plan) return;
+      if (plan.kind === "item") {
+        const r = plan.row.getBoundingClientRect();
+        paintLine(plan.after ? r.bottom : r.top, r.left, r.width, 0);
+        dragPlanNow = plan;
+        return;
+      }
+      const bx = plan.box.getBoundingClientRect();
       let y;
-      if (next) y = next.getBoundingClientRect().top;
+      if (plan.empty) y = bx.top;
       else {
-        const all = box.querySelectorAll(".ss-b");
-        const last = all[all.length - 1];
-        y = last ? last.getBoundingClientRect().bottom : bx.bottom;
+        const next = plan.box.querySelector('.ss-b[data-di="' + plan.at + '"]');
+        if (next) y = next.getBoundingClientRect().top;
+        else {
+          const all = plan.box.querySelectorAll(".ss-b");
+          const last = all[all.length - 1];
+          y = last ? last.getBoundingClientRect().bottom : bx.bottom;
+        }
       }
-      const off = d.ind * markPx();
-      dropMark = lineAt(y, bx.left + off, bx.width - off);
-      dropMark.dataset.ind = String(d.ind); /* 몇 단으로 들어가는지 — 픽셀로 되짚지 않게 */
-      /* 하위로 들어가면 «어느 덩어리 안인지» 를 박스로 감싼다 — 형제로 붙는 것과 눈으로 갈린다 (#62).
-         박스는 부모 한 줄이 아니라 «부모 + 그 하위 전체» 다: 이 표시가 말하는 것은 자리가 아니라 소속이다 */
-      dropParent = [];
-      for (let i = d.parent; i >= 0 && i < d.pEnd; i++) {
-        const el = box.querySelector('.ss-b[data-di="' + i + '"]');
+      const off = plan.ind * markPx();
+      paintLine(y, bx.left + off, bx.width - off, plan.ind);
+      /* 소속 박스 — 부모 한 줄이 아니라 «부모 + 그 하위 전체» (R6). 배경만 칠한다(철학 1) */
+      for (let i = plan.parent; i >= 0 && i < plan.pEnd; i++) {
+        const el = plan.box.querySelector('.ss-b[data-di="' + i + '"]');
         if (!el) continue;
-        el.classList.add("ss-drop-in");
-        if (i === d.parent) el.classList.add("ss-drop-in-a");
-        if (i === d.pEnd - 1) el.classList.add("ss-drop-in-z");
-        dropParent.push(el);
+        const add = (c) => { el.classList.add(c); dragArt.push({ el: el, cls: c }); };
+        add("ss-drop-in");
+        if (i === plan.parent) add("ss-drop-in-a");
+        if (i === plan.pEnd - 1) add("ss-drop-in-z");
       }
-      dropAt = d;
+      dragPlanNow = plan;
     }
-    function dropShowRow(row, after) {
-      dropClear();
-      const r = row.getBoundingClientRect();
-      dropMark = lineAt(after ? r.bottom : r.top, r.left, r.width);
-      dropAt = { row: row, after: after };
-    }
-    /* 끌려가는 덩어리를 흐리게 — 무엇이 같이 움직이는지 눈으로 보여야 규칙이 «규칙» 이 된다 */
-    function dragMark(info) {
-      if (info.kind === "item") { if (info.row) info.row.classList.add("ss-dragging"); return; }
-      const sp = specOf(info.key);
-      if (!sp || !sp.defs) return;
-      const n = subLen(sp.defs, info.di);
-      for (let i = 0; i < n; i++) {
-        const el = info.row && info.row.querySelector('.ss-b[data-di="' + (info.di + i) + '"]');
-        if (el) el.classList.add("ss-dragging");
+
+    /* ---- 3. 실행 ---- */
+    function dragApply(plan) {
+      if (!plan) return;
+      edSnap();
+      if (plan.kind === "item") {
+        const list = specs();
+        const from = list.findIndex((sp) => String(sp.n) === String(drag.key));
+        const to = list.findIndex((sp) => String(sp.n) === String(edKeyOf(plan.row)));
+        if (from < 0 || to < 0) return;
+        moveAt(list, from, to + (plan.after ? 1 : 0));
+        edRenumber();
+      } else {
+        const src = specOf(drag.key);
+        if (!src || !src.defs) return;
+        const n = subLen(src.defs, drag.di);
+        const cut = src.defs.splice(drag.di, n);
+        if (!cut.length) return;
+        let at = plan.at;
+        if (src === plan.sp && at > drag.di) at -= n; /* 앞에서 빠진 만큼 당긴다 */
+        const shift = plan.ind - blkInd(cut[0]);      /* R7: 깊이 차이를 유지한다 */
+        cut.forEach((b) => {
+          const v = Math.max(0, Math.min(2, blkInd(b) + shift));
+          if (v) b.indent = v; else delete b.indent;
+        });
+        const dst = plan.sp.defs || (plan.sp.defs = []);
+        dst.splice(Math.max(0, Math.min(dst.length, at)), 0, ...cut);
       }
+      edTouched();
+      render();
     }
-    function edDnDMount() {
-      /* 끄는 동안에는 «문서 어디서든» 받는다 (PM 2026-08-30).
-         한 곳이라도 안 받으면 그 위에서 브라우저가 🚫 커서를 띄우는데, 그건 「고장」 처럼 읽힌다.
-         노션은 끄는 내내 그 표시가 없다 — 놓을 수 없는 자리는 «아무 일도 안 일어나는 것» 으로 족하다.
-         어디에 놓이느냐는 아래 목록 쪽 판정이 정하고, 여기서는 «막힘 표시만» 없앤다. */
-      const allow = (e) => {
-        if (!dragFrom) return;
-        e.preventDefault();
-        try { if (e.dataTransfer) e.dataTransfer.dropEffect = "move"; } catch (x) { /* 일부 브라우저 */ }
-      };
-      document.addEventListener("dragover", allow, true);
-      document.addEventListener("drop", allow, true);
-      const ad = appDoc();
-      if (ad && ad !== document) {
-        ad.addEventListener("dragover", allow, true);
-        ad.addEventListener("drop", allow, true);
+
+    /* ---- 세션 ---- */
+    function dragBegin(e) {
+      const g = e.target.closest && e.target.closest("[data-g]");
+      if (!g) return false;
+      if (edEl) edFinish(true);
+      drag = { kind: g.dataset.g, key: edKeyOf(g), di: Number(g.dataset.di),
+        x0: e.clientX, row: g.closest(".ss-row") };
+      /* 무엇이 같이 움직이는지 흐리게 보여 준다 — 규칙이 «규칙» 으로 보이려면 눈에 보여야 한다 */
+      if (drag.kind === "item") { if (drag.row) drag.row.classList.add("ss-dragging"); }
+      else {
+        const sp = specOf(drag.key);
+        if (sp && sp.defs) {
+          const n = subLen(sp.defs, drag.di);
+          for (let i = 0; i < n; i++) {
+            const el = drag.row && drag.row.querySelector('.ss-b[data-di="' + (drag.di + i) + '"]');
+            if (el) el.classList.add("ss-dragging");
+          }
+        }
       }
-      ctx.listEl.addEventListener("dragstart", (e) => {
-        const info = dragInfo(e.target);
-        if (!info) return;
-        if (edEl) edFinish(true);
-        dragFrom = info;
-        /* 잡은 지점을 기억한다 — 깊이는 «여기서 얼마나 옆으로 갔나» 로 정한다 (아래 blockDrop) */
-        dragFrom.x = e.clientX;
-        dragMark(info);
+      try {
         e.dataTransfer.effectAllowed = "move";
-        try { e.dataTransfer.setData("text/plain", info.kind); } catch (x) { /* 일부 브라우저는 필요 */ }
-      });
-      ctx.listEl.addEventListener("dragover", (e) => {
-        if (!dragFrom) return;
-        /* 끄는 동안에는 «언제나» 받는다. 안 받으면 브라우저가 🚫 커서를 띄우는데,
-           그건 «고장» 처럼 읽힌다 — 무효한 자리는 선을 안 그리는 것으로 충분하다 (PM 2026-08-30) */
+        e.dataTransfer.setData("text/plain", drag.kind); /* 일부 브라우저는 이게 있어야 끌린다 */
+      } catch (x) { /* 막힌 환경 */ }
+      return true;
+    }
+    function dragEnd() {
+      dragWipe();
+      ctx.listEl.querySelectorAll(".ss-dragging").forEach((n) => n.classList.remove("ss-dragging"));
+      drag = null;
+    }
+
+    function edDnDMount() {
+      /* 철학 3 — 끄는 동안에는 «문서 어디서든» 받는다. 한 곳이라도 안 받으면 그 위에서 🚫 가 뜬다.
+         받는 것(=막힘 표시 없애기)과 그리는 것(=계획)은 별개다: 여기서는 받기만 한다 */
+      const allow = (e) => {
+        if (!drag) return;
         e.preventDefault();
-        if (dragFrom.kind === "item") {
-          const row = e.target.closest(".ss-row");
-          if (!row) { dropClear(); return; }
-          const r = row.getBoundingClientRect();
-          dropShowRow(row, e.clientY > r.top + r.height / 2);
-          return;
-        }
-        /* 빈 번호 안이면 그 번호의 첫 자리로 */
-        const kids = e.target.closest(".ss-kids");
-        if (kids && !kids.querySelector(".ss-b")) {
-          const sp = specOf(edKeyOf(kids));
-          if (!sp) { dropClear(); return; }
-          dropClear();
-          const kr = kids.getBoundingClientRect();
-          dropMark = lineAt(kr.top, kr.left, kr.width);
-          dropAt = { sp: sp, defs: sp.defs || (sp.defs = []), at: 0, ind: 0 };
-          return;
-        }
-        const d = nearestDrop(e);
-        /* 바뀌는 게 없는 자리면 «앞서 그린 선» 도 지운다 — 안 지우면 옛 선이 남아 오해를 부른다 */
-        if (!d) { dropClear(); return; }
-        dropShowBlock(d);
+        try { if (e.dataTransfer) e.dataTransfer.dropEffect = "move"; } catch (x) { /* 막힌 환경 */ }
+      };
+      const docs = [document];
+      const ad = appDoc();
+      if (ad && ad !== document) docs.push(ad);
+      docs.forEach((d) => {
+        d.addEventListener("dragover", allow, true);
+        d.addEventListener("drop", allow, true);
       });
+
+      ctx.listEl.addEventListener("dragstart", (e) => { dragBegin(e); });
+      ctx.listEl.addEventListener("dragover", (e) => { if (drag) dragPaint(dragPlan(e)); });
+      /* 목록 밖으로 나가면 그림을 지운다 — 남아 있으면 «여기 놓으면 된다» 로 읽힌다 */
       ctx.listEl.addEventListener("dragleave", (e) => {
-        if (!e.relatedTarget || !ctx.listEl.contains(e.relatedTarget)) dropClear();
+        if (drag && (!e.relatedTarget || !ctx.listEl.contains(e.relatedTarget))) dragWipe();
       });
       ctx.listEl.addEventListener("drop", (e) => {
-        if (!dragFrom || !dropAt) { edDragEnd(); return; }
+        if (!drag) return;
         e.preventDefault();
-        const d = dropAt;
-        dropClear();
-        edSnap();
-        if (dragFrom.kind === "item") {
-          const list = specs();
-          const from = list.findIndex((sp) => String(sp.n) === String(dragFrom.key));
-          const to = list.findIndex((sp) => String(sp.n) === String(edKeyOf(d.row)));
-          if (from < 0 || to < 0) { edDragEnd(); return; }
-          moveAt(list, from, to + (d.after ? 1 : 0));
-          edRenumber();
-        } else {
-          const src = specOf(dragFrom.key);
-          if (!src || !src.defs) { edDragEnd(); return; }
-          /* 갈 수 없는 자리·바뀌는 게 없는 자리는 blockDrop 이 이미 걸렀다 (#62) */
-          const n = subLen(src.defs, dragFrom.di);
-          const cut = src.defs.splice(dragFrom.di, n);
-          if (!cut.length) { edDragEnd(); return; }
-          let at = d.at;
-          if (src === d.sp && at > dragFrom.di) at -= n; /* 앞에서 빠진 만큼 당긴다 */
-          const shift = d.ind - blkInd(cut[0]);
-          cut.forEach((b) => {
-            const v = Math.max(0, Math.min(2, blkInd(b) + shift));
-            if (v) b.indent = v; else delete b.indent;
-          });
-          const dst = d.sp.defs || (d.sp.defs = []);
-          dst.splice(Math.max(0, Math.min(dst.length, at)), 0, ...cut);
-        }
-        edTouched();
-        render();
-        edDragEnd();
+        const plan = dragPlanNow;
+        dragWipe();
+        dragApply(plan);
+        dragEnd();
       });
-      ctx.listEl.addEventListener("dragend", edDragEnd);
-    }
-    function edDragEnd() {
-      dropClear();
-      ctx.listEl.querySelectorAll(".ss-dragging").forEach((n) => n.classList.remove("ss-dragging"));
-      dragFrom = null;
+      ctx.listEl.addEventListener("dragend", dragEnd);
     }
 
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
