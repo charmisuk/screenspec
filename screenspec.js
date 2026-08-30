@@ -2830,28 +2830,40 @@ ${HL_CSS}
       drag = null;
     }
 
+    /* 커서가 목록 «안» 에 있는가 — 판정은 이벤트가 아니라 «좌표» 로 한다.
+       dragleave 로 판정하면 블록과 블록 사이를 지날 때도 떠나는 것으로 잡혀(relatedTarget 이
+       비어 오는 경우가 있다) 그림이 지워졌다 다시 그려진다 — 그게 «없음» 이 깜빡이던 정체다.
+       좌표는 그런 사정이 없다: 안이면 안이고 밖이면 밖이다 (2026-08-30) */
+    function inList(e) {
+      const r = ctx.listEl.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    }
     function edDnDMount() {
-      /* 철학 3 — 끄는 동안에는 «문서 어디서든» 받는다. 한 곳이라도 안 받으면 그 위에서 🚫 가 뜬다.
-         받는 것(=막힘 표시 없애기)과 그리는 것(=계획)은 별개다: 여기서는 받기만 한다 */
+      /* 철학 3 — 끄는 동안에는 «문서 어디서든» 받는다. 한 곳이라도 안 받으면 그 위에서 🚫 가 뜬다 */
       const allow = (e) => {
-        if (!drag) return;
+        if (!drag) return false;
         e.preventDefault();
         try { if (e.dataTransfer) e.dataTransfer.dropEffect = "move"; } catch (x) { /* 막힌 환경 */ }
+        return true;
       };
+      /* 한 프레임에 한 번, 한 곳에서 정한다: 받고 → 안이면 그리고 → 밖이면 지운다.
+         목록에도 따로 dragover 를 달지 않는다 — 두 곳에서 그리면 순서에 따라 결과가 갈린다 */
+      const over = (e) => { if (allow(e)) dragPaint(inList(e) ? dragPlan(e) : null); };
+      /* dragenter 도 반드시 취소해야 한다 (2026-08-30 실측: 31프레임 전부 안 되고 있었다).
+         HTML5 끌어놓기는 «그 요소가 받을 수 있는가» 를 dragenter 에서 정한다. 안 취소하면
+         새 요소에 들어가는 «그 한 프레임» 동안 🚫 가 떴다가 다음 dragover 에서 사라진다 —
+         블록과 블록 사이를 지날 때마다 깜빡이던 것이 이것이다. dragover 만 막아서는 못 없앤다 */
       const docs = [document];
       const ad = appDoc();
       if (ad && ad !== document) docs.push(ad);
       docs.forEach((d) => {
-        d.addEventListener("dragover", allow, true);
+        d.addEventListener("dragenter", allow, true);
         d.addEventListener("drop", allow, true);
+        /* 그리기는 우리 문서에서만 — 액자 안에는 목록이 없다 */
+        d.addEventListener("dragover", d === document ? over : allow, true);
       });
 
       ctx.listEl.addEventListener("dragstart", (e) => { dragBegin(e); });
-      ctx.listEl.addEventListener("dragover", (e) => { if (drag) dragPaint(dragPlan(e)); });
-      /* 목록 밖으로 나가면 그림을 지운다 — 남아 있으면 «여기 놓으면 된다» 로 읽힌다 */
-      ctx.listEl.addEventListener("dragleave", (e) => {
-        if (drag && (!e.relatedTarget || !ctx.listEl.contains(e.relatedTarget))) dragWipe();
-      });
       ctx.listEl.addEventListener("drop", (e) => {
         if (!drag) return;
         e.preventDefault();

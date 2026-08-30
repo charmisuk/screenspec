@@ -1197,7 +1197,8 @@ function check(name, ok, detail) {
       const src = document.querySelector('[data-defrow="2"] > .ss-gut .ss-g-grip');
       const dst = document.querySelector('[data-defrow="1"]');
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
+      const sx = src.getBoundingClientRect();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: sx.left + sx.width / 2 }));
       const r = dst.getBoundingClientRect();
       dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
       dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
@@ -1758,10 +1759,12 @@ function check(name, ok, detail) {
       const src = document.querySelector(f), dst = document.querySelector(t);
       if (!src || !dst) return "대상 없음";
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
+      const sr = src.getBoundingClientRect();
+      const x0 = sr.left + sr.width / 2; /* 실제로 잡는 자리 */
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: x0 }));
       const r = dst.getBoundingClientRect();
       const y = af ? r.bottom - 2 : r.top + 2;
-      const cx = 500 + (x || 0); /* 잡은 곳(500)에서 x 만큼 옆으로 */
+      const cx = x0 + (x || 0); /* 잡은 곳에서 x 만큼 옆으로 */
       dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: cx }));
       dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: cx }));
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
@@ -1840,7 +1843,8 @@ function check(name, ok, detail) {
     const hint = (di, half, dx) => page.evaluate(([i, h, v]) => {
       const src = document.querySelector('.ss-b[data-di="1"] .ss-g-grip');
       const dt = new DataTransfer();
-      const step = 16, x0 = 500;
+      const sr = src.getBoundingClientRect();
+      const step = 16, x0 = sr.left + sr.width / 2;
       src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: x0 }));
       const el = document.querySelector('.ss-b[data-di="' + i + '"]');
       const r = el.getBoundingClientRect();
@@ -1867,17 +1871,22 @@ function check(name, ok, detail) {
     check("드롭선: 끄는 동안 어디에도 «막힘» 표시가 안 뜬다", await page.evaluate(() => {
       const src = document.querySelector('[data-defrow="1"] .ss-b[data-di="0"] .ss-g-grip');
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
+      const sx = src.getBoundingClientRect();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: sx.left + sx.width / 2 }));
       const spots = [".ss-sheet", ".ss-defs-head", ".ss-toolbar", ".ss-defs-list", ".ss-badge"];
       const bad = [];
       spots.forEach((sel) => {
         const el = document.querySelector(sel);
         if (!el) return;
         const r = el.getBoundingClientRect();
-        const ev = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt,
-          clientX: r.left + r.width / 2, clientY: r.top + Math.min(10, r.height / 2) });
-        el.dispatchEvent(ev);
-        if (!ev.defaultPrevented) bad.push(sel);
+        /* dragenter 도 함께 본다 — 이것을 안 막으면 새 요소에 «들어가는 한 프레임» 동안
+           🚫 가 떴다 사라진다. 블록 사이를 지날 때마다 깜빡이던 것이 그것이다 (2026-08-30) */
+        ["dragenter", "dragover"].forEach((type) => {
+          const ev = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt,
+            clientX: r.left + r.width / 2, clientY: r.top + Math.min(10, r.height / 2) });
+          el.dispatchEvent(ev);
+          if (!ev.defaultPrevented) bad.push(sel + "/" + type);
+        });
       });
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
       return bad.length === 0 ? true : bad;
@@ -1898,7 +1907,8 @@ function check(name, ok, detail) {
       const src = document.querySelector('[data-defrow="2"] .ss-b[data-di="0"] .ss-g-grip');
       const dst = document.querySelector('[data-defrow="1"]');
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
+      const sx = src.getBoundingClientRect();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: sx.left + sx.width / 2 }));
       const r = dst.getBoundingClientRect();
       dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
       const drew = !!document.querySelector(".ss-drop-line");
@@ -2388,7 +2398,8 @@ function check(name, ok, detail) {
             const got = await page.evaluate(([f, i, h, v]) => {
               const src = document.querySelector('.ss-b[data-di="' + f + '"] .ss-g-grip');
               const dt = new DataTransfer();
-              const step = 16, x0 = 500; /* 잡은 지점 — 깊이는 여기서의 «옆 이동» 으로 정해진다 */
+              const sr = src.getBoundingClientRect();
+              const step = 16, x0 = sr.left + sr.width / 2; /* 실제로 잡는 자리 */
               src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: x0 }));
               const el = document.querySelector('.ss-b[data-di="' + i + '"]');
               const r = el.getBoundingClientRect();

@@ -96,7 +96,8 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
           const got = await p.evaluate(([f, i, h, v]) => {
             const src = document.querySelector('.ss-b[data-di="' + f + '"] .ss-g-grip');
             const dt = new DataTransfer();
-            const step = 16, x0 = 500;
+            const sr = src.getBoundingClientRect();
+            const step = 16, x0 = sr.left + sr.width / 2; /* 실제로 잡는 자리 */
             src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: x0 }));
             const el = document.querySelector('.ss-b[data-di="' + i + '"]');
             const r = el.getBoundingClientRect();
