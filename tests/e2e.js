@@ -1861,6 +1861,28 @@ function check(name, ok, detail) {
     check("드롭선: 맨 위로는 그린다", (await hint(0, "top", 0)).선 === true, await hint(0, "top", 0));
     const inC = await hint(2, "bottom", 0);
     check("드롭선: 하위로 들어가면 부모가 될 블록을 밝힌다", inC.선 === true && inC.부모 === "C" && inC.왼쪽 === "16px", inC);
+    /* 끄는 동안 «막힘 표시(🚫)» 가 어디에도 뜨지 않아야 한다 (PM QA 2026-08-30).
+       한 곳이라도 dragover 를 안 받으면 그 위에서 브라우저가 🚫 를 띄우고, 그건 「고장」 처럼 읽힌다.
+       노션은 끄는 내내 그 표시가 없다 — 놓을 수 없는 자리는 «아무 일도 안 일어나는 것» 으로 족하다 */
+    check("드롭선: 끄는 동안 어디에도 «막힘» 표시가 안 뜬다", await page.evaluate(() => {
+      const src = document.querySelector('[data-defrow="1"] .ss-b[data-di="0"] .ss-g-grip');
+      const dt = new DataTransfer();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
+      const spots = [".ss-sheet", ".ss-defs-head", ".ss-toolbar", ".ss-defs-list", ".ss-badge"];
+      const bad = [];
+      spots.forEach((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const ev = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt,
+          clientX: r.left + r.width / 2, clientY: r.top + Math.min(10, r.height / 2) });
+        el.dispatchEvent(ev);
+        if (!ev.defaultPrevented) bad.push(sel);
+      });
+      src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
+      return bad.length === 0 ? true : bad;
+    }));
+
     const sib = await hint(2, "bottom", -1);
     check("드롭선: 형제로 붙을 때는 부모를 안 밝힌다", sib.선 === true && sib.부모 === null && sib.왼쪽 === "0px", sib);
 

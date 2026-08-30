@@ -2745,6 +2745,22 @@ ${HL_CSS}
       }
     }
     function edDnDMount() {
+      /* 끄는 동안에는 «문서 어디서든» 받는다 (PM 2026-08-30).
+         한 곳이라도 안 받으면 그 위에서 브라우저가 🚫 커서를 띄우는데, 그건 「고장」 처럼 읽힌다.
+         노션은 끄는 내내 그 표시가 없다 — 놓을 수 없는 자리는 «아무 일도 안 일어나는 것» 으로 족하다.
+         어디에 놓이느냐는 아래 목록 쪽 판정이 정하고, 여기서는 «막힘 표시만» 없앤다. */
+      const allow = (e) => {
+        if (!dragFrom) return;
+        e.preventDefault();
+        try { if (e.dataTransfer) e.dataTransfer.dropEffect = "move"; } catch (x) { /* 일부 브라우저 */ }
+      };
+      document.addEventListener("dragover", allow, true);
+      document.addEventListener("drop", allow, true);
+      const ad = appDoc();
+      if (ad && ad !== document) {
+        ad.addEventListener("dragover", allow, true);
+        ad.addEventListener("drop", allow, true);
+      }
       ctx.listEl.addEventListener("dragstart", (e) => {
         const info = dragInfo(e.target);
         if (!info) return;
