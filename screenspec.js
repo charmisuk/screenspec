@@ -525,15 +525,17 @@
      편집 중이라고 왼쪽 여백을 없애지 않는다 — 손잡이는 콜아웃 «밖» 거터에 있어서 자리를 다투지 않는다.
      (PM 2026-08-29: 「번호 쪽 디자인이 너무 왼쪽 마진이 없어」— 원인이 이 규칙이었다) */
   /* 드롭선 — 왼쪽 끝이 «몇 단에 들어가는지» 를 말한다 (#61). 동그라미가 그 지점을 짚는다 */
-  .ss-drop-line{position:relative;height:2px;background:var(--ss-accent);border-radius:2px;margin:0}
+  .ss-drop-line{position:absolute;z-index:3;height:2px;background:var(--ss-accent);border-radius:2px;
+    pointer-events:none}
   .ss-drop-line::before{content:"";position:absolute;left:-3px;top:-2px;width:6px;height:6px;
     border-radius:99px;background:var(--ss-accent)}
   .ss-dragging{opacity:.4}
   /* 하위로 들어갈 때 부모가 될 블록 — 노션과 같은 «통째로 밝히기», 색은 우리 액센트 (PM 2026-08-30) */
   /* 들어갈 덩어리 — 부모와 그 하위를 «한 박스» 로 감싼다. 자리가 아니라 소속을 말한다 */
+  /* 배경만 칠한다 — 여백을 건드리면 글이 밀리고, 밀리면 표시가 떤다 (2026-08-30) */
   .ss-drop-in{background:var(--ss-accent-soft)}
-  .ss-drop-in-a{border-radius:6px 6px 0 0;padding-top:calc(var(--ss-blk-py) + 2px);margin-top:-2px}
-  .ss-drop-in-z{border-radius:0 0 6px 6px;padding-bottom:calc(var(--ss-blk-py) + 2px);margin-bottom:-2px}
+  .ss-drop-in-a{border-radius:6px 6px 0 0}
+  .ss-drop-in-z{border-radius:0 0 6px 6px}
   .ss-drop-in-a.ss-drop-in-z{border-radius:6px}
   /* 빈 번호도 «놓을 수 있는 자리» 여야 한다 — 높이가 0 이면 마우스가 닿지 않는다 */
   .ss-kids{min-height:14px}
@@ -594,7 +596,7 @@
   /* 끌 수 없는 선택지는 «꺼져 있음» 이 보여야 한다 (기능 설명을 안 넣으면 레이어는 무의미) */
   .ss-prdlg label.ss-off{opacity:.4}
   .ss-prdlg label.ss-off select{cursor:not-allowed}
-  .ss-defs-list{flex:1;overflow-y:auto;padding:6px 8px 18px calc(var(--ss-gut-w) + 4px)}
+  .ss-defs-list{position:relative;flex:1;overflow-y:auto;padding:6px 8px 18px calc(var(--ss-gut-w) + 4px)}
   .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
   .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
   .ss-badge a:hover{color:var(--ss-accent)}
@@ -2705,15 +2707,35 @@ ${HL_CSS}
       });
       return best ? blockDrop(best.el, best.half, e) : null;
     }
+    /* 표시는 «자리를 차지하지 않는다» (PM 2026-08-30).
+       선을 목록의 흐름 안에 끼워 넣으면 넣는 순간 블록이 밀리고 → 커서 밑 요소가 바뀌고 →
+       선이 다른 자리로 다시 그려진다. 마우스를 움직이는 내내 이 되먹임이 돌아 표시가 떨었다.
+       그래서 선은 목록 위에 «떠 있는» 채로 그린다 — 무엇을 그려도 글은 한 픽셀도 안 움직인다 */
+    function lineAt(y, left, width) {
+      const lr = ctx.listEl.getBoundingClientRect();
+      const el = h("div", { class: "ss-drop-line ss-ui" });
+      el.style.top = (y - lr.top + ctx.listEl.scrollTop - 1) + "px";
+      el.style.left = (left - lr.left + ctx.listEl.scrollLeft) + "px";
+      el.style.width = Math.max(0, width) + "px";
+      ctx.listEl.appendChild(el);
+      return el;
+    }
     function dropShowBlock(d) {
       dropClear();
-      dropMark = h("div", { class: "ss-drop-line ss-ui" });
-      dropMark.style.marginLeft = (d.ind * markPx()) + "px";
-      /* 선은 «실제로 들어갈 자리» 에 그린다. 부모 위에 놓으면 그 하위 뒤로 가므로,
-         커서 바로 밑에 그리면 눈과 결과가 어긋난다 (2026-08-29 실측) */
+      /* 선은 «실제로 들어갈 자리» 에 그린다 — 눈과 결과가 어긋나면 안 된다 */
       const box = d.overBlk.parentNode;
       const next = box.querySelector('.ss-b[data-di="' + d.at + '"]');
-      if (next) box.insertBefore(dropMark, next); else box.appendChild(dropMark);
+      const bx = box.getBoundingClientRect();
+      let y;
+      if (next) y = next.getBoundingClientRect().top;
+      else {
+        const all = box.querySelectorAll(".ss-b");
+        const last = all[all.length - 1];
+        y = last ? last.getBoundingClientRect().bottom : bx.bottom;
+      }
+      const off = d.ind * markPx();
+      dropMark = lineAt(y, bx.left + off, bx.width - off);
+      dropMark.dataset.ind = String(d.ind); /* 몇 단으로 들어가는지 — 픽셀로 되짚지 않게 */
       /* 하위로 들어가면 «어느 덩어리 안인지» 를 박스로 감싼다 — 형제로 붙는 것과 눈으로 갈린다 (#62).
          박스는 부모 한 줄이 아니라 «부모 + 그 하위 전체» 다: 이 표시가 말하는 것은 자리가 아니라 소속이다 */
       dropParent = [];
@@ -2729,8 +2751,8 @@ ${HL_CSS}
     }
     function dropShowRow(row, after) {
       dropClear();
-      dropMark = h("div", { class: "ss-drop-line ss-ui" });
-      row.parentNode.insertBefore(dropMark, after ? row.nextSibling : row);
+      const r = row.getBoundingClientRect();
+      dropMark = lineAt(after ? r.bottom : r.top, r.left, r.width);
       dropAt = { row: row, after: after };
     }
     /* 끌려가는 덩어리를 흐리게 — 무엇이 같이 움직이는지 눈으로 보여야 규칙이 «규칙» 이 된다 */
@@ -2790,8 +2812,8 @@ ${HL_CSS}
           const sp = specOf(edKeyOf(kids));
           if (!sp) { dropClear(); return; }
           dropClear();
-          dropMark = h("div", { class: "ss-drop-line ss-ui" });
-          kids.appendChild(dropMark);
+          const kr = kids.getBoundingClientRect();
+          dropMark = lineAt(kr.top, kr.left, kr.width);
           dropAt = { sp: sp, defs: sp.defs || (sp.defs = []), at: 0, ind: 0 };
           return;
         }

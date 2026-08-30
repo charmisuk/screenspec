@@ -1848,7 +1848,7 @@ function check(name, ok, detail) {
         clientY: h === "top" ? r.top + 2 : r.bottom - 2, clientX: x0 + v * step }));
       const line = document.querySelector(".ss-drop-line");
       const par = document.querySelector(".ss-drop-in");
-      const out = { 선: !!line, 왼쪽: line ? line.style.marginLeft : null,
+      const out = { 선: !!line, 깊이: line ? Number(line.dataset.ind) : null,
         부모: par ? par.textContent.replace(/[＋⠿]/g, "").trim() : null };
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
       return out;
@@ -1860,7 +1860,7 @@ function check(name, ok, detail) {
     check("드롭선: 자리는 같아도 깊이가 바뀌면 그린다", (await hint(1, "bottom", -1)).선 === true, await hint(1, "bottom", -1));
     check("드롭선: 맨 위로는 그린다", (await hint(0, "top", 0)).선 === true, await hint(0, "top", 0));
     const inC = await hint(2, "bottom", 0);
-    check("드롭선: 하위로 들어가면 부모가 될 블록을 밝힌다", inC.선 === true && inC.부모 === "C" && inC.왼쪽 === "16px", inC);
+    check("드롭선: 하위로 들어가면 부모가 될 블록을 밝힌다", inC.선 === true && inC.부모 === "C" && inC.깊이 === 1, inC);
     /* 끄는 동안 «막힘 표시(🚫)» 가 어디에도 뜨지 않아야 한다 (PM QA 2026-08-30).
        한 곳이라도 dragover 를 안 받으면 그 위에서 브라우저가 🚫 를 띄우고, 그건 「고장」 처럼 읽힌다.
        노션은 끄는 내내 그 표시가 없다 — 놓을 수 없는 자리는 «아무 일도 안 일어나는 것» 으로 족하다 */
@@ -1884,7 +1884,7 @@ function check(name, ok, detail) {
     }));
 
     const sib = await hint(2, "bottom", -1);
-    check("드롭선: 형제로 붙을 때는 부모를 안 밝힌다", sib.선 === true && sib.부모 === null && sib.왼쪽 === "0px", sib);
+    check("드롭선: 형제로 붙을 때는 부모를 안 밝힌다", sib.선 === true && sib.부모 === null && sib.깊이 === 0, sib);
 
     /* 5) 하위 하나만 남의 번호로 보낼 수도 있다 */
     await setDefs("0A,1a1,1a2", "0X");
@@ -2395,7 +2395,7 @@ function check(name, ok, detail) {
               const y = h === "top" ? r.top + 2 : r.bottom - 2, x = x0 + v * step;
               el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
               const line = document.querySelector(".ss-drop-line"), par = document.querySelector(".ss-drop-in");
-              const o = { show: !!line, ind: line ? parseInt(line.style.marginLeft || "0", 10) / 16 : null,
+              const o = { show: !!line, ind: line ? Number(line.dataset.ind) : null,
                 par: par ? par.querySelector(".ss-dt").textContent.trim() : null };
               el.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
               src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
