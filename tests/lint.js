@@ -108,7 +108,9 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   /* 어디에 있든 틀린 것 */
   const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"|상위 \d+ · 하위|패널 ⇄|SpecLayer|1a·1b|↳ 이유|편집 모드로 들어|편집.{0,3}\s?버튼|자동 번호를 매긴/;
   /* 설정 예시 — 문서에서만 (코드에는 같은 이름의 다른 필드가 산다) */
-  const STALE_DOC = /(^|[^\w.])(parts|subs)\s*:|\bwhy\s*:\s*"/;
+  const STALE_DOC = /(^|[^\w.`])(parts|subs)\s*:|\bwhy\s*:\s*"|`(parts|subs)`|`why`/;
+  /* `why` 는 지금도 쓰는 값이다 (kind:"why"). 그 값을 설명하는 줄은 드리프트가 아니다 */
+  const OKWHY = /kind/;
   /* 이 말이 줄에 있으면 «폐기를 설명하는 줄» 이다 */
   const KEEP = /폐기|없앴|없어졌|deprecated|legacy|별칭|alias|호환|더 이상|옛 /;
   for (const f of ["README.md", "SKILL.md", "AGENTS.md", "llms.txt", "docs/config.md", "screenspec.js"]) {
@@ -116,7 +118,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
     const hits = [];
     fs.readFileSync(path.join(REPO, f), "utf8").split("\n").forEach((line, i) => {
       if (KEEP.test(line)) return;
-      const m = line.match(STALE) || (isDoc ? line.match(STALE_DOC) : null);
+      const m = line.match(STALE) || (isDoc && !OKWHY.test(line) ? line.match(STALE_DOC) : null);
       if (m) hits.push(f + ":" + (i + 1) + " " + m[0].trim());
     });
     check(f + " 폐기 용어 없음", hits.length === 0, JSON.stringify(hits));
