@@ -2269,13 +2269,14 @@ function check(name, ok, detail) {
     await page.evaluate((src) => {
       window.__file = "<html><body>" + src + "</body></html>";
       window.__writes = 0;
+      window.__mt = 1000;
       window.showOpenFilePicker = async () => [{
         name: "proto.html",
         queryPermission: async () => "granted",
         requestPermission: async () => "granted",
-        getFile: async () => ({ text: async () => window.__file }),
+        getFile: async () => ({ text: async () => window.__file, lastModified: window.__mt }),
         createWritable: async () => ({
-          write: async (t) => { window.__file = t; window.__writes++; },
+          write: async (t) => { window.__file = t; window.__mt += 10; window.__writes++; },
           close: async () => {},
         }),
       }];
@@ -2292,7 +2293,7 @@ function check(name, ok, detail) {
     await page.click(".ss-svbtn");
     await page.waitForTimeout(500);
     check("자동저장: 파일을 한 번 고르면 켜진다", (await st()).indexOf("저장됨") === 0 &&
-      (await page.locator(".ss-svbtn").textContent()) === "지금 저장" && (await writes()) === 1, await st());
+      (await page.locator(".ss-svbtn").textContent()) === "저장" && (await writes()) === 1, await st());
 
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
@@ -2319,6 +2320,35 @@ function check(name, ok, detail) {
       return JSON.stringify(w.SCREENSPEC.specs[0].defs.map((d) => d.t)) ===
         JSON.stringify(window.SCREENSPEC.specs[0].defs.map((d) => d.t));
     }));
+    /* 저장 단추는 «누를 일이 있을 때만» 눌린다 (PM 2026-08-30) */
+    check("자동저장: 저장할 게 없으면 저장 단추가 꺼진다",
+      (await page.locator(".ss-svbtn").isDisabled()) === true &&
+      (await page.locator(".ss-svbtn").textContent()) === "저장");
+
+    /* ---- 밖에서 바뀐 파일 (#63) ----
+       PM 이 에이전트에게 프로토타입을 고치라고 하면 파일은 바뀌는데 브라우저는 모른다.
+       모르는 채로 자동저장이 돌면 그 변경을 덮어쓴다 — 그래서 알아채고 «멈춰야» 한다 */
+    await page.evaluate(() => { window.__file = window.__file.replace("홈", "홈 화면"); window.__mt += 99999; });
+    check("파일감시: 바뀌기 전에는 띠가 없다",
+      (await page.locator(".ss-outside").evaluate((e) => getComputedStyle(e).display)) === "none");
+    await page.waitForTimeout(3600);
+    check("파일감시: 밖에서 바뀌면 띠가 뜬다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-outside")).display === "flex" &&
+      document.querySelector(".ss-outside").textContent.indexOf("밖에서 바뀌었습니다") >= 0));
+    check("파일감시: 그동안 상태는 «저장 멈춤»", (await page.locator(".ss-savest").textContent()) === "저장 멈춤",
+      await page.locator(".ss-savest").textContent());
+    const w0 = await writes();
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.type("X");
+    await page.waitForTimeout(1800);
+    check("파일감시: 멈춘 동안에는 파일에 쓰지 않는다 (남의 변경을 안 덮는다)", (await writes()) === w0, [w0, await writes()]);
+    await page.click('.ss-outside [data-oc="keep"]');
+    await page.waitForTimeout(1600);
+    check("파일감시: 「내 것 유지」 를 고르면 띠가 닫히고 저장이 다시 돈다",
+      (await page.locator(".ss-outside").evaluate((e) => getComputedStyle(e).display)) === "none" &&
+      (await writes()) > w0, [await writes(), w0]);
+    check("파일감시: 새로고침 선택지가 함께 있다", (await page.locator('.ss-outside [data-oc="reload"]').count()) === 1);
+
     check("자동저장: 도중에 JS 에러 0건", errs.length === 0, errs);
     page.off("pageerror", onErr);
   }

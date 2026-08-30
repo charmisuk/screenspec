@@ -488,6 +488,12 @@
   .ss-savest::before{content:"";width:6px;height:6px;border-radius:99px;background:currentColor;flex:none}
   .ss-savest.ss-st-on{color:#2F8F5B}
   .ss-savest.ss-st-busy{color:#B8862B}
+  .ss-savest.ss-st-warn{color:#E0522F}
+  .ss-headbtn:disabled{opacity:.45;cursor:default;border-color:var(--ss-line)}
+  .ss-headbtn:disabled:hover{border-color:var(--ss-line);color:var(--ss-ink2)}
+  /* 밖에서 바뀐 파일 띠 (#63) — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
+  .ss-outside{background:#EAF1FF;border-bottom-color:#C7D8F5;color:#1B4A9C}
+  .ss-outside button{border-color:#B9CDF0;color:#1B4A9C}
   .ss-wipeall:hover{border-color:#E0522F;color:#E0522F}
   .ss-edbar{display:none;align-items:center;gap:6px;padding:8px 18px;border-bottom:1px solid var(--ss-line);
     background:#FAFAF9;font-size:11.5px;color:var(--ss-ink3);flex-wrap:wrap}
@@ -2088,7 +2094,9 @@ ${HL_CSS}
       edSay("전부 지웠습니다 (Ctrl+Z 로 되돌리기)");
     }
     let edSavedAt = "", edStat = null, edSvBtn = null, edSaving = false, edAutoT = null, edSnapped = false;
-    const AUTO_MS = 1200; /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
+    let edMtime = 0, edOutside = false, edWatchT = null, edBar2 = null;
+    const AUTO_MS = 1200;   /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
+    const WATCH_MS = 3000;  /* 파일이 밖에서 바뀌었는지 보는 주기. 아래 edWatch 주석 참고 */
     function edCanFile() { return typeof window.showOpenFilePicker === "function"; }
     /* 오른쪽 위 한 줄로 «지금 어떤 상태인가» 를 말한다. 사람이 저장을 신경 쓰지 않아도 되게 */
     function edSync() {
@@ -2097,15 +2105,19 @@ ${HL_CSS}
       let cls = "ss-savest ss-ui", txt;
       if (!edCanFile()) { cls += " ss-st-off"; txt = "자동저장 안 됨 (크롬·엣지에서 됩니다)"; }
       else if (!edHandle) { cls += " ss-st-off"; txt = "자동저장 꺼짐"; }
+      else if (edOutside) { cls += " ss-st-warn"; txt = "저장 멈춤"; }
       else if (edSaving) { cls += " ss-st-busy"; txt = "저장 중…"; }
       else if (edDirty) { cls += " ss-st-busy"; txt = "저장 대기"; }
       else { cls += " ss-st-on"; txt = "저장됨" + (edSavedAt ? " · " + edSavedAt : ""); }
       edStat.className = cls;
       edStat.textContent = txt;
       if (edSvBtn) {
-        edSvBtn.textContent = edHandle ? "지금 저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");
-        edSvBtn.title = edHandle ? "「" + edHandle.name + "」 에 바로 씁니다"
-          : edCanFile() ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다" : "고친 내용을 파일로 내려받습니다";
+        edSvBtn.textContent = edHandle ? "저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");
+        /* 자동저장이 켜져 있고 이미 저장됐으면 누를 일이 없다 — 눌러도 되는 것처럼 두지 않는다 (PM 2026-08-30) */
+        const idle = edHandle && !edDirty && !edSaving && !edOutside;
+        edSvBtn.disabled = !!idle;
+        edSvBtn.title = !edHandle ? (edCanFile() ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다" : "고친 내용을 파일로 내려받습니다")
+          : idle ? "저장할 것이 없습니다" : "「" + edHandle.name + "」 에 바로 씁니다";
       }
     }
     function edTouched() {
@@ -2125,12 +2137,41 @@ ${HL_CSS}
         그게 프로토타입 파일에 반영되고 그걸 또 클로드가 픽스하고 핑퐁이 되지 않을까.」
        파일을 한 번 고르면(브라우저가 권한을 그때 받는다) 그 뒤로는 손이 멈출 때마다 조용히 쓴다. */
     function edAutoPlan() {
-      if (!edHandle) return;
+      if (!edHandle || edOutside) return;
       clearTimeout(edAutoT);
       edAutoT = setTimeout(edAutoSave, AUTO_MS);
     }
+    /* ---- 밖에서 바뀐 파일 알아채기 (#63, PM 2026-08-30) ----
+       PM 이 에이전트에게 프로토타입을 고치라고 하면 파일은 바뀌는데 브라우저는 모른다.
+       자동저장을 켜 두면 그 파일의 손잡이를 쥐고 있으므로 «언제 바뀌었는지» 를 물어볼 수 있다.
+
+       주기를 짧게 잡을 이유가 없다: 사람은 그동안 에이전트 쪽을 보고 있고,
+       돌아오는 «순간» 확인하면 되기 때문이다. 그래서 탭이 보일 때만 3초마다 보고,
+       탭이 가려지면 아예 멈추고, 돌아오면 즉시 한 번 본다.
+       비용은 파일 정보 한 번 읽기다 — 내용을 읽지 않으므로 사실상 공짜다. */
+    async function edPeekFile() {
+      if (!edHandle || edOutside) return;
+      let f;
+      try { f = await edHandle.getFile(); } catch (e) { return; } /* 지워졌거나 권한이 끊겼다 */
+      if (!edMtime) { edMtime = f.lastModified; return; }
+      if (f.lastModified <= edMtime + 1) return;
+      /* 밖에서 바뀌었다 — 우리 저장을 멈춘다. 안 멈추면 다음 자동저장이 그 변경을 덮는다 */
+      edOutside = true;
+      clearTimeout(edAutoT);
+      if (edBar2) {
+        const when = new Date(f.lastModified).toLocaleTimeString();
+        edBar2.querySelector(".ss-out-when").textContent = when;
+        edBar2.classList.add("ss-show");
+      }
+      edSync();
+    }
+    function edWatch() {
+      clearInterval(edWatchT);
+      if (!edHandle) return;
+      edWatchT = setInterval(() => { if (!document.hidden) edPeekFile(); }, WATCH_MS);
+    }
     async function edAutoSave() {
-      if (!edHandle || edSaving) return;
+      if (!edHandle || edSaving || edOutside) return;
       edPickUp(); /* 치는 중이어도 지금까지 친 글은 담는다 */
       if (!edDirty) return;
       edSaving = true; edSync();
@@ -2808,6 +2849,8 @@ ${HL_CSS}
         const w = await edHandle.createWritable();
         await w.write(out);
         await w.close();
+        /* 우리가 쓴 것을 «밖에서 바뀐 것» 으로 오해하지 않게 기준 시각을 갱신한다 */
+        try { edMtime = (await edHandle.getFile()).lastModified; } catch (e) { edMtime = Date.now(); }
         return null;
       } catch (e) {
         return "저장하지 못했습니다: " + ((e && e.message) || e);
@@ -2835,6 +2878,7 @@ ${HL_CSS}
       edSaving = false;
       if (bad) { edHandle = null; edSay(bad + " 지금 보고 있는 프로토타입 HTML 을 골라 주세요."); edSync(); return; }
       edSavedNow();
+      edWatch();
       edSync();
       edSay("「" + edHandle.name + "」 에 저장합니다. 이제 고칠 때마다 알아서 저장됩니다.");
     }
@@ -2904,6 +2948,23 @@ ${HL_CSS}
       edBtn2.onclick = edWipeAll;
       (headTools() || head).appendChild(edBtn2);
 
+      /* 밖에서 바뀐 파일 알림 (#63) — 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다.
+         「프로토타입의 동작을 방해하지 않는다」가 이 제품의 전제라 새 고정 요소를 만들지 않는다 */
+      edBar2 = h("div", { class: "ss-draft ss-outside ss-ui" },
+        '프로토타입 파일이 밖에서 바뀌었습니다 (<span class="ss-out-when"></span>) ' +
+        '<button type="button" data-oc="reload">새로고침</button><button type="button" data-oc="keep">내 것 유지</button>');
+      edBar2.addEventListener("click", (e) => {
+        const b2 = e.target.closest("[data-oc]");
+        if (!b2) return;
+        if (b2.dataset.oc === "reload") { location.reload(); return; }
+        edBar2.classList.remove("ss-show");
+        edOutside = false;
+        edStore(() => { /* 기준을 지금으로 — 다음 저장이 내 것으로 덮는다 */ });
+        edHandle.getFile().then((f) => { edMtime = f.lastModified; }).catch(() => { edMtime = Date.now(); });
+        edSync();
+        edAutoPlan();
+        edSay("내 것을 유지합니다. 다음 저장이 파일의 설정 블록을 덮어씁니다.");
+      });
       edDraftBar = h("div", { class: "ss-draft ss-ui" },
         '저장 안 된 초안이 있습니다 (<span class="ss-draft-when"></span>) ' +
         '<button type="button" data-dc="take">이어서</button><button type="button" data-dc="drop">버리기</button>');
@@ -2911,7 +2972,9 @@ ${HL_CSS}
       edBar = h("div", { class: "ss-edbar ss-ui" },
         '<button type="button" data-fm="bold" title="굵게 (Ctrl+B)"><b>B</b></button>' +
         '<span class="ss-edwhen"></span><span class="ss-edmsg"></span>');
+      /* 초안 띠가 먼저다 — 둘 다 .ss-draft 모양을 쓰므로 순서가 바뀌면 «첫 .ss-draft» 가 달라진다 */
       head.parentNode.insertBefore(edDraftBar, head.nextSibling);
+      head.parentNode.insertBefore(edBar2, edDraftBar.nextSibling);
       head.parentNode.insertBefore(edBar, edDraftBar.nextSibling);
       edWhen = edBar.querySelector(".ss-edwhen");
       edMsg = edBar.querySelector(".ss-edmsg");
@@ -2992,7 +3055,11 @@ ${HL_CSS}
         if (edDirty) edStore(() => localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), cfg: RAW })));
       };
       addEventListener("pagehide", edPark);
-      document.addEventListener("visibilitychange", () => { if (document.hidden) edPark(); });
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) edPark();
+        else edPeekFile(); /* 에이전트 쪽에 갔다가 돌아온 «그 순간» 이 가장 중요한 확인 시점이다 */
+      });
+      addEventListener("focus", () => edPeekFile());
       /* 글 쓰듯 고치는 키 (0-6) — Enter 가 «반영» 이 아니라 «새 줄» 이다.
          반영은 치는 즉시 일어나고, 파일로 남기는 것은 위의 「저장」 이다 (PM 결정 2026-08-28) */
       ctx.listEl.addEventListener("keydown", (e) => {
