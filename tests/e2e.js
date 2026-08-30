@@ -2253,6 +2253,105 @@ function check(name, ok, detail) {
     }), await page.evaluate(() => getComputedStyle(document.querySelector(".ss-b-dot")).transform));
   }
 
+  /* ============ 위계 전수 검증 ============
+     PM 2026-08-30: 「노션 로직을 먼저 상세히 정리하고, 그대로 재현되는지 하나하나 체크하는 게 맞지 않나.」
+
+     그래서 규칙을 «참조 구현» 으로 적어 두고, 자리 × 위아래 × 깊이를 전부 돌려 실제와 대조한다.
+     눈으로 몇 번 끌어 보는 것과 다르다 — 200건 중 하나만 어긋나도 여기서 걸린다.
+
+     규칙 (노션 영상 분석 + PM 확인):
+       1) 넣을 자리   : 위쪽 절반 = 그 블록 앞 · 아래쪽 절반 = 그 블록의 하위까지 건너뛴 뒤
+       2) 깊이 상한   : 넣을 자리 «바로 앞» 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
+       3) 끌고 있는 덩어리는 «이미 빠진 셈» 으로 본다 — 자기를 앞 블록으로 세면 자기가 자기 하위가 된다
+       4) 안 그린다   : 자기 하위 안 · 놓아도 자리와 깊이가 그대로일 때
+       5) 부모 표시   : 깊이 1 이상이면 «누구의 하위가 되는지» 를 통째로 밝힌다
+       6) 옮길 때     : 딸린 하위가 통째로 따라오고, 깊이 차이를 그대로 유지한다 */
+  console.log("[grid] 위계 전수 검증");
+  {
+    const ind = (l, i) => (l[i] ? (l[i].d | 0) : 0);
+    const sub = (l, i) => { let n = 1; while (i + n < l.length && ind(l, i + n) > ind(l, i)) n++; return n; };
+    /* 참조 구현 — «맞다» 고 정한 규칙을 그대로 적은 것 */
+    const ref = (l, from, di, half, lvl) => {
+      const n = sub(l, from);
+      const at = half === "bottom" ? di + sub(l, di) : di;
+      if (at > from && at < from + n) return { show: false };
+      let p = at - 1;
+      while (p >= from && p < from + n) p--;
+      const cap = p >= 0 ? Math.min(2, ind(l, p) + 1) : 0;
+      const want = Math.max(0, Math.min(cap, lvl));
+      const at2 = at > from ? at - n : at;
+      if (at2 === from && want === ind(l, from)) return { show: false };
+      let par = -1;
+      if (want > 0) for (let i = at - 1; i >= 0; i--) {
+        if (i >= from && i < from + n) continue;
+        if (ind(l, i) === want - 1) { par = i; break; }
+      }
+      const cut = l.slice(from, from + n).map((b) => ({ t: b.t, d: b.d | 0 }));
+      const rest = l.slice(0, from).concat(l.slice(from + n));
+      const shift = want - cut[0].d;
+      cut.forEach((b) => { b.d = Math.max(0, Math.min(2, b.d + shift)); });
+      return { show: true, ind: want, par: par,
+        after: rest.slice(0, at2).concat(cut, rest.slice(at2)).map((b) => b.d + b.t).join(",") };
+    };
+    const FIX = [
+      { l: [{ t: "A", d: 0 }, { t: "B", d: 1 }, { t: "C", d: 0 }, { t: "D", d: 1 }], from: 1 },
+      { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "Q", d: 1 }, { t: "B", d: 0 }], from: 0 },
+      { l: [{ t: "A", d: 0 }, { t: "B", d: 0 }, { t: "C", d: 0 }], from: 1 },
+      { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "X", d: 2 }, { t: "B", d: 0 }], from: 1 },
+      { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "X", d: 2 }, { t: "B", d: 0 }], from: 2 },
+      { l: [{ t: "A", d: 0 }, { t: "B", d: 0 }, { t: "P", d: 1 }, { t: "Q", d: 1 }], from: 0 },
+      { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "B", d: 0 }, { t: "Q", d: 1 }], from: 3 },
+      { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "Q", d: 2 }, { t: "R", d: 1 }, { t: "B", d: 0 }], from: 1 },
+      { l: [{ t: "A", d: 0 }, { t: "B", d: 0 }], from: 0 },
+    ];
+    let cases = 0;
+    const bad = [];
+    for (const fx of FIX) {
+      const defs = "[" + fx.l.map((x) => x.d ? "{t:'" + x.t + "',indent:" + x.d + "}" : "{t:'" + x.t + "'}").join(",") + "]";
+      const same = fx.l.map((x) => x.d + x.t).join(",");
+      for (let di = 0; di < fx.l.length; di++) {
+        for (const half of ["top", "bottom"]) {
+          for (let lvl = 0; lvl <= 2; lvl++) {
+            await page.goto("about:blank");
+            await page.setContent('<div id="a" data-spec="1">가</div>' +
+              "<script>window.SCREENSPEC={screen:{id:'S-G',name:'g'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
+            await page.addScriptTag({ content: LIB });
+            await page.waitForTimeout(300);
+            await page.click("#ss-mDoc");
+            await page.waitForTimeout(200);
+            const got = await page.evaluate(([f, i, h, v]) => {
+              const src = document.querySelector('.ss-b[data-di="' + f + '"] .ss-g-grip');
+              const dt = new DataTransfer();
+              src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+              const el = document.querySelector('.ss-b[data-di="' + i + '"]');
+              const r = el.getBoundingClientRect(), step = 16;
+              const y = h === "top" ? r.top + 2 : r.bottom - 2, x = r.left + step + v * step;
+              el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
+              const line = document.querySelector(".ss-drop-line"), par = document.querySelector(".ss-drop-in");
+              const o = { show: !!line, ind: line ? parseInt(line.style.marginLeft || "0", 10) / 16 : null,
+                par: par ? par.querySelector(".ss-dt").textContent.trim() : null };
+              el.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
+              src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
+              return o;
+            }, [fx.from, di, half, lvl]);
+            const after = await page.evaluate(() =>
+              window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
+            const w = ref(fx.l, fx.from, di, half, lvl);
+            const wantAfter = w.show ? w.after : same;
+            const wantPar = w.show && w.par >= 0 ? fx.l[w.par].t : null;
+            cases++;
+            if (!(got.show === w.show && (!w.show || (got.ind === w.ind && got.par === wantPar)) && after === wantAfter)) {
+              bad.push("[" + same + "] " + fx.l[fx.from].t + " → di" + di + "/" + half + "/lvl" + lvl +
+                " 기대 " + (w.show ? "선d" + w.ind + (wantPar ? "⊂" + wantPar : "") : "선없음") + "→" + wantAfter +
+                " · 실제 " + (got.show ? "선d" + got.ind + (got.par ? "⊂" + got.par : "") : "선없음") + "→" + after);
+            }
+          }
+        }
+      }
+    }
+    check("위계 전수: " + cases + "가지 자리에서 규칙과 실제가 같다", bad.length === 0, bad.slice(0, 6));
+  }
+
   /* ============ 자동저장 ============
      PM 2026-08-29: 「번호 넣고 입력하면 구글 시트 자동저장되듯이 로컬에 계속 저장되면서 가면
      그게 프로토타입 파일에 반영되고 그걸 또 클로드가 픽스하고 핑퐁이 되지 않을까.」

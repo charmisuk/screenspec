@@ -2593,26 +2593,37 @@ ${HL_CSS}
       const key = edKeyOf(overBlk), sp = specOf(key);
       if (!sp) return null;
       const defs = sp.defs || (sp.defs = []);
+      const src = specOf(dragFrom.key);
+      if (!src || !src.defs) return null;
+      const from = dragFrom.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
       const di = Number(overBlk.dataset.di);
       const r = overBlk.getBoundingClientRect();
       const after = e.clientY > r.top + r.height / 2;
       const at = after ? di + subLen(defs, di) : di;
-      const prev = defs[at - 1];
-      const cap = prev ? Math.min(2, blkInd(prev) + 1) : 0; /* 앞 블록보다 한 단까지 */
+      if (src === sp && at > from && at < from + n) return null; /* 자기 하위 안으로는 못 간다 */
+
+      /* 끌고 있는 덩어리는 «이미 빠진 셈» 으로 본다 (2026-08-30 전수 검증에서 잡힌 뿌리).
+         자기 자신을 「앞 블록」으로 세면 자기가 자기 하위가 되고, 그 뒤로 깊이가 어긋난 채
+         굳어서 다음 이동에서 하위가 안 따라오는 것처럼 보였다 (PM 관찰). */
+      const mine = (i) => src === sp && i >= from && i < from + n;
+      let p = at - 1;
+      while (p >= 0 && mine(p)) p--;
+      const cap = p >= 0 ? Math.min(2, blkInd(defs[p]) + 1) : 0; /* 앞 블록보다 한 단까지 */
       const step = markPx();
       const lvl = Math.round((e.clientX - (r.left + step)) / step);
       const ind = Math.max(0, Math.min(cap, lvl));
 
-      const src = specOf(dragFrom.key);
-      if (!src || !src.defs) return null;
-      const from = dragFrom.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
+      /* 놓아도 자리와 깊이가 그대로면 그리지 않는다 */
       if (src === sp) {
-        if (at > from && at < from + n) return null;          /* 자기 하위 안 */
-        if ((at === from || at === from + n) && ind === was) return null; /* 놓아도 그대로 */
+        const at2 = at > from ? at - n : at;
+        if (at2 === from && ind === was) return null;
       }
       /* 깊이가 1 이상이면 «누구의 하위가 되는지» 를 짚어 준다 */
       let parent = -1;
-      if (ind > 0) for (let i = at - 1; i >= 0; i--) if (blkInd(defs[i]) === ind - 1) { parent = i; break; }
+      if (ind > 0) for (let i = at - 1; i >= 0; i--) {
+        if (mine(i)) continue;
+        if (blkInd(defs[i]) === ind - 1) { parent = i; break; }
+      }
       return { sp: sp, defs: defs, at: at, ind: ind, overBlk: overBlk, after: after, parent: parent };
     }
     function dropShowBlock(d) {
