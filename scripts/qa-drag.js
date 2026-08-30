@@ -9,6 +9,12 @@
  * 같은 검사가 e2e 에도 있다: node tests/e2e.js --grid
  *
  * ── 규칙 (여기 적힌 것이 «맞다» 의 정의다) ──
+ *  0) 불변    : 내가 옮긴 것 «말고는» 아무것도 안 바뀐다 — 남의 깊이도, 남의 소속(부모)도.
+ *              PM 2026-08-30: 「내가 바꾸는 건 그 하나의 불렛만. 그게 다른 곳을 바꾸면 안 돼.」
+ *              ⚠ 지금 모형(평평한 목록 + 절대 깊이 숫자)으로는 이 약속을 지킬 수 없다.
+ *              부모가 저장되지 않고 «앞쪽에서 깊이가 하나 작은 첫 블록» 으로 «계산» 되기 때문에,
+ *              앞에 무엇이 끼거나 빠지면 뒤 블록의 부모가 조용히 바뀐다.
+ *              아래 「R0 위반」 수가 그 빚이다. 트리로 옮기면 0 이 되어야 한다.
  *  1) 넣을 자리 : 눈에 보이는 «줄과 줄 사이» 하나. 커서에서 가장 가까운 경계로 붙는다
  *  2) 깊이     : 원래 깊이 + 잡은 곳에서 옆으로 간 칸수 (아래로만 끌면 같은 단)
  *  3) 깊이 상한 : 넣을 자리 바로 앞 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
@@ -42,6 +48,29 @@ const DX = [-1, 0, 1, 2]; /* 잡은 곳에서 옆으로 민 칸수 */
 
 const parse = (s) => s.split(",").filter(Boolean).map((x) => ({ t: x.slice(1), d: Number(x[0]) }));
 const say = (l) => l.map((b) => b.d + b.t).join(",");
+/* 부모 = 앞쪽에서 깊이가 하나 작은 첫 블록 (평평 모형에서는 저장이 아니라 «계산» 이다) */
+const parentOf = (l) => {
+  const m = {};
+  l.forEach((b, i) => {
+    m[b.t] = "(뿌리)";
+    for (let j = i - 1; j >= 0; j--) if (l[j].d === b.d - 1) { m[b.t] = l[j].t; break; }
+  });
+  return m;
+};
+/* R0 — 옮긴 것 말고 «남» 이 바뀌었는가 */
+const r0 = (before, afterStr, movedSet) => {
+  const after = parse(afterStr);
+  const pb = parentOf(before), pa = parentOf(after);
+  const db = {}; before.forEach((b) => (db[b.t] = b.d));
+  const da = {}; after.forEach((b) => (da[b.t] = b.d));
+  const bad = [];
+  before.forEach((b) => {
+    if (movedSet.has(b.t)) return; /* 끌고 간 덩어리는 «내가 바꾼 것» 이다 (R7) */
+    if (da[b.t] !== undefined && da[b.t] !== db[b.t]) bad.push(b.t + " 깊이 " + db[b.t] + "→" + da[b.t]);
+    if (pa[b.t] !== undefined && pa[b.t] !== pb[b.t]) bad.push(b.t + " 부모 " + pb[b.t] + "→" + pa[b.t]);
+  });
+  return bad;
+};
 
 /* ---- 참조 구현: 위 규칙을 그대로 적은 것 ---- */
 function ref(l, from, di, half, dx) {
@@ -117,7 +146,13 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
           const ok = got.show === w.show && (!w.show || (got.ind === w.ind && got.par === w.par)) && after === wantAfter;
           cases++;
           if (!ok) bad++;
+          /* «내가 바꾼 것» = 잡은 블록 + 딸려 간 하위 전체 */
+          const mv = new Set();
+          { const base = l[S.from].d; mv.add(l[S.from].t);
+            for (let k = S.from + 1; k < l.length && l[k].d > base; k++) mv.add(l[k].t); }
+          const hurt = r0(l, after, mv);
           rows.push({ 샘플: S.name, 목록: S.list, 끄는것: l[S.from].t, 자리: l[di].t + " " + half, 옆으로: dx,
+            R0: hurt.length ? hurt.join(" · ") : "",
             기대: w.show ? "선 " + w.ind + "단" + (w.par ? " (" + w.par + "의 하위)" : "") : "선 없음 · " + w.why,
             실제: got.show ? "선 " + got.ind + "단" + (got.par ? " (" + got.par + "의 하위)" : "") : "선 없음",
             기대결과: wantAfter, 실제결과: after, ok: ok });
@@ -133,7 +168,12 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
   /* ---- 화면 표 ---- */
   const failed = rows.filter((r) => !r.ok);
-  console.log("샘플 " + SAMPLES.length + "가지 · 검사 " + cases + "건 · 어긋남 " + bad + "건");
+  const hurt = rows.filter((r) => r.R0);
+  console.log("샘플 " + SAMPLES.length + "가지 · 검사 " + cases + "건 · 규칙 어긋남 " + bad + "건");
+  console.log("R0 위반(내가 안 건드린 것이 바뀜): " + hurt.length + "건" +
+    (hurt.length ? "  ← 평평 모형의 빚. 트리로 옮기면 0 이어야 한다" : ""));
+  if (hurt.length) console.table(hurt.slice(0, 10).map((r) => ({
+    목록: r.목록, 끄는것: r.끄는것, 자리: r.자리, 옆으로: r.옆으로, 결과: r.실제결과, "남이 바뀜": r.R0 })));
   if (failed.length) console.table(failed.slice(0, 25).map((r) => ({
     목록: r.목록, 끄는것: r.끄는것, 자리: r.자리, 옆으로: r.옆으로, 기대: r.기대, 실제: r.실제,
     기대결과: r.기대결과, 실제결과: r.실제결과 })));
@@ -146,10 +186,10 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
     const nb = rs.filter((r) => !r.ok).length;
     return '<section><h2>' + esc(S.name) + ' <small>' + esc(S.list) + ' · ' + esc(S.뜻) + '</small>' +
       '<b class="' + (nb ? "no" : "yes") + '">' + (nb ? nb + "건 어긋남" : "전부 일치") + '</b></h2>' +
-      '<table><tr><th>놓는 자리</th><th>옆으로</th><th>기대</th><th>실제</th><th>기대 결과</th><th>실제 결과</th></tr>' +
+      '<table><tr><th>놓는 자리</th><th>옆으로</th><th>기대</th><th>실제</th><th>기대 결과</th><th>실제 결과</th><th>R0 위반</th></tr>' +
       rs.map((r) => '<tr class="' + (r.ok ? "" : "bad") + '"><td>' + esc(r.자리) + '</td><td>' + (r.옆으로 > 0 ? "+" : "") + r.옆으로 +
         '</td><td>' + esc(r.기대) + '</td><td>' + esc(r.실제) + '</td><td><code>' + esc(r.기대결과) +
-        '</code></td><td><code>' + esc(r.실제결과) + '</code></td></tr>').join("") + '</table></section>';
+        '</code></td><td><code>' + esc(r.실제결과) + '</code></td><td class="r0">' + esc(r.R0 || "") + '</td></tr>').join("") + '</table></section>';
   }).join("");
   fs.writeFileSync(OUT, '<!doctype html><meta charset="utf-8"><title>불릿 위계 QA</title>' +
     '<style>body{font:13px/1.6 "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif;margin:28px;color:#191919;background:#fafaf9}' +
@@ -163,9 +203,11 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
     'th{background:#f7f7f6;font-size:11px;color:#666;font-weight:700}' +
     'code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:#f4f4f3;padding:1px 5px;border-radius:4px}' +
     'tr.bad td{background:#FFF6F4}tr.bad code{background:#FBE0D8}' +
+    'td.r0{color:#C0341A;font-size:11px}' +
     'section{margin-bottom:8px}</style>' +
     '<h1>불릿 위계 QA</h1><p class="sum">샘플 ' + SAMPLES.length + '가지 · 자리마다 검사 ' + cases + '건 · ' +
     (bad ? '<b style="color:#C0341A">어긋남 ' + bad + '건</b>' : '<b style="color:#2F8F5B">전부 일치</b>') +
+    ' &nbsp;·&nbsp; R0 위반 ' + rows.filter((r) => r.R0).length + '건' +
     ' &nbsp;·&nbsp; 규칙은 <code>scripts/qa-drag.js</code> 머리말에 적혀 있다</p>' + byS);
   console.log("리포트: " + OUT);
   if (OPEN) require("child_process").exec('start "" "' + OUT + '"', { shell: "cmd.exe" });
