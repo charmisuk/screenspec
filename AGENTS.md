@@ -46,15 +46,33 @@
 
 `tests/lint.js` 가 이 규칙을 강제한다 — `docs/product/`·`docs/sprint/`·`_private/` 가 git 에 추적되면 FAIL.
 
-## 검증 (변경 후 반드시)
+## 검증 — 매번 도는 것과 필요할 때 켜는 것 (PM 구조 2026-08-30)
+
+**매번 (커밋 전 반드시. CI 도 push·PR·태그마다 같은 것을 돈다):**
 
 ```bash
-node tests/lint.js   # 의존성 없음
-node tests/e2e.js    # playwright 설치된 폴더에서
-node tests/smoke.js  # 예제 전수 클릭 — JS 에러 0 (릴리스 전)
+node tests/lint.js   # 의존성 없음, 1초
+node tests/e2e.js    # playwright 설치된 폴더에서, ~2분
+node tests/smoke.js  # 예제 전수 클릭 — JS 에러 0
 ```
 
-셋 다 통과해야 커밋한다. CI(`.github/workflows/ci.yml`)가 push·PR·태그마다 같은 것을 돌린다.
+**필요할 때만 (기본 꺼짐 — 느리거나, 특정 규칙을 손댔을 때만 의미가 있다):**
+
+```bash
+node tests/e2e.js --grid   # 불릿 위계 전수(272자리) — 드래그·Tab·드롭선 규칙을 고쳤을 때
+node scripts/qa-drag.js    # 같은 검사 + 사람이 볼 리포트(_qa/drag-report.html) — PM 검수용
+```
+
+어느 쪽인지 갈리면 이 기준으로:
+
+| 바꾼 것 | 돌릴 것 |
+|---|---|
+| 문서·예제·카피 | lint |
+| 코드 (기능 추가·수정, 슬래시 항목 추가 포함) | lint + e2e + smoke |
+| CSS·디자인만 | 같다 — lint + e2e + smoke. 「디자인이라 영향 없다」는 틀린 적이 있다: CSS 한 줄 오타가 뒤 규칙 전부를 조용히 죽였다 (v0.24 사고, lint 22 가 그래서 생겼다) |
+| 드래그·Tab·드롭선 «위계 규칙» | 위 셋 + `--grid` (또는 qa-drag) |
+
+간헐 도구도 **이 저장소에 둔다** — 규칙(참조 구현)이 곧 라이브러리의 계약이라 코드와 같이 버전이 돌아야 한다. `_private/`(개인 레포)에는 계획·기록만 둔다. 리포트 출력물(`_qa/`)은 gitignore.
 
 ## 문서 동기화 (기계가 강제한다)
 

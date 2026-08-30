@@ -2318,16 +2318,18 @@ function check(name, ok, detail) {
     for (const fx of FIX) {
       const defs = "[" + fx.l.map((x) => x.d ? "{t:'" + x.t + "',indent:" + x.d + "}" : "{t:'" + x.t + "'}").join(",") + "]";
       const same = fx.l.map((x) => x.d + x.t).join(",");
+      /* 판마다 한 번만 띄운다 — 드롭이 상태를 바꿨으면 Ctrl+Z 로 되돌린다 (검수 2026-08-30).
+         케이스마다 페이지를 다시 띄우면 272회 × 0.5초의 «기다림» 이 전부다 */
+      await page.goto("about:blank");
+      await page.setContent('<div id="a" data-spec="1">가</div>' +
+        "<script>window.SCREENSPEC={screen:{id:'S-G',name:'g'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(300);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(200);
       for (let di = 0; di < fx.l.length; di++) {
         for (const half of ["top", "bottom"]) {
           for (const dx of [-1, 0, 1, 2]) {
-            await page.goto("about:blank");
-            await page.setContent('<div id="a" data-spec="1">가</div>' +
-              "<script>window.SCREENSPEC={screen:{id:'S-G',name:'g'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
-            await page.addScriptTag({ content: LIB });
-            await page.waitForTimeout(300);
-            await page.click("#ss-mDoc");
-            await page.waitForTimeout(200);
             const got = await page.evaluate(([f, i, h, v]) => {
               const src = document.querySelector('.ss-b[data-di="' + f + '"] .ss-g-grip');
               const dt = new DataTransfer();
@@ -2344,7 +2346,7 @@ function check(name, ok, detail) {
               src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
               return o;
             }, [fx.from, di, half, dx]);
-            const after = await page.evaluate(() =>
+            let after = await page.evaluate(() =>
               window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
             const w = ref(fx.l, fx.from, di, half, dx);
             const wantAfter = w.show ? w.after : same;
@@ -2354,6 +2356,14 @@ function check(name, ok, detail) {
               bad.push("[" + same + "] " + fx.l[fx.from].t + " → di" + di + "/" + half + "/dx" + dx +
                 " 기대 " + (w.show ? "선d" + w.ind + (wantPar ? "⊂" + wantPar : "") : "선없음") + "→" + wantAfter +
                 " · 실제 " + (got.show ? "선d" + got.ind + (got.par ? "⊂" + got.par : "") : "선없음") + "→" + after);
+            }
+            /* 상태가 바뀌었으면 되돌려서 다음 케이스가 같은 판에서 시작하게 한다 */
+            if (after !== same) {
+              await page.keyboard.press("Control+z");
+              await page.waitForTimeout(60);
+              const back = await page.evaluate(() =>
+                window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
+              if (back !== same) { bad.push("[" + same + "] 되돌리기 실패: " + back); break; }
             }
           }
         }

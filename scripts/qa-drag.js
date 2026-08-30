@@ -81,16 +81,17 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
   for (const S of SAMPLES) {
     const l = parse(S.list);
     const defs = "[" + l.map((x) => x.d ? "{t:'" + x.t + "',indent:" + x.d + "}" : "{t:'" + x.t + "'}").join(",") + "]";
+    /* 샘플마다 한 번만 띄우고, 드롭이 상태를 바꿨으면 Ctrl+Z 로 되돌린다 (케이스마다 재로딩 X) */
+    await p.goto("about:blank");
+    await p.setContent('<div id="a" data-spec="1">가</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-QA',name:'qa'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
+    await p.addScriptTag({ path: path.join(REPO, "screenspec.js") });
+    await p.waitForTimeout(280);
+    await p.click("#ss-mDoc");
+    await p.waitForTimeout(180);
     for (let di = 0; di < l.length; di++) {
       for (const half of ["위", "아래"]) {
         for (const dx of DX) {
-          await p.goto("about:blank");
-          await p.setContent('<div id="a" data-spec="1">가</div>' +
-            "<script>window.SCREENSPEC={screen:{id:'S-QA',name:'qa'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
-          await p.addScriptTag({ path: path.join(REPO, "screenspec.js") });
-          await p.waitForTimeout(280);
-          await p.click("#ss-mDoc");
-          await p.waitForTimeout(180);
           const got = await p.evaluate(([f, i, h, v]) => {
             const src = document.querySelector('.ss-b[data-di="' + f + '"] .ss-g-grip');
             const dt = new DataTransfer();
@@ -107,7 +108,7 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
             src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
             return o;
           }, [S.from, di, half, dx]);
-          const after = await p.evaluate(() =>
+          let after = await p.evaluate(() =>
             window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
           const w = ref(l, S.from, di, half, dx);
           const wantAfter = w.show ? w.after : S.list;
@@ -118,6 +119,10 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
             기대: w.show ? "선 " + w.ind + "단" + (w.par ? " (" + w.par + "의 하위)" : "") : "선 없음 · " + w.why,
             실제: got.show ? "선 " + got.ind + "단" + (got.par ? " (" + got.par + "의 하위)" : "") : "선 없음",
             기대결과: wantAfter, 실제결과: after, ok: ok });
+          if (after !== S.list) {
+            await p.keyboard.press("Control+z");
+            await p.waitForTimeout(60);
+          }
         }
       }
     }

@@ -2975,7 +2975,7 @@ ${HL_CSS}
         if (b2.dataset.oc === "reload") { location.reload(); return; }
         edBar2.classList.remove("ss-show");
         edOutside = false;
-        edStore(() => { /* 기준을 지금으로 — 다음 저장이 내 것으로 덮는다 */ });
+        /* 기준을 지금으로 — 다음 저장이 내 것으로 덮는다 */
         edHandle.getFile().then((f) => { edMtime = f.lastModified; }).catch(() => { edMtime = Date.now(); });
         edSync();
         edAutoPlan();
