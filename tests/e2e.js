@@ -1113,7 +1113,7 @@ function check(name, ok, detail) {
       [...document.querySelectorAll(".ss-edbar [data-fm]")].map((x) => x.dataset.fm).join(",") === "bold"));
     check("편집: 저장 경로는 위 툴바로 옮겼다 (#58)", await page.evaluate(() => {
       const t = [...document.querySelectorAll(".ss-headbtn")].map((x) => x.textContent).join(",");
-      return t.indexOf("저장") >= 0 && t.indexOf("설정 복사") >= 0 && !document.querySelector(".ss-edbar [data-sv]");
+      return t.indexOf("저장") >= 0 && t.indexOf("설명 복사") >= 0 && !document.querySelector(".ss-edbar [data-sv]");
     }));
     check("편집: 새 고정 요소를 만들지 않는다 (마커·띠를 가릴 일이 없다)", await page.evaluate(() =>
       [".ss-edbar", ".ss-draft", ".ss-editbtn"].every((s) => {

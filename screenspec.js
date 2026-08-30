@@ -2103,7 +2103,8 @@ ${HL_CSS}
         };
         box.appendChild(sv);
         edSync();
-        const cp = h("button", { class: "ss-headbtn ss-ui", type: "button", title: "설정 블록을 클립보드로" }, "설정 복사");
+        const cp = h("button", { class: "ss-headbtn ss-ui", type: "button",
+          title: "지금까지 쓴 기능 설명을 통째로 복사합니다 (자동저장이 안 되는 브라우저용)" }, "설명 복사");
         cp.onclick = edCopyBlock;
         box.appendChild(cp);
       }
@@ -3191,7 +3192,7 @@ ${HL_CSS}
     async function edCopyBlock() {
       edFlush();
       const txt = edBlockText();
-      try { await navigator.clipboard.writeText(txt); edSay("설정을 복사했습니다. 원본의 window.SCREENSPEC 블록에 붙여넣거나, AI 에게 「이걸로 교체해줘」 하세요."); }
+      try { await navigator.clipboard.writeText(txt); edSay("기능 설명을 복사했습니다. 원본 파일의 window.SCREENSPEC 블록에 붙여넣거나, AI 에게 「이걸로 바꿔줘」 하세요."); }
       catch (e) { edSay("복사가 막혔습니다: 콘솔에 출력했습니다."); console.log(txt); }
     }
 
