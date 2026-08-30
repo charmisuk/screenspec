@@ -1197,7 +1197,7 @@ function check(name, ok, detail) {
       const src = document.querySelector('[data-defrow="2"] > .ss-gut .ss-g-grip');
       const dst = document.querySelector('[data-defrow="1"]');
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
       const r = dst.getBoundingClientRect();
       dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
       dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
@@ -1751,15 +1751,17 @@ function check(name, ok, detail) {
       "<script>window.SCREENSPEC={screen:{id:'S-D',name:'드래그'},specs:[" +
       "{n:1,target:'1',title:'첫 항목',defs:[{t:'A'},{t:'B'},{t:'C'}]}," +
       "{n:2,target:'2',title:'둘째 항목',defs:[{t:'X'}]}]};<" + "/script>";
-    /* dx = 드롭선을 오른쪽으로 얼마나 미느냐 = 몇 단 안으로 넣느냐 (#61). 글머리칸 16px 이 한 단 */
+    /* dx = 잡은 곳에서 오른쪽으로 민 픽셀 = 몇 단 더 들어가느냐 (#61·#62). 글머리칸 16px 이 한 단.
+       깊이는 커서의 «절대 위치» 가 아니라 «잡은 곳에서의 이동» 으로 정해진다 — 손잡이가 글 왼쪽
+       거터에 있어서, 절대 위치로 재면 그냥 아래로만 끌어도 0단으로 떨어진다 (PM 2026-08-30) */
     const dragTo = (fromSel, toSel, after, dx) => page.evaluate(([f, t, af, x]) => {
       const src = document.querySelector(f), dst = document.querySelector(t);
       if (!src || !dst) return "대상 없음";
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
       const r = dst.getBoundingClientRect();
       const y = af ? r.bottom - 2 : r.top + 2;
-      const cx = r.left + 5 + (x || 0);
+      const cx = 500 + (x || 0); /* 잡은 곳(500)에서 x 만큼 옆으로 */
       dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: cx }));
       dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: cx }));
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
@@ -1834,37 +1836,39 @@ function check(name, ok, detail) {
        PM: 「지금은 그냥 모든 곳에서 다 뜨는 것 같고 그래서 버그가 발생하는 것으로 보여.」
        노션은 자기 자리 근처에서 선을 아예 안 띄운다. 뜨면 반드시 무언가 바뀐다. */
     await setDefs("0A,1B,0C,1D", "0X");
-    const hint = (di, half, lvl) => page.evaluate(([i, h, l]) => {
+    /* dx = 잡은 곳에서 옆으로 민 «칸수». 0 이면 원래 깊이 그대로다 */
+    const hint = (di, half, dx) => page.evaluate(([i, h, v]) => {
       const src = document.querySelector('.ss-b[data-di="1"] .ss-g-grip');
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      const step = 16, x0 = 500;
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: x0 }));
       const el = document.querySelector('.ss-b[data-di="' + i + '"]');
-      const r = el.getBoundingClientRect(), step = 16;
+      const r = el.getBoundingClientRect();
       el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt,
-        clientY: h === "top" ? r.top + 2 : r.bottom - 2, clientX: r.left + step + l * step }));
+        clientY: h === "top" ? r.top + 2 : r.bottom - 2, clientX: x0 + v * step }));
       const line = document.querySelector(".ss-drop-line");
       const par = document.querySelector(".ss-drop-in");
       const out = { 선: !!line, 왼쪽: line ? line.style.marginLeft : null,
         부모: par ? par.textContent.replace(/[＋⠿]/g, "").trim() : null };
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
       return out;
-    }, [di, half, lvl]);
+    }, [di, half, dx]);
 
     check("드롭선: 놓아도 그대로인 자리엔 안 그린다 (제자리 위)", (await hint(1, "top", 1)).선 === false, await hint(1, "top", 1));
     check("드롭선: 놓아도 그대로인 자리엔 안 그린다 (제자리 아래)", (await hint(1, "bottom", 1)).선 === false, await hint(1, "bottom", 1));
     check("드롭선: 앞 블록 아래 같은 깊이도 제자리면 안 그린다", (await hint(0, "bottom", 1)).선 === false, await hint(0, "bottom", 1));
-    check("드롭선: 자리는 같아도 깊이가 바뀌면 그린다", (await hint(1, "bottom", 0)).선 === true, await hint(1, "bottom", 0));
+    check("드롭선: 자리는 같아도 깊이가 바뀌면 그린다", (await hint(1, "bottom", -1)).선 === true, await hint(1, "bottom", -1));
     check("드롭선: 맨 위로는 그린다", (await hint(0, "top", 0)).선 === true, await hint(0, "top", 0));
-    const inC = await hint(2, "bottom", 1);
+    const inC = await hint(2, "bottom", 0);
     check("드롭선: 하위로 들어가면 부모가 될 블록을 밝힌다", inC.선 === true && inC.부모 === "C" && inC.왼쪽 === "16px", inC);
-    const sib = await hint(2, "bottom", 0);
+    const sib = await hint(2, "bottom", -1);
     check("드롭선: 형제로 붙을 때는 부모를 안 밝힌다", sib.선 === true && sib.부모 === null && sib.왼쪽 === "0px", sib);
 
     /* 5) 하위 하나만 남의 번호로 보낼 수도 있다 */
     await setDefs("0A,1a1,1a2", "0X");
     await dragTo('[data-defrow="1"] .ss-b[data-di="1"] .ss-g-grip', '[data-defrow="2"] .ss-b[data-di="0"]', true, 0);
-    check("위계: 하위 하나만 남의 번호로 보낼 수 있다",
-      (await defsOf(0)) === "0A,1a2" && (await defsOf(1)) === "0X,0a1",
+    check("위계: 하위 하나만 남의 번호로 보낼 수 있다 (옆으로 안 밀면 깊이 그대로)",
+      (await defsOf(0)) === "0A,1a2" && (await defsOf(1)) === "0X,1a1",
       [await defsOf(0), await defsOf(1)]);
 
     /* 4) 번호와 번호 사이에는 블록을 놓을 수 없다 — 되지도 않는 자리를 보여 주지 않는다 */
@@ -1872,7 +1876,7 @@ function check(name, ok, detail) {
       const src = document.querySelector('[data-defrow="2"] .ss-b[data-di="0"] .ss-g-grip');
       const dst = document.querySelector('[data-defrow="1"]');
       const dt = new DataTransfer();
-      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: 500 }));
       const r = dst.getBoundingClientRect();
       dst.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
       const drew = !!document.querySelector(".ss-drop-line");
@@ -2261,24 +2265,29 @@ function check(name, ok, detail) {
 
      규칙 (노션 영상 분석 + PM 확인):
        1) 넣을 자리   : 위쪽 절반 = 그 블록 앞 · 아래쪽 절반 = 그 블록의 하위까지 건너뛴 뒤
-       2) 깊이 상한   : 넣을 자리 «바로 앞» 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
+       2) 깊이       : 원래 깊이 + «잡은 곳에서 옆으로 간 칸수». 아래로만 끌면 같은 단이다
+       2-1) 깊이 상한 : 넣을 자리 «바로 앞» 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
        3) 끌고 있는 덩어리는 «이미 빠진 셈» 으로 본다 — 자기를 앞 블록으로 세면 자기가 자기 하위가 된다
        4) 안 그린다   : 자기 하위 안 · 놓아도 자리와 깊이가 그대로일 때
        5) 부모 표시   : 깊이 1 이상이면 «누구의 하위가 되는지» 를 통째로 밝힌다
        6) 옮길 때     : 딸린 하위가 통째로 따라오고, 깊이 차이를 그대로 유지한다 */
+  /* 매 빌드마다 돌릴 필요는 없다 (PM 2026-08-30) — 200번 넘게 페이지를 다시 띄우므로 느리다.
+     규칙을 손댈 때만 켠다:  node tests/e2e.js --grid   (또는 SS_GRID=1) */
+  const GRID = process.argv.includes("--grid") || process.env.SS_GRID === "1";
+  if (GRID) {
   console.log("[grid] 위계 전수 검증");
   {
     const ind = (l, i) => (l[i] ? (l[i].d | 0) : 0);
     const sub = (l, i) => { let n = 1; while (i + n < l.length && ind(l, i + n) > ind(l, i)) n++; return n; };
     /* 참조 구현 — «맞다» 고 정한 규칙을 그대로 적은 것 */
-    const ref = (l, from, di, half, lvl) => {
+    const ref = (l, from, di, half, dx) => {
       const n = sub(l, from);
       const at = half === "bottom" ? di + sub(l, di) : di;
       if (at > from && at < from + n) return { show: false };
       let p = at - 1;
       while (p >= from && p < from + n) p--;
       const cap = p >= 0 ? Math.min(2, ind(l, p) + 1) : 0;
-      const want = Math.max(0, Math.min(cap, lvl));
+      const want = Math.max(0, Math.min(cap, ind(l, from) + dx)); /* 원래 깊이 + 옆으로 간 칸수 */
       const at2 = at > from ? at - n : at;
       if (at2 === from && want === ind(l, from)) return { show: false };
       let par = -1;
@@ -2311,7 +2320,7 @@ function check(name, ok, detail) {
       const same = fx.l.map((x) => x.d + x.t).join(",");
       for (let di = 0; di < fx.l.length; di++) {
         for (const half of ["top", "bottom"]) {
-          for (let lvl = 0; lvl <= 2; lvl++) {
+          for (const dx of [-1, 0, 1, 2]) {
             await page.goto("about:blank");
             await page.setContent('<div id="a" data-spec="1">가</div>' +
               "<script>window.SCREENSPEC={screen:{id:'S-G',name:'g'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
@@ -2322,10 +2331,11 @@ function check(name, ok, detail) {
             const got = await page.evaluate(([f, i, h, v]) => {
               const src = document.querySelector('.ss-b[data-di="' + f + '"] .ss-g-grip');
               const dt = new DataTransfer();
-              src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+              const step = 16, x0 = 500; /* 잡은 지점 — 깊이는 여기서의 «옆 이동» 으로 정해진다 */
+              src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt, clientX: x0 }));
               const el = document.querySelector('.ss-b[data-di="' + i + '"]');
-              const r = el.getBoundingClientRect(), step = 16;
-              const y = h === "top" ? r.top + 2 : r.bottom - 2, x = r.left + step + v * step;
+              const r = el.getBoundingClientRect();
+              const y = h === "top" ? r.top + 2 : r.bottom - 2, x = x0 + v * step;
               el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
               const line = document.querySelector(".ss-drop-line"), par = document.querySelector(".ss-drop-in");
               const o = { show: !!line, ind: line ? parseInt(line.style.marginLeft || "0", 10) / 16 : null,
@@ -2333,15 +2343,15 @@ function check(name, ok, detail) {
               el.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: y, clientX: x }));
               src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
               return o;
-            }, [fx.from, di, half, lvl]);
+            }, [fx.from, di, half, dx]);
             const after = await page.evaluate(() =>
               window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
-            const w = ref(fx.l, fx.from, di, half, lvl);
+            const w = ref(fx.l, fx.from, di, half, dx);
             const wantAfter = w.show ? w.after : same;
             const wantPar = w.show && w.par >= 0 ? fx.l[w.par].t : null;
             cases++;
             if (!(got.show === w.show && (!w.show || (got.ind === w.ind && got.par === wantPar)) && after === wantAfter)) {
-              bad.push("[" + same + "] " + fx.l[fx.from].t + " → di" + di + "/" + half + "/lvl" + lvl +
+              bad.push("[" + same + "] " + fx.l[fx.from].t + " → di" + di + "/" + half + "/dx" + dx +
                 " 기대 " + (w.show ? "선d" + w.ind + (wantPar ? "⊂" + wantPar : "") : "선없음") + "→" + wantAfter +
                 " · 실제 " + (got.show ? "선d" + got.ind + (got.par ? "⊂" + got.par : "") : "선없음") + "→" + after);
             }
@@ -2351,6 +2361,7 @@ function check(name, ok, detail) {
     }
     check("위계 전수: " + cases + "가지 자리에서 규칙과 실제가 같다", bad.length === 0, bad.slice(0, 6));
   }
+  } else console.log("[grid] 위계 전수 검증 — 건너뜀 (규칙을 손댔으면 --grid 로 돌린다)");
 
   /* ============ 자동저장 ============
      PM 2026-08-29: 「번호 넣고 입력하면 구글 시트 자동저장되듯이 로컬에 계속 저장되면서 가면

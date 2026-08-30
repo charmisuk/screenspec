@@ -2554,7 +2554,7 @@ ${HL_CSS}
       const g = el.closest && el.closest("[data-g]");
       if (!g) return null;
       return { kind: g.dataset.g, key: edKeyOf(g), di: Number(g.dataset.di),
-        row: g.closest(".ss-row"), blk: g.closest(".ss-b") };
+        row: g.closest(".ss-row"), blk: g.closest(".ss-b"), x: 0 };
     }
     function blkInd(d) { return Math.max(0, Math.min(2, (d && d.indent) || 0)); }
     /* 잡은 블록 + 그보다 깊은 뒤쪽 블록들 = 한 덩어리 */
@@ -2609,8 +2609,11 @@ ${HL_CSS}
       let p = at - 1;
       while (p >= 0 && mine(p)) p--;
       const cap = p >= 0 ? Math.min(2, blkInd(defs[p]) + 1) : 0; /* 앞 블록보다 한 단까지 */
+      /* 깊이는 «커서가 지금 어디 있나» 가 아니라 «잡은 곳에서 옆으로 몇 칸 갔나» 다 (PM 2026-08-30).
+         손잡이(⠿)는 글 왼쪽 거터에 있어서, 그냥 아래로 끌면 커서 X 가 늘 맨 왼쪽이다.
+         절대 위치로 재면 무엇을 끌든 0단으로 떨어진다 — 아래로만 끌면 «같은 단» 이어야 한다. */
       const step = markPx();
-      const lvl = Math.round((e.clientX - (r.left + step)) / step);
+      const lvl = was + Math.round((e.clientX - (dragFrom.x || 0)) / step);
       const ind = Math.max(0, Math.min(cap, lvl));
 
       /* 놓아도 자리와 깊이가 그대로면 그리지 않는다 */
@@ -2665,6 +2668,8 @@ ${HL_CSS}
         if (!info) return;
         if (edEl) edFinish(true);
         dragFrom = info;
+        /* 잡은 지점을 기억한다 — 깊이는 «여기서 얼마나 옆으로 갔나» 로 정한다 (아래 blockDrop) */
+        dragFrom.x = e.clientX;
         dragMark(info);
         e.dataTransfer.effectAllowed = "move";
         try { e.dataTransfer.setData("text/plain", info.kind); } catch (x) { /* 일부 브라우저는 필요 */ }
