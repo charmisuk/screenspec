@@ -10,6 +10,9 @@ const fs = require("fs");
 const path = require("path");
 
 const REPO = path.resolve(__dirname, "..");
+/* 정의는 트리다 (#65). 시험은 «0A,1B» 표기로 읽는다 — 눈으로 읽기 쉽고, 깊이·순서가 한눈에 보인다 */
+const FLAT = "(function(l){var w=function(x,d){return (x||[]).reduce(function(o,b){" +
+  "return o.concat([d+b.t], w(b.c,d+1));},[]);};return w(l,0).join(',');})";
 const LIB = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
 const { chromium } = require(require.resolve("playwright", { paths: [process.cwd(), __dirname] }));
 
@@ -1175,10 +1178,11 @@ function check(name, ok, detail) {
     await page.keyboard.press("Backspace");
     await page.waitForTimeout(250);
     /* 옛 문서(why·subs)는 부팅 때 «평평한 블록» 으로 펴진다 (#55): 첫 줄 · 근거(↳) · 둘째 줄 · 하위 */
-    check("편집: 줄 삭제", await page.evaluate(() => {
-      const d = window.SCREENSPEC.specs[0].defs;
-      return d.length === 3 && !d.some((x) => x.t === "첫 줄");
-    }), await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
+    /* 옛 문서(why·subs)는 부팅 때 트리로 선다 (#65): 첫 줄 > 근거(↳) · 둘째 줄 > 하위.
+       첫 줄을 지우면 그 하위(근거)는 «있던 자리» 로 올라온다 — 딸린 것이 사라지면 안 된다 */
+    check("편집: 줄 삭제 — 지운 줄의 하위는 그 자리에 남는다",
+      (await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)")) === "0근거,0둘째 줄,1하위",
+      await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)"));
     /* 화살표는 슬래시 또는 빈 줄에서 «>» 로 (#57) — 「이유」 라벨도 ＋이유 버튼도 없앴다 */
     await page.click('[data-defrow="1"] [data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
@@ -1189,9 +1193,11 @@ function check(name, ok, detail) {
     await page.keyboard.type("근거 한 줄");
     await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(200);
-    check("편집: «>» 로 화살표 블록 붙이기 (#57)", await page.evaluate(() =>
-      window.SCREENSPEC.specs[0].defs.some((d) => d.kind === "why" && d.t === "근거 한 줄")),
-      await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
+    check("편집: «>» 로 화살표 블록 붙이기 (#57)", await page.evaluate(() => {
+      const seen = [];
+      (function w(l) { (l || []).forEach((b) => { seen.push(b); w(b.c); }); })(window.SCREENSPEC.specs[0].defs);
+      return seen.some((d) => d.kind === "why" && d.t === "근거 한 줄");
+    }), await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)"));
     /* #49 이후 순서는 «잡아서 옮긴다» (↑↓ 버튼 없음) */
     await page.evaluate(() => {
       const src = document.querySelector('[data-defrow="2"] > .ss-gut .ss-g-grip');
@@ -1498,7 +1504,7 @@ function check(name, ok, detail) {
     await page.keyboard.type("POST /api/items");
     await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 는 여기서 그만 */
     await page.waitForTimeout(200);
-    check("레이어: 개발 줄 편집이 «원래 인덱스» 에 정확히 들어간다", await page.evaluate(() =>
+    check("레이어: 개발 줄 편집이 «그 자리» 에 정확히 들어간다", await page.evaluate(() =>
       window.SCREENSPEC.specs[0].defs.map((d) => (d.layer || "plan") + ":" + d.t).join("|") ===
       "plan:기획 한 줄|dev:POST /api/items|plan:기획 둘째 줄"),
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
@@ -1594,8 +1600,8 @@ function check(name, ok, detail) {
     await page.click('.ss-dt[data-ed="b"][data-di="1"]');
     await page.keyboard.press("Tab");
     await page.waitForTimeout(200);
-    let c = await defs();
-    check("에디터: Tab 으로 한 단 들어간다", c.length === 2 && c[1].indent === 1, c);
+    let c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
+    check("에디터: Tab 으로 한 단 들어간다", c === "0첫 줄,1둘째 줄", c);
 
     await page.keyboard.type("셋째");
     await page.keyboard.press("Enter");
@@ -1603,22 +1609,22 @@ function check(name, ok, detail) {
     await page.keyboard.type("넷째");
     await page.keyboard.press("Tab");
     await page.waitForTimeout(200);
-    c = await defs();
-    check("에디터: 2단까지 들어간다 (더는 안 들어간다)", c.length === 3 && c[2].indent === 2, c);
+    c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
+    check("에디터: 2단까지 들어간다 (더는 안 들어간다)", c === "0첫 줄,1둘째 줄셋째,2넷째", c);
     check("에디터: 2단 블록도 같은 글머리표로 그린다", (await page.locator(".ss-b.ss-in2").count()) === 1 &&
       (await page.locator(".ss-no").count()) >= 1);
 
     await page.keyboard.press("Shift+Tab");
     await page.waitForTimeout(200);
-    c = await defs();
-    check("에디터: Shift+Tab 으로 한 단 나온다", c[2].indent === 1, c);
+    c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
+    check("에디터: Shift+Tab 으로 한 단 나온다", c === "0첫 줄,1둘째 줄셋째,1넷째", c);
 
     await page.keyboard.press("Control+a");
     await page.keyboard.press("Delete");
     await page.keyboard.press("Backspace");
     await page.waitForTimeout(200);
-    c = await defs();
-    check("에디터: 빈 줄에서 Backspace 면 그 줄이 사라진다", c.length === 2, c);
+    c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
+    check("에디터: 빈 줄에서 Backspace 면 그 줄이 사라진다", c === "0첫 줄,1둘째 줄셋째", c);
 
     await page.keyboard.press("Control+z");
     await page.waitForTimeout(150);
@@ -1771,7 +1777,7 @@ function check(name, ok, detail) {
       return "ok";
     }, [fromSel, toSel, after, dx]);
     const defsOf = (n) => page.evaluate((i) =>
-      window.SCREENSPEC.specs[i].defs.map((d) => (d.indent || 0) + d.t).join(","), n);
+      (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[i].defs, 0).join(","), n);
     /* 위계 시험은 «앞 시험의 결과» 에 얹히면 못 읽는다 — 매번 새 문서로 시작한다.
        («0A,1a1» = 0단 A · 1단 a1) */
     const setDefs = async (a, b) => {
@@ -2275,7 +2281,7 @@ function check(name, ok, detail) {
       await page.waitForTimeout(300);
     };
     const now = () => page.evaluate(() =>
-      window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
+      (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[0].defs, 0).join(","));
     const tab = async (di, shift) => {
       await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="' + di + '"]');
       await page.keyboard.press(shift ? "Shift+Tab" : "Tab");
@@ -2286,14 +2292,16 @@ function check(name, ok, detail) {
     await setup("0A,0B,0C");
     await tab(0);
     check("위계: 맨 앞 줄은 Tab 으로 들어갈 수 없다 (부모 없는 하위 X)",
-      (await now()) === "0A,0B,0C" && (await said()).indexOf("맨 앞") >= 0, [await now(), await said()]);
+      (await now()) === "0A,0B,0C" && (await said()).indexOf("앞에 붙일 줄이 없어") >= 0, [await now(), await said()]);
 
     await setup("0A,0B,0C");
     await tab(1);
     check("위계: Tab 은 앞 줄의 하위가 된다", (await now()) === "0A,1B,0C", await now());
     await tab(1);
+    /* 트리에서 «들어간다» = 바로 앞 형제의 하위가 되는 것이다. 방금 들어간 줄은 그 안에서 맨 앞이라
+       앞 형제가 없다 — 그래서 더 못 들어간다. 깊이를 «건너뛰는» 상태가 애초에 만들어지지 않는다 */
     check("위계: Tab 을 또 눌러도 두 단은 건너뛰지 않는다",
-      (await now()) === "0A,1B,0C" && (await said()).indexOf("한 단까지만") >= 0, [await now(), await said()]);
+      (await now()) === "0A,1B,0C" && (await said()).indexOf("앞에 붙일 줄이 없어") >= 0, [await now(), await said()]);
 
     await setup("0A,1a1,1x,0B");
     await tab(2);
@@ -2418,7 +2426,7 @@ function check(name, ok, detail) {
               return o;
             }, [fx.from, di, half, dx]);
             let after = await page.evaluate(() =>
-              window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
+              (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[0].defs, 0).join(","));
             const w = ref(fx.l, fx.from, di, half, dx);
             const wantAfter = w.show ? w.after : same;
             const wantPar = w.show && w.par >= 0 ? fx.l[w.par].t : null;
@@ -2433,7 +2441,7 @@ function check(name, ok, detail) {
               await page.keyboard.press("Control+z");
               await page.waitForTimeout(60);
               const back = await page.evaluate(() =>
-                window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
+                (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[0].defs, 0).join(","));
               if (back !== same) { bad.push("[" + same + "] 되돌리기 실패: " + back); break; }
             }
           }

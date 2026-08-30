@@ -953,25 +953,74 @@ ${HL_CSS}
      한 가지 표현만 남으면 편집·드래그·저장이 전부 같은 규칙으로 돈다. */
   const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why";
   function blkKind(d) { return d && d.kind ? d.kind : B_BULLET; } /* 생략 = 불릿 (옛 문서 호환) */
+  /* ---- 정의는 «트리» 다 (#65, PM 2026-08-30) ----
+     R0: 내가 옮긴 것 말고는 아무것도 안 바뀐다 — 남의 깊이도, 남의 소속도.
+
+     평평한 목록 + 절대 깊이 숫자로는 이 약속을 못 지킨다. 부모가 저장되지 않고
+     «앞쪽에서 깊이가 하나 작은 첫 블록» 으로 계산되기 때문에, 앞에 무엇이 끼거나 빠지면
+     뒤 블록의 부모가 조용히 바뀐다 (실측: 272자리 중 16자리).
+
+     그래서 부모를 «담김» 으로 확정한다. 각 블록이 자기 하위(c)를 직접 들고 있다.
+     추측이 없으므로 남의 소속이 바뀔 «길» 자체가 없다.
+
+       { t:"사양", c:[ { t:"조건" }, { t:"까닭", kind:"why" } ] }
+
+     화면·드래그는 «펼친 목록»(flat)을 본다 — 트리는 원본, 펼친 것은 파생이다.
+     그래서 그리기·자리 찾기 코드는 그대로 살고, «바꾸는» 곳만 트리를 만진다. */
+  function normOne(d) {
+    if (typeof d === "string") return { t: d };
+    const b = { t: (d && d.t) || "" };
+    if (d.kind) b.kind = d.kind;
+    if (d.layer) b.layer = d.layer;
+    const kids = [];
+    /* 옛 문서 두 가지를 여기서 흡수한다: why 속성 · subs 중첩 */
+    if (d.why) kids.push({ t: String(d.why), kind: B_WHY });
+    (d.subs || []).forEach((x) => kids.push(normOne(x)));
+    (d.c || []).forEach((x) => kids.push(normOne(x)));
+    if (kids.length) b.c = kids;
+    return b;
+  }
+  /* 옛 «깊이 숫자» 목록을 담김 관계로 세운다 — 숫자가 있던 문서도 그대로 열린다 */
   function normDefs(defs) {
     if (!defs) return defs;
-    const out = [];
-    defs.forEach((d) => {
-      if (typeof d === "string") { out.push({ t: d }); return; }
-      const base = { t: d.t || "" };
-      if (d.kind) base.kind = d.kind;
-      if (d.indent) base.indent = d.indent;
-      if (d.layer) base.layer = d.layer;
-      out.push(base);
-      if (d.why) out.push({ t: String(d.why), kind: B_WHY, indent: (base.indent || 0) + 1 });
-      (d.subs || []).forEach((sub) => {
-        const txt = typeof sub === "string" ? sub : (sub && sub.t) || "";
-        out.push({ t: txt, indent: (base.indent || 0) + 1 });
-        if (sub && sub.subs) sub.subs.forEach((s3) => out.push({ t: String(s3), indent: (base.indent || 0) + 2 }));
-      });
+    const root = { c: [] };
+    const stack = [root];       /* stack[i] = 깊이 i 에서 지금 담고 있는 것 */
+    defs.forEach((raw) => {
+      const d = typeof raw === "string" ? { t: raw } : raw;
+      const b = normOne(d);
+      const want = Math.max(0, Math.min(2, (d && d.indent) || 0));
+      const at = Math.min(want, stack.length - 1); /* 부모 없이 두 단 뛰어든 문서는 붙잡아 준다 */
+      const parent = stack[at];
+      (parent.c || (parent.c = [])).push(b);
+      stack.length = at + 1;
+      stack.push(b);
     });
-    out.forEach((x) => { if (!x.indent) delete x.indent; });
+    return root.c;
+  }
+  /* 트리를 «펼친 목록» 으로 — 그리기와 자리 찾기가 보는 것.
+     path 는 뿌리에서 그 블록까지의 자리 번호들이다: [0,2,1] = 첫째의 셋째의 둘째 */
+  function flatten(defs, want) {
+    const out = [];
+    const walk = (list, depth, path) => {
+      (list || []).forEach((b, i) => {
+        const p = path.concat(i);
+        const keep = want === "plan" ? !b.layer : want === "dev" ? b.layer === "dev" : true;
+        if (keep) out.push({ b: b, depth: depth, path: p });
+        walk(b.c, depth + 1, p);
+      });
+    };
+    walk(defs, 0, []);
     return out;
+  }
+  /* 자리 번호로 그 블록을 담고 있는 목록과 순번을 찾는다 — 트리를 «바꾸는» 모든 곳이 이걸 쓴다 */
+  function atPath(defs, path) {
+    let list = defs;
+    for (let i = 0; i < path.length - 1; i++) {
+      const b = list[path[i]];
+      if (!b) return null;
+      list = b.c || (b.c = []);
+    }
+    return { owner: list, idx: path[path.length - 1] };
   }
   /* 부팅 때 한 번 — 설정 원본을 제자리에서 편다. 저장도 이 모양으로 나간다 */
   function normalizeAll(screens) {
@@ -982,28 +1031,25 @@ ${HL_CSS}
   }
 
   /* 블록 하나 — 종류와 들여쓰기가 화면을 정한다. 편집은 언제나 가능하다(#58) */
-  function blockHTML(d, di, key) {
-    const kind = blkKind(d);
-    const ind = Math.max(0, Math.min(2, d.indent || 0));
+  /* di = «펼친 순번» (화면에서 몇 번째 줄인가) · data-path = 트리에서의 자리.
+     화면은 순번으로 짚고, 모델은 자리 번호로 짚는다 — 둘을 갈라 두면 트리를 바꿔도 그리기가 안 흔들린다 */
+  function blockHTML(n, di) {
+    const d = n.b, kind = blkKind(d);
+    const ind = Math.max(0, Math.min(2, n.depth));
     const cls = "ss-b ss-blk ss-b-" + kind + (ind ? " ss-in" + ind : "") + (d.layer === "dev" ? " ss-b-dev" : "");
-    return '<div class="' + cls + '" data-di="' + di + '" data-kind="' + kind + '">' +
+    return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
       edGut("b", di) +
       (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' : "") +
       '<span class="ss-dt"' + edMark("b", di) + ">" + rich(d.t) + "</span></div>";
   }
-  function blocksHTML(defs, want, key) {
-    let out = "";
-    (defs || []).forEach((d, di) => {
-      if (want === "plan" && d.layer) return;
-      if (want === "dev" && d.layer !== "dev") return;
-      out += blockHTML(d, di, key);
-    });
-    return out;
+  function blocksHTML(defs, want) {
+    return flatten(defs, want).map(blockHTML).join("");
   }
 
   /* 개발 정의 (#38) — 탭으로 가르지 않는다. 개발 정의는 기획 정의를 «보면서» 쓰는 글이라
      같은 항목 안에 한 단 들여쓴 블록으로 붙인다 (결정 D2) */
-  function hasDev(defs) { return (defs || []).some((d) => d.layer === "dev"); }
+  /* 트리 어디에든 개발 줄이 있으면 «있다» — 하위에 숨어 있어도 찾는다 */
+  function hasDev(defs) { return flatten(defs, "dev").length > 0; }
   function devBlockHTML(defs) {
     if (!hasDev(defs)) return "";
     return '<div class="ss-dev"><span class="ss-devtag">DEV</span>' + blocksHTML(defs, "dev") + "</div>";
@@ -1724,8 +1770,8 @@ ${HL_CSS}
        세 모드가 잡을 대상이 다르므로 «무엇을 캡처할지» 만 각 모드가 알려 준다(ctx.capSource).
        ============================================================ */
     let prDlg = null;
-    function prLine(d) {
-      const kind = blkKind(d), ind = Math.max(0, Math.min(2, d.indent || 0));
+    function prLine(n) {
+      const d = n.b, kind = blkKind(d), ind = Math.max(0, Math.min(2, n.depth));
       const cls = "ss-pr-b" + (ind ? " ss-pr-in" + ind : "") + (kind === B_WHY ? " ss-pr-why" : "") +
         (kind === B_TEXT ? " ss-pr-text" : "");
       return '<li class="' + cls + '">' + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) + "</li>";
@@ -1741,11 +1787,12 @@ ${HL_CSS}
       const common = (current && current.dev) || [];
       if (common.length && layer !== "plan") {
         out += '<tr class="ss-pr-dev"><td class="ss-pr-no">·</td><td class="ss-pr-ttl">화면 공통</td>' +
-          '<td class="ss-pr-tag">개발</td><td><ul>' + common.map((d) => prLine(Object.assign({}, d, { layer: "dev" }))).join("") + "</ul></td></tr>";
+          '<td class="ss-pr-tag">개발</td><td><ul>' +
+          flatten(common, null).map((n) => prLine({ b: Object.assign({}, n.b, { layer: "dev" }), depth: n.depth })).join("") + "</ul></td></tr>";
       }
       items().forEach((it) => {
         let li = "";
-        (it.spec.defs || []).filter((d) => prKeep(d, layer)).forEach((d) => { li += prLine(d); });
+        flatten(it.spec.defs, layer === "plan" ? "plan" : layer === "dev" ? "dev" : null).forEach((n) => { li += prLine(n); });
         out += '<tr><td class="ss-pr-no">' + esc(it.label) + "</td>" +
           '<td class="ss-pr-ttl">' + esc(it.spec.title || "") + "</td>" +
           '<td class="ss-pr-tag">' + esc(annoOf(it.spec).label) + "</td>" +
@@ -2203,6 +2250,14 @@ ${HL_CSS}
     }
 
     /* ---- 글자 고치기 — 자리를 안 옮기고 그 자리에서 (contenteditable) ---- */
+    /* 그 편집 칸이 가리키는 트리 자리 — 화면 순번(di)이 아니라 자리 번호(data-path)로 쓴다.
+       걸러 그린 화면(기획만·개발만)에서는 순번이 «걸러진 목록» 기준이라 그걸로 쓰면 남의 줄을 덮는다 */
+    function spotOf(el, sp) {
+      const box = el.closest && el.closest(".ss-b");
+      const raw = box && box.dataset.path;
+      if (!raw) return null;
+      return atPath(sp.defs || (sp.defs = []), raw.split(".").map(Number));
+    }
     function edKeyOf(el) {
       const p = el.closest("[data-part]");
       if (p) return p.dataset.part;
@@ -2251,9 +2306,15 @@ ${HL_CSS}
       edSnapOnce();
       if (f === "title") s.title = next;
       else if (f === "b") {
-        if (!s.defs || !s.defs[di]) return;
-        if (next) s.defs[di].t = next;
-        else { s.defs.splice(di, 1); redraw = true; } /* 빈 블록은 남기지 않는다 — 지운 것과 같은 뜻이다 */
+        const spot = spotOf(el, s);
+        if (!spot || !spot.owner[spot.idx]) return;
+        if (next) spot.owner[spot.idx].t = next;
+        else {
+          /* 빈 블록은 남기지 않는다 — 지운 것과 같은 뜻이다. 다만 «딸린 하위» 는 그 자리에 남긴다 */
+          const gone = spot.owner[spot.idx];
+          spot.owner.splice(spot.idx, 1, ...(gone.c || []));
+          redraw = true;
+        }
       }
       edTouched();
       /* 화면을 «저장된 형태» 로 맞춘다 — 브라우저는 굵게를 <b> 로 만드는데 우리가 담는 것은 <strong> 이다.
@@ -2295,7 +2356,17 @@ ${HL_CSS}
       if (!edEl) return null;
       const key = edKeyOf(edEl), it = itemOf(key);
       if (!it) return null;
-      return { key: key, it: it, s: it.spec, di: Number(edEl.dataset.di) };
+      /* 자리 번호는 블록 상자(.ss-b)에 붙어 있다 — 고치는 칸은 그 «안» 의 글자 span 이다 */
+      const holder = edEl.closest(".ss-b");
+      const raw = holder && holder.dataset.path;
+      const path = raw ? raw.split(".").map(Number) : null;
+      return { key: key, it: it, s: it.spec, di: Number(edEl.dataset.di), path: path };
+    }
+    /* 펼친 순번 → 그 블록 (화면에서 짚은 것을 모델에서 찾는다) */
+    function edNode(p) {
+      if (!p || !p.path) return null;
+      const spot = atPath(p.s.defs || (p.s.defs = []), p.path);
+      return spot && spot.owner[spot.idx] ? { spot: spot, b: spot.owner[spot.idx], depth: p.path.length - 1 } : null;
     }
     /* 다시 그린 뒤 «그 자리» 로 커서를 돌려놓는다. di 를 안 주면 그 번호의 제목으로 */
     function edGo(key, di) {
@@ -2308,6 +2379,20 @@ ${HL_CSS}
       if (el) edBegin(el);
     }
     function edLines(p) { return p.s.defs || (p.s.defs = []); }
+    /* 다시 그린 뒤 «그 블록» 으로 커서를 돌린다.
+       자리 번호로 찾으면 옮기거나 들인 뒤 엉뚱한 줄을 잡는다 — 블록 자체는 그대로이므로 그것으로 찾는다 */
+    function edGoPath(key, b) {
+      render();
+      const it = itemOf(key);
+      if (!it) return;
+      /* 자리 번호(data-path)로 곧장 찾는다 — 펼친 순번은 «기획만/개발만» 필터에 따라 달라져서
+         그걸로 찾으면 필터가 켜진 문서에서 엉뚱한 줄을 잡는다 (2026-08-30) */
+      const n = flatten(it.spec.defs, null).find((x) => x.b === b);
+      if (!n) return;
+      const box = ctx.listEl.querySelector('[data-defrow="' + key + '"]');
+      const el = box && box.querySelector('.ss-b[data-path="' + n.path.join(".") + '"] [data-ed]');
+      if (el) edBegin(el);
+    }
 
     /* Enter — 노션과 같다: 그냥 «빈 글 블록». 불릿을 이어 쓰는 중이면 불릿을 잇는다 (#56) */
     function edNewLine() {
@@ -2315,76 +2400,93 @@ ${HL_CSS}
       if (!p) return;
       edFinish(true);
       edSnap();
-      const defs = edLines(p), cur = defs[p.di];
+      const defs = edLines(p);
       /* 이름 칸에서 Enter — 첫 줄이 이미 비어 있으면 그리로 간다. 빈 줄을 둘 만들지 않는다 */
-      if (isNaN(p.di) && defs.length && !String(defs[0].t || "").trim()) { edGo(p.key, 0); return; }
-      const at = isNaN(p.di) ? defs.length : p.di + 1;
+      if (!p.path && defs.length && !String(defs[0].t || "").trim()) { edGo(p.key, 0); return; }
       const nb = { t: "" };
-      if (cur) {
-        if (cur.indent) nb.indent = cur.indent;
+      let list, at;
+      const node = edNode(p);
+      if (node) {
+        const cur = node.b;
         if (cur.layer) nb.layer = cur.layer;
-        /* PM 결정 (#56): Enter 의 기본은 «아무것도 아닌 줄» 이다. 불릿은 «-» + 스페이스나 ＋ 로 만든다.
-           옛 문서는 kind 가 없어 전부 불릿으로 읽히는데, 그것을 «불릿을 쓰는 중» 으로 오해하면
-           Enter 마다 글머리표가 따라붙는다 — 그래서 «명시적으로 불릿인 줄» 에서만 이어 준다 */
+        /* PM 결정 (#56): Enter 의 기본은 «아무것도 아닌 줄» 이다. 불릿은 «-» + 스페이스나 ＋ 로 만든다 */
         nb.kind = cur.kind === B_BULLET ? B_BULLET : B_TEXT;
-      } else nb.kind = B_TEXT;
-      defs.splice(at, 0, nb);
-      edGo(p.key, at);
+        /* 형제로 «바로 뒤» — 하위를 가진 줄이어도 그 하위 «앞» 에 끼우지 않는다.
+           그러면 그 하위들의 부모가 바뀐다 (R0) */
+        list = node.spot.owner; at = node.spot.idx + 1;
+      } else { nb.kind = B_TEXT; list = defs; at = defs.length; }
+      list.splice(at, 0, nb);
+      edGoPath(p.key, nb);
     }
     /* Tab / Shift+Tab — 잡아 끄는 것과 «같은 위계 규칙» 이어야 한다 (#61, PM 2026-08-30).
        예전에는 Tab 이 그 줄의 숫자만 1 올렸다. 그래서 맨 앞 줄이 부모 없이 하위가 되고,
        두 번 누르면 0단 밑에 2단이 생기고, 하위 달린 줄을 들이면 자식이 제자리에 남아 관계가 끊겼다.
        규칙은 하나다: 바로 앞 블록보다 한 단까지 · 딸린 하위는 통째로 따라온다. */
+    /* 트리에서 가장 깊은 곳까지 몇 단인가 (화면은 2단까지 그린다) */
+    function deepOf(b, at) {
+      let m = at;
+      (b.c || []).forEach((k) => { m = Math.max(m, deepOf(k, at + 1)); });
+      return m;
+    }
+    /* Tab / Shift+Tab — «담김» 을 바꾼다. 딸린 하위는 그 블록이 «들고» 있으므로 저절로 따라간다.
+       남의 목록은 손대지 않는다 → R0 이 구조적으로 지켜진다 */
     function edIndent(deeper) {
       const p = edPos();
       if (!p) return;
       edFinish(true);
-      const defs = edLines(p), d = defs[p.di];
-      if (!d) return;
-      const now = blkInd(d);
-      const prev = defs[p.di - 1];
-      const cap = prev ? Math.min(2, blkInd(prev) + 1) : 0; /* 맨 앞 줄엔 부모가 없다 */
-      const next = deeper ? Math.min(cap, now + 1) : Math.max(0, now - 1);
-      if (next === now) {
-        edSay(deeper ? (prev ? "앞 줄보다 한 단까지만 들어갑니다" : "맨 앞 줄은 더 들어갈 수 없습니다")
-                     : "더 나올 수 없습니다");
-        return;
-      }
-      const n = subLen(defs, p.di), shift = next - now;
-      let deepest = 0;
-      for (let i = 0; i < n; i++) deepest = Math.max(deepest, blkInd(defs[p.di + i]));
-      if (deepest + shift > 2) { edSay("딸린 하위가 너무 깊어집니다"); return; }
-      edSnap();
-      for (let i = 0; i < n; i++) {
-        const v = blkInd(defs[p.di + i]) + shift;
-        if (v) defs[p.di + i].indent = v; else delete defs[p.di + i].indent;
+      const node = edNode(p);
+      if (!node) return;
+      const { spot } = node, list = spot.owner, i = spot.idx, b = list[i];
+      if (deeper) {
+        const prev = list[i - 1];
+        /* 트리에서 «들어간다» = 바로 앞 형제의 하위가 된다. 앞 형제가 없으면 들어갈 곳이 없다 */
+        if (!prev) { edSay("앞에 붙일 줄이 없어 더 들어갈 수 없습니다"); return; }
+        if (deepOf(b, node.depth + 1) > 2) { edSay("딸린 하위가 너무 깊어집니다"); return; }
+        edSnap();
+        list.splice(i, 1);
+        (prev.c || (prev.c = [])).push(b); /* 바로 앞 줄의 «마지막 하위» 가 된다 (노션과 같다) */
+      } else {
+        if (p.path.length < 2) { edSay("더 나올 수 없습니다"); return; }
+        const up = atPath(edLines(p), p.path.slice(0, -1)); /* 부모가 담긴 자리 */
+        edSnap();
+        list.splice(i, 1);
+        if (!list.length) delete up.owner[up.idx].c;
+        up.owner.splice(up.idx + 1, 0, b); /* 부모 «바로 뒤» 형제로 */
       }
       edTouched();
-      edGo(p.key, p.di);
+      edGoPath(p.key, b);
     }
     /* 빈 줄에서 Backspace — 그 블록을 지우고 앞 블록으로 */
     function edKillLine() {
       const p = edPos();
-      if (!p) return;
-      const defs = edLines(p);
-      if (!defs[p.di]) return;
+      const node = edNode(p);
+      if (!node) return;
       edSnap();
-      defs.splice(p.di, 1);
+      const { spot } = node, b = spot.owner[spot.idx];
+      /* 지운 줄이 하위를 들고 있었으면 그 하위는 «있던 자리» 에 그대로 남는다 — 사라지면 안 된다 */
+      spot.owner.splice(spot.idx, 1, ...(b.c || []));
       edTouched();
-      if (p.di > 0) edGo(p.key, p.di - 1);
-      else render();
+      /* 커서는 «지운 자리 바로 앞 줄» 로. 첫 줄을 지웠으면 그 자리에 온 줄로 */
+      const flat = flatten(edLines(p), null);
+      const at = Math.max(0, Math.min(flat.length - 1, node.spot.idx === 0 && p.path.length === 1 ? 0 : 0));
+      if (!flat.length) { render(); return; }
+      edGoPath(p.key, flat[at].b);
     }
     /* 블록 종류 바꾸기 — 슬래시·＋ 메뉴와 «-» 단축키가 함께 쓴다 */
     function edSetKind(kind) {
       const p = edPos();
-      if (!p) return;
-      const d = edLines(p)[p.di];
-      if (!d) return;
+      const node = edNode(p);
+      if (!node) return;
+      const d = node.b;
       edSnap();
       if (kind === B_BULLET) delete d.kind; else d.kind = kind;
-      if (kind === B_WHY && !d.indent) d.indent = 1; /* 화살표는 한 단 안쪽이 자연스럽다 */
+      /* 화살표(까닭)는 «앞 줄의 하위» 가 자연스럽다 — 앞 줄이 있고, 아직 뿌리에 있을 때만 */
+      if (kind === B_WHY && p.path.length === 1) {
+        const list = node.spot.owner, i = node.spot.idx, prev = list[i - 1];
+        if (prev && deepOf(d, 1) <= 2) { list.splice(i, 1); (prev.c || (prev.c = [])).push(d); }
+      }
       edTouched();
-      edGo(p.key, p.di);
+      edGoPath(p.key, d);
     }
 
     /* 슬래시 메뉴 (#42) — 항목은 셋뿐이다: 번호 · 불릿 · 이유.
@@ -2609,13 +2711,16 @@ ${HL_CSS}
          4) 커서는 자유롭다. 블록 위에 정확히 올릴 필요 없이 «가장 가까운 자리» 로 붙는다.
 
        위계 규칙 (여기가 «맞다» 의 정의. scripts/qa-drag.js 가 이 규칙으로 전수 검증한다):
+         R0 불변   : 내가 옮긴 것 말고는 아무것도 안 바뀐다 — 남의 깊이도, 남의 소속도.
+                     트리라서 «구조적으로» 지켜진다: 옮기기는 «담긴 목록에서 빼서 다른 목록에 넣기» 이고,
+                     하위는 그 블록이 들고 있으므로 남의 목록은 손댈 일이 없다
          R1 자리   : 눈에 보이는 «줄과 줄 사이» 하나. 커서에서 가장 가까운 경계
          R2 깊이   : 원래 깊이 + 잡은 곳에서 옆으로 간 칸수 (아래로만 끌면 같은 단)
          R3 상한   : 넣을 자리 바로 앞 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
          R4 제외   : 끌고 있는 덩어리는 «이미 빠진 셈» — 자기가 자기 부모가 되지 않게
          R5 무표시 : 자기 하위 안 · 놓아도 자리와 깊이가 그대로일 때
          R6 소속   : 깊이 1 이상이면 부모 + 그 하위 전체를 박스로
-         R7 이동   : 딸린 하위가 통째로 따라오고 깊이 차이를 유지
+         R7 이동   : 딸린 하위가 통째로 따라온다 (트리에선 저절로 — 들고 있으니까)
 
        구조: 한 프레임에 딱 세 걸음이다.
          dragPlan(e)   순수 계산 — DOM 을 «읽기만» 하고 무엇도 바꾸지 않는다. 계획 또는 null
@@ -2626,14 +2731,8 @@ ${HL_CSS}
     let dragPlanNow = null; /* 마지막으로 그린 계획 — 놓을 때 이것을 실행한다 */
     let dragArt = [];     /* 지금 그려 둔 것들 (선·박스) — 지울 때 이 목록만 보면 된다 */
 
-    function blkInd(d) { return Math.max(0, Math.min(2, (d && d.indent) || 0)); }
-    /* 잡은 블록 + 그보다 깊은 뒤쪽 블록들 = 한 덩어리 */
-    function subLen(defs, i) {
-      const base = blkInd(defs[i]);
-      let n = 1;
-      while (i + n < defs.length && blkInd(defs[i + n]) > base) n++;
-      return n;
-    }
+    /* 펼친 목록에서 그 번호의 줄들 — 화면 순서 그대로다 */
+    function flatOf(sp) { return flatten(sp.defs || (sp.defs = []), null); }
     function markPx() {
       const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-blk-mark");
       return parseFloat(v) || 16;
@@ -2662,43 +2761,79 @@ ${HL_CSS}
     function planBlock(e) {
       const src = specOf(drag.key);
       if (!src || !src.defs) return null;
+      const srcFlat = flatOf(src);
+      const me = srcFlat[drag.di];
+      if (!me) return null;
+
       /* 블록이 하나도 없는 번호 안이면 그 번호의 첫 자리 */
       const kids = e.target.closest && e.target.closest(".ss-kids");
       if (kids && !kids.querySelector(".ss-b")) {
         const sp = specOf(edKeyOf(kids));
         if (!sp) return null;
-        return { kind: "b", sp: sp, defs: sp.defs || (sp.defs = []), at: 0, ind: 0,
-          parent: -1, pEnd: -1, box: kids, empty: true };
+        return { kind: "b", sp: sp, at: 0, ind: 0, parent: -1, pEnd: -1, box: kids, empty: true,
+          into: sp.defs || (sp.defs = []), intoAt: 0 };
       }
       const near = nearestEdge(e);
       if (!near) return null;
       const overBlk = near.el;
       const sp = specOf(edKeyOf(overBlk));
       if (!sp) return null;
-      const defs = sp.defs || (sp.defs = []);
-      const from = drag.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
+      const flat = sp === src ? srcFlat : flatOf(sp);
       const di = Number(overBlk.dataset.di);
-      const at = near.after ? di + 1 : di;                 /* R1 */
-      if (src === sp && at > from && at < from + n) return null; /* R5: 자기 하위 안 */
+      const at = near.after ? di + 1 : di;                  /* R1 — 펼친 목록에서의 자리 */
 
-      const mine = (i) => src === sp && i >= from && i < from + n; /* R4 */
-      let p = at - 1;
-      while (p >= 0 && mine(p)) p--;
-      const cap = p >= 0 ? Math.min(2, blkInd(defs[p]) + 1) : 0; /* R3 */
+      /* R4·R5 — 끌고 있는 덩어리는 «이미 빠진 셈». 자기 하위 안이면 아예 없던 일 */
+      const mine = (n) => sp === src && (n.b === me.b || isUnder(me.b, n.b));
+      if (sp === src) {
+        const inside = flat.slice(Math.min(at, flat.length)).length >= 0 && flat[at] && isUnder(me.b, flat[at].b);
+        if (at > drag.di && flat[at - 1] && (flat[at - 1].b === me.b || isUnder(me.b, flat[at - 1].b))) {
+          if (inside || at <= drag.di + countUnder(me.b)) return null;
+        }
+      }
+      /* 넣을 자리 «바로 앞» 줄 (끌고 있는 덩어리는 건너뛴다) */
+      let pi = at - 1;
+      while (pi >= 0 && mine(flat[pi])) pi--;
+      const prev = pi >= 0 ? flat[pi] : null;
+      /* R3 — 앞 줄보다 한 단까지. 그리고 «내가 든 하위» 까지 2단 안에 들어와야 한다:
+         하위를 들고 깊이 들어가면 그 하위가 3단이 된다 (2026-08-30 전수에서 잡힘) */
+      const room = 2 - deepOf(me.b, 0);
+      const cap = Math.min(prev ? Math.min(2, prev.depth + 1) : 0, Math.max(0, room));
       const step = markPx();
-      const ind = Math.max(0, Math.min(cap, was + Math.round((e.clientX - drag.x0) / step))); /* R2 */
+      const ind = Math.max(0, Math.min(cap, me.depth + Math.round((e.clientX - drag.x0) / step))); /* R2 */
 
-      if (src === sp) {                                     /* R5: 놓아도 그대로 */
-        const at2 = at > from ? at - n : at;
-        if (at2 === from && ind === was) return null;
+      /* 어느 목록의 몇 번째로 들어가는가 — 트리에서의 «진짜 자리» */
+      let into, intoAt, parent = -1, pEnd = -1;
+      if (!prev) { into = sp.defs; intoAt = 0; }
+      else if (ind > prev.depth) {                          /* 앞 줄의 «첫 하위» 로 */
+        into = prev.b.c || (prev.b.c = []); intoAt = 0;
+      } else {                                              /* 앞 줄의 조상 중 깊이 ind 인 것의 «다음 형제» */
+        const anc = prev.path.slice(0, ind + 1);
+        const spot = atPath(sp.defs, anc);
+        if (!spot) return null;
+        into = spot.owner; intoAt = spot.idx + 1;
       }
-      let parent = -1, pEnd = -1;                           /* R6 */
-      if (ind > 0) for (let i = at - 1; i >= 0; i--) {
-        if (mine(i)) continue;
-        if (blkInd(defs[i]) === ind - 1) { parent = i; pEnd = i + subLen(defs, i); break; }
+      /* R5 — 놓아도 그대로면 그리지 않는다 */
+      if (sp === src) {
+        const here = atPath(src.defs, me.path);
+        if (here && here.owner === into && (here.idx === intoAt || here.idx + 1 === intoAt)) return null;
       }
-      return { kind: "b", sp: sp, defs: defs, at: at, ind: ind, parent: parent, pEnd: pEnd,
-        box: overBlk.parentNode };
+      if (ind > 0) {                                        /* R6 — 어느 덩어리 안인가 */
+        for (let i = at - 1; i >= 0; i--) {
+          if (mine(flat[i])) continue;
+          if (flat[i].depth === ind - 1) { parent = i; pEnd = i + 1 + countUnder(flat[i].b); break; }
+        }
+      }
+      return { kind: "b", sp: sp, at: at, ind: ind, parent: parent, pEnd: pEnd,
+        box: overBlk.parentNode, into: into, intoAt: intoAt };
+    }
+    /* a 가 b 를 (몇 대째든) 담고 있는가 — 자기 하위 안으로 못 들어가게 막는 데 쓴다 */
+    function isUnder(a, b) {
+      return (a.c || []).some((k) => k === b || isUnder(k, b));
+    }
+    function countUnder(b) {
+      let n = 0;
+      (b.c || []).forEach((k) => { n += 1 + countUnder(k); });
+      return n;
     }
     function planRow(e) {
       const row = e.target.closest && e.target.closest(".ss-row");
@@ -2797,20 +2932,19 @@ ${HL_CSS}
         moveAt(list, from, to + (plan.after ? 1 : 0));
         edRenumber();
       } else {
+        /* R0 — 하는 일은 이것뿐이다: «담긴 목록에서 빼서, 갈 목록에 넣는다».
+           하위는 그 블록이 들고 있으므로 저절로 따라오고(R7), 남의 목록은 손대지 않는다 */
         const src = specOf(drag.key);
         if (!src || !src.defs) return;
-        const n = subLen(src.defs, drag.di);
-        const cut = src.defs.splice(drag.di, n);
-        if (!cut.length) return;
-        let at = plan.at;
-        if (src === plan.sp && at > drag.di) at -= n; /* 앞에서 빠진 만큼 당긴다 */
-        const shift = plan.ind - blkInd(cut[0]);      /* R7: 깊이 차이를 유지한다 */
-        cut.forEach((b) => {
-          const v = Math.max(0, Math.min(2, blkInd(b) + shift));
-          if (v) b.indent = v; else delete b.indent;
-        });
-        const dst = plan.sp.defs || (plan.sp.defs = []);
-        dst.splice(Math.max(0, Math.min(dst.length, at)), 0, ...cut);
+        const me = flatOf(src)[drag.di];
+        if (!me) return;
+        const from = atPath(src.defs, me.path);
+        if (!from) return;
+        const b = from.owner[from.idx];
+        let at = plan.intoAt;
+        if (from.owner === plan.into && from.idx < at) at--; /* 앞에서 빠진 만큼 당긴다 */
+        from.owner.splice(from.idx, 1);
+        plan.into.splice(Math.max(0, Math.min(plan.into.length, at)), 0, b);
       }
       edTouched();
       render();
@@ -2828,7 +2962,8 @@ ${HL_CSS}
       else {
         const sp = specOf(drag.key);
         if (sp && sp.defs) {
-          const n = subLen(sp.defs, drag.di);
+          const me = flatOf(sp)[drag.di];
+          const n = me ? 1 + countUnder(me.b) : 1; /* 자기 + 딸린 하위 전부 */
           for (let i = 0; i < n; i++) {
             const el = drag.row && drag.row.querySelector('.ss-b[data-di="' + (drag.di + i) + '"]');
             if (el) el.classList.add("ss-dragging");
@@ -2974,8 +3109,9 @@ ${HL_CSS}
       edSnapOnce();
       if (f === "title") sp.title = next;
       else if (f === "b") {
-        if (!sp.defs || !sp.defs[di]) return;
-        sp.defs[di].t = next; /* 빈 칸도 그대로 — 빈 줄 «정리» 는 편집이 끝날 때 한다 */
+        const spot = spotOf(el, sp);
+        if (!spot || !spot.owner[spot.idx]) return;
+        spot.owner[spot.idx].t = next; /* 빈 칸도 그대로 — 빈 줄 «정리» 는 편집이 끝날 때 한다 */
       } else return;
       edWas = next; /* 나중에 edFinish 가 «안 바뀌었다» 로 읽게 */
       edTouched();  /* 초안·자동저장이 같은 길을 탄다 */

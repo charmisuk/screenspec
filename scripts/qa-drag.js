@@ -48,7 +48,18 @@ const DX = [-1, 0, 1, 2]; /* 잡은 곳에서 옆으로 민 칸수 */
 
 const parse = (s) => s.split(",").filter(Boolean).map((x) => ({ t: x.slice(1), d: Number(x[0]) }));
 const say = (l) => l.map((b) => b.d + b.t).join(",");
-/* 부모 = 앞쪽에서 깊이가 하나 작은 첫 블록 (평평 모형에서는 저장이 아니라 «계산» 이다) */
+
+/* ---- 검사는 «결과 예측» 이 아니라 «불변 조건» 이다 ----
+   트리로 옮긴 뒤에는 구현을 베껴 결과를 예측하는 것이 검증이 아니다 (같은 코드를 두 번 쓰는 셈).
+   대신 «무슨 일이 있어도 지켜져야 하는 것» 을 재고, 하나라도 깨지면 그 자리를 보여 준다. */
+const INV = [
+  { name: "R0 남이 안 바뀜", why: "내가 옮긴 것 말고는 깊이도 소속도 그대로여야 한다" },
+  { name: "개수 보존", why: "옮기다 줄이 사라지거나 늘면 안 된다" },
+  { name: "하위 동행", why: "딸린 하위는 통째로 따라와야 한다 (R7)" },
+  { name: "깊이 상한", why: "2단을 넘는 줄이 생기면 안 된다" },
+  { name: "표시 = 변화", why: "선이 뜨면 반드시 바뀌고, 안 뜨면 반드시 그대로여야 한다" },
+];
+/* 「0A,1B」 표기 ↔ 부모 관계 */
 const parentOf = (l) => {
   const m = {};
   l.forEach((b, i) => {
@@ -57,45 +68,36 @@ const parentOf = (l) => {
   });
   return m;
 };
-/* R0 — 옮긴 것 말고 «남» 이 바뀌었는가 */
-const r0 = (before, afterStr, movedSet) => {
+/* 그 블록에 딸린 하위들의 이름 (바로 뒤에서 더 깊은 동안) */
+const kidsOf = (l, t) => {
+  const i = l.findIndex((b) => b.t === t);
+  if (i < 0) return [];
+  const out = [];
+  for (let k = i + 1; k < l.length && l[k].d > l[i].d; k++) out.push(l[k].t);
+  return out;
+};
+/* 한 자리에서 지켜져야 하는 것들을 전부 재고, 깨진 것만 돌려준다 */
+function checkInv(before, afterStr, movedT, drewLine) {
   const after = parse(afterStr);
+  const bad = [];
   const pb = parentOf(before), pa = parentOf(after);
   const db = {}; before.forEach((b) => (db[b.t] = b.d));
   const da = {}; after.forEach((b) => (da[b.t] = b.d));
-  const bad = [];
-  before.forEach((b) => {
-    if (movedSet.has(b.t)) return; /* 끌고 간 덩어리는 «내가 바꾼 것» 이다 (R7) */
-    if (da[b.t] !== undefined && da[b.t] !== db[b.t]) bad.push(b.t + " 깊이 " + db[b.t] + "→" + da[b.t]);
-    if (pa[b.t] !== undefined && pa[b.t] !== pb[b.t]) bad.push(b.t + " 부모 " + pb[b.t] + "→" + pa[b.t]);
-  });
-  return bad;
-};
+  const moved = new Set([movedT].concat(kidsOf(before, movedT)));
 
-/* ---- 참조 구현: 위 규칙을 그대로 적은 것 ---- */
-function ref(l, from, di, half, dx) {
-  const ind = (i) => (l[i] ? l[i].d : 0);
-  const sub = (i) => { let n = 1; while (i + n < l.length && ind(i + n) > ind(i)) n++; return n; };
-  const n = sub(from);
-  const at = half === "아래" ? di + 1 : di;
-  if (at > from && at < from + n) return { show: false, why: "자기 하위 안" };
-  let p = at - 1;
-  while (p >= from && p < from + n) p--;
-  const cap = p >= 0 ? Math.min(2, ind(p) + 1) : 0;
-  const want = Math.max(0, Math.min(cap, ind(from) + dx));
-  const at2 = at > from ? at - n : at;
-  if (at2 === from && want === ind(from)) return { show: false, why: "놓아도 그대로" };
-  let par = -1;
-  if (want > 0) for (let i = at - 1; i >= 0; i--) {
-    if (i >= from && i < from + n) continue;
-    if (ind(i) === want - 1) { par = i; break; }
-  }
-  const cut = l.slice(from, from + n).map((b) => ({ t: b.t, d: b.d }));
-  const rest = l.slice(0, from).concat(l.slice(from + n));
-  const shift = want - cut[0].d;
-  cut.forEach((b) => { b.d = Math.max(0, Math.min(2, b.d + shift)); });
-  return { show: true, ind: want, par: par >= 0 ? l[par].t : null,
-    after: say(rest.slice(0, at2).concat(cut, rest.slice(at2))) };
+  before.forEach((b) => {
+    if (moved.has(b.t)) return;
+    if (da[b.t] !== db[b.t]) bad.push("R0: " + b.t + " 깊이 " + db[b.t] + "→" + da[b.t]);
+    if (pa[b.t] !== pb[b.t]) bad.push("R0: " + b.t + " 부모 " + pb[b.t] + "→" + pa[b.t]);
+  });
+  if (after.length !== before.length) bad.push("개수 " + before.length + "→" + after.length);
+  const kb = kidsOf(before, movedT).join("/"), ka = kidsOf(after, movedT).join("/");
+  if (kb !== ka) bad.push("하위 [" + kb + "]→[" + ka + "]");
+  after.forEach((b) => { if (b.d > 2) bad.push("깊이 " + b.t + "=" + b.d); });
+  const same = afterStr === say(before);
+  if (drewLine && same) bad.push("선은 떴는데 안 바뀜");
+  if (!drewLine && !same) bad.push("선은 안 떴는데 바뀜");
+  return bad;
 }
 
 const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -139,23 +141,19 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
             src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
             return o;
           }, [S.from, di, half, dx]);
-          let after = await p.evaluate(() =>
-            window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
-          const w = ref(l, S.from, di, half, dx);
-          const wantAfter = w.show ? w.after : S.list;
-          const ok = got.show === w.show && (!w.show || (got.ind === w.ind && got.par === w.par)) && after === wantAfter;
+          /* 정의는 이제 트리다 — 펼쳐서 «깊이+글자» 로 읽는다 (하네스의 표기는 그대로 쓴다) */
+          let after = await p.evaluate(() => {
+            const walk = (l, d) => (l || []).reduce((o, b) => o.concat([d + b.t], walk(b.c, d + 1)), []);
+            return walk(window.SCREENSPEC.specs[0].defs, 0).join(",");
+          });
+          const broke = checkInv(l, after, l[S.from].t, got.show);
+          const ok = broke.length === 0;
           cases++;
           if (!ok) bad++;
-          /* «내가 바꾼 것» = 잡은 블록 + 딸려 간 하위 전체 */
-          const mv = new Set();
-          { const base = l[S.from].d; mv.add(l[S.from].t);
-            for (let k = S.from + 1; k < l.length && l[k].d > base; k++) mv.add(l[k].t); }
-          const hurt = r0(l, after, mv);
           rows.push({ 샘플: S.name, 목록: S.list, 끄는것: l[S.from].t, 자리: l[di].t + " " + half, 옆으로: dx,
-            R0: hurt.length ? hurt.join(" · ") : "",
-            기대: w.show ? "선 " + w.ind + "단" + (w.par ? " (" + w.par + "의 하위)" : "") : "선 없음 · " + w.why,
-            실제: got.show ? "선 " + got.ind + "단" + (got.par ? " (" + got.par + "의 하위)" : "") : "선 없음",
-            기대결과: wantAfter, 실제결과: after, ok: ok });
+            R0: broke.filter((x) => x.indexOf("R0") === 0).join(" · "),
+            표시: got.show ? "선 " + got.ind + "단" + (got.par ? " (" + got.par + "의 하위)" : "") : "선 없음",
+            결과: after, 깨진것: broke.join(" · "), ok: ok });
           if (after !== S.list) {
             await p.keyboard.press("Control+z");
             await p.waitForTimeout(60);
@@ -169,14 +167,11 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
   /* ---- 화면 표 ---- */
   const failed = rows.filter((r) => !r.ok);
   const hurt = rows.filter((r) => r.R0);
-  console.log("샘플 " + SAMPLES.length + "가지 · 검사 " + cases + "건 · 규칙 어긋남 " + bad + "건");
-  console.log("R0 위반(내가 안 건드린 것이 바뀜): " + hurt.length + "건" +
-    (hurt.length ? "  ← 평평 모형의 빚. 트리로 옮기면 0 이어야 한다" : ""));
-  if (hurt.length) console.table(hurt.slice(0, 10).map((r) => ({
-    목록: r.목록, 끄는것: r.끄는것, 자리: r.자리, 옆으로: r.옆으로, 결과: r.실제결과, "남이 바뀜": r.R0 })));
+  console.log("샘플 " + SAMPLES.length + "가지 · 자리 " + cases + "곳 · 불변 조건이 깨진 곳 " + bad + "곳");
+  console.log("  그중 R0(내가 안 건드린 것이 바뀜): " + hurt.length + "곳");
+  INV.forEach((v) => console.log("    · " + v.name + " — " + v.why));
   if (failed.length) console.table(failed.slice(0, 25).map((r) => ({
-    목록: r.목록, 끄는것: r.끄는것, 자리: r.자리, 옆으로: r.옆으로, 기대: r.기대, 실제: r.실제,
-    기대결과: r.기대결과, 실제결과: r.실제결과 })));
+    목록: r.목록, 끄는것: r.끄는것, 자리: r.자리, 옆으로: r.옆으로, 표시: r.표시, 결과: r.결과, 깨진것: r.깨진것 })));
   if (errs.length) console.log("JS 에러:", errs);
 
   /* ---- 눈으로 볼 리포트 ---- */
@@ -186,10 +181,10 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
     const nb = rs.filter((r) => !r.ok).length;
     return '<section><h2>' + esc(S.name) + ' <small>' + esc(S.list) + ' · ' + esc(S.뜻) + '</small>' +
       '<b class="' + (nb ? "no" : "yes") + '">' + (nb ? nb + "건 어긋남" : "전부 일치") + '</b></h2>' +
-      '<table><tr><th>놓는 자리</th><th>옆으로</th><th>기대</th><th>실제</th><th>기대 결과</th><th>실제 결과</th><th>R0 위반</th></tr>' +
+      '<table><tr><th>놓는 자리</th><th>옆으로</th><th>표시</th><th>결과</th><th>깨진 것</th></tr>' +
       rs.map((r) => '<tr class="' + (r.ok ? "" : "bad") + '"><td>' + esc(r.자리) + '</td><td>' + (r.옆으로 > 0 ? "+" : "") + r.옆으로 +
-        '</td><td>' + esc(r.기대) + '</td><td>' + esc(r.실제) + '</td><td><code>' + esc(r.기대결과) +
-        '</code></td><td><code>' + esc(r.실제결과) + '</code></td><td class="r0">' + esc(r.R0 || "") + '</td></tr>').join("") + '</table></section>';
+        '</td><td>' + esc(r.표시) + '</td><td><code>' + esc(r.결과) +
+        '</code></td><td class="r0">' + esc(r.깨진것 || "") + '</td></tr>').join("") + '</table></section>';
   }).join("");
   fs.writeFileSync(OUT, '<!doctype html><meta charset="utf-8"><title>불릿 위계 QA</title>' +
     '<style>body{font:13px/1.6 "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif;margin:28px;color:#191919;background:#fafaf9}' +
@@ -207,7 +202,7 @@ const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
     'section{margin-bottom:8px}</style>' +
     '<h1>불릿 위계 QA</h1><p class="sum">샘플 ' + SAMPLES.length + '가지 · 자리마다 검사 ' + cases + '건 · ' +
     (bad ? '<b style="color:#C0341A">어긋남 ' + bad + '건</b>' : '<b style="color:#2F8F5B">전부 일치</b>') +
-    ' &nbsp;·&nbsp; R0 위반 ' + rows.filter((r) => r.R0).length + '건' +
+    ' &nbsp;·&nbsp; R0 위반 ' + rows.filter((r) => r.R0).length + '곳' +
     ' &nbsp;·&nbsp; 규칙은 <code>scripts/qa-drag.js</code> 머리말에 적혀 있다</p>' + byS);
   console.log("리포트: " + OUT);
   if (OPEN) require("child_process").exec('start "" "' + OUT + '"', { shell: "cmd.exe" });
