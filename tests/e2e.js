@@ -1883,7 +1883,10 @@ function check(name, ok, detail) {
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
       return drew;
     });
-    check("위계: 번호 사이에는 드롭선을 그리지 않는다", rowDrop === false);
+    /* PM 2026-08-30: 「아주 특정한 위치 아니면 안 뜨게끔 되고 있어.」
+       이제는 커서가 어디에 있든 «가장 가까운 넣을 자리» 로 붙는다. 번호와 번호 사이를 가리켜도
+       그 근처의 진짜 자리가 잡힌다 — 아무 표시도 없는 «먹통» 구간을 만들지 않는다 */
+    check("위계: 어디를 가리켜도 가장 가까운 자리가 잡힌다", rowDrop === true);
 
     await dragTo('[data-defrow="1"] > .ss-gut .ss-g-grip', '[data-defrow="2"]', true);
     await page.waitForTimeout(350);
@@ -2184,6 +2187,36 @@ function check(name, ok, detail) {
     check("FTUE: 프로토타입을 눌러도 쓴 글이 남는다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join("|"))) === "누르면 결제 화면으로|불릿 줄",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
+    /* ---- 찍은 번호가 «저장하고 다시 열어도» 살아 있는가 (#64) ----
+       저장은 설정 블록만 갈아끼우므로, 찍을 때 화면에 붙인 data-spec 속성은 파일에 남지 않는다.
+       그래서 선택자(sel)를 같이 적어 두고, 다시 열 때 그것으로 찾아 속성을 되붙인다.
+       이게 깨지면 FTUE 의 약속(코드 안 열고 번호 붙이기)이 새로고침 한 번에 무너진다 */
+    check("FTUE: 찍은 번호에 되찾을 선택자가 적힌다", await page.evaluate(() => {
+      const sp = window.SCREENSPEC.specs[0];
+      if (!sp.sel) return false;
+      const root = document.querySelector(".ss-sheet");
+      return root.querySelector(sp.sel) === root.querySelector("#buy");
+    }), await page.evaluate(() => window.SCREENSPEC.specs[0].sel));
+    /* id 가 있으면 그것으로 — 프로토타입을 고쳐도 잘 안 흔들리는 길이다 */
+    check("FTUE: id 가 있으면 id 로 적는다",
+      (await page.evaluate(() => window.SCREENSPEC.specs[0].sel)) === '[id="buy"]',
+      await page.evaluate(() => window.SCREENSPEC.specs[0].sel));
+
+    const cfg = await page.evaluate(() => window.ScreenSpec.serialize());
+    await page.goto("about:blank");
+    /* 저장본을 다시 연 상황 — data-spec 속성이 «없는» 프로토타입 + 저장된 설정 */
+    await page.setContent('<h1 id="t">쇼핑몰 홈</h1><button id="buy" style="margin:40px">구매하기</button>' +
+      "<script>" + cfg + "<" + "/script>");
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("FTUE: 저장본을 다시 열어도 마커가 살아 있다", await page.evaluate(() =>
+      document.querySelectorAll(".ss-marker").length === 1 &&
+      !document.querySelector('[data-defrow="1"]').classList.contains("ss-now-hidden")));
+    check("FTUE: 이름표(data-spec)가 저절로 되붙는다",
+      await page.evaluate(() => document.querySelector("#buy").getAttribute("data-spec") === "1"));
+
     check("FTUE: 도중에 JS 에러 0건", errs.length === 0, errs);
     page.off("pageerror", onErr);
   }
@@ -2264,7 +2297,7 @@ function check(name, ok, detail) {
      눈으로 몇 번 끌어 보는 것과 다르다 — 200건 중 하나만 어긋나도 여기서 걸린다.
 
      규칙 (노션 영상 분석 + PM 확인):
-       1) 넣을 자리   : 위쪽 절반 = 그 블록 앞 · 아래쪽 절반 = 그 블록의 하위까지 건너뛴 뒤
+       1) 넣을 자리   : 눈에 보이는 «줄과 줄 사이» 하나. 커서에서 가장 가까운 경계로 붙는다
        2) 깊이       : 원래 깊이 + «잡은 곳에서 옆으로 간 칸수». 아래로만 끌면 같은 단이다
        2-1) 깊이 상한 : 넣을 자리 «바로 앞» 블록보다 한 단까지 (최대 2단). 앞이 없으면 0단
        3) 끌고 있는 덩어리는 «이미 빠진 셈» 으로 본다 — 자기를 앞 블록으로 세면 자기가 자기 하위가 된다
@@ -2282,7 +2315,7 @@ function check(name, ok, detail) {
     /* 참조 구현 — «맞다» 고 정한 규칙을 그대로 적은 것 */
     const ref = (l, from, di, half, dx) => {
       const n = sub(l, from);
-      const at = half === "bottom" ? di + sub(l, di) : di;
+      const at = half === "bottom" ? di + 1 : di;
       if (at > from && at < from + n) return { show: false };
       let p = at - 1;
       while (p >= from && p < from + n) p--;

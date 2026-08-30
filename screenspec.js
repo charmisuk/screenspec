@@ -303,7 +303,7 @@
   const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "style", "off", "readonly",
     "vocab", "prefixes", "endings", "idScheme", "notes",
     "screen", "screens", "id", "name", "path", "route", "root", "viewports", "covers", "skip",
-    "n", "target", "anno", "title", "optional", "t", "why", "subs", "layer", "defs", "dev", "parts",
+    "n", "target", "sel", "anno", "title", "optional", "t", "why", "subs", "layer", "defs", "dev", "parts",
     "play", "preview", "flowTo", "arrowTo", "selector", "label", "w", "h", "specs"];
   function ssStr(s) {
     /* JSON.stringify 가 따옴표·역슬래시·줄바꿈을 맡고, 우리는 «스크립트 블록을 깨뜨리는» 것만 더 막는다.
@@ -530,8 +530,11 @@
     border-radius:99px;background:var(--ss-accent)}
   .ss-dragging{opacity:.4}
   /* 하위로 들어갈 때 부모가 될 블록 — 노션과 같은 «통째로 밝히기», 색은 우리 액센트 (PM 2026-08-30) */
-  .ss-drop-in{background:var(--ss-accent-soft);border-radius:5px;
-    box-shadow:-6px 0 0 var(--ss-accent-soft),6px 0 0 var(--ss-accent-soft)}
+  /* 들어갈 덩어리 — 부모와 그 하위를 «한 박스» 로 감싼다. 자리가 아니라 소속을 말한다 */
+  .ss-drop-in{background:var(--ss-accent-soft)}
+  .ss-drop-in-a{border-radius:6px 6px 0 0;padding-top:calc(var(--ss-blk-py) + 2px);margin-top:-2px}
+  .ss-drop-in-z{border-radius:0 0 6px 6px;padding-bottom:calc(var(--ss-blk-py) + 2px);margin-bottom:-2px}
+  .ss-drop-in-a.ss-drop-in-z{border-radius:6px}
   /* 빈 번호도 «놓을 수 있는 자리» 여야 한다 — 높이가 0 이면 마우스가 닿지 않는다 */
   .ss-kids{min-height:14px}
   /* 항목 삭제 — 제목 줄 오른쪽 끝. 마우스를 올린 블록에만 나온다 */
@@ -1156,9 +1159,26 @@ ${HL_CSS}
       const d = appDoc();
       return current && current.root ? d.querySelector(current.root) || d : d;
     }
+    /* 요소를 찾는 길이 둘이다 (#64, 2026-08-30).
+         ① 이름표 data-spec — 원래의 길
+         ② 선택자 sel — 번호를 «찍어서» 만들 때 같이 적어 둔다
+
+       왜 둘인가: 저장은 설정 블록만 갈아끼우므로 화면에 붙인 data-spec 속성은 파일에 남지 않는다.
+       찍어서 번호를 만들고 저장한 뒤 다시 열면 이름표가 없어 마커가 통째로 사라졌다 (2026-08-30 실측).
+       선택자가 있으면 찾아서 이름표를 «다시 붙인다» — 나중에 AI 가 프로토타입을 고치며 이름표를
+       지워도 같은 길로 저절로 돌아온다. */
     function targetOf(s) {
       const r = rootEl();
-      return (r.querySelector ? r : appDoc()).querySelector('[data-spec="' + s.target + '"]');
+      const scope = r.querySelector ? r : appDoc();
+      const byTag = scope.querySelector('[data-spec="' + s.target + '"]');
+      if (byTag) return byTag;
+      if (!s.sel) return null;
+      let el = null;
+      const from = pickRoot() || scope; /* 선택자는 «앱의 뿌리» 기준으로 적혀 있다 */
+      try { el = from.querySelector(s.sel); } catch (e) { return null; } /* 손으로 고친 선택자가 깨졌을 수 있다 */
+      if (!el || el.getAttribute("data-spec")) return null; /* 남의 번호가 붙은 요소는 뺏지 않는다 */
+      el.setAttribute("data-spec", String(s.target));
+      return el;
     }
     function specs() { return (current && current.specs) || []; }
     /* 상위·하위를 편 목록. 하위(part)는 parent 를 갖고, target 이 없으면 패널에만 산다 (#25) */
@@ -2428,6 +2448,37 @@ ${HL_CSS}
 
        저장은 프로토타입에 data-spec 을 «직접 쓴다» (로드맵 D7): 우리 약속은 «코드 불변» 이 아니라
        «동작 불변» 이다. 보이지 않는 이름표라 프로토타입은 하던 대로 움직인다. */
+    /* 이 요소를 다시 찾아올 «짧고 안 흔들리는» 길. id 가 있으면 그것으로 끝내고,
+       없으면 뿌리까지 올라가며 몇 번째 자식인지로 길을 만든다. 클래스는 쓰지 않는다 —
+       프로토타입의 클래스는 디자인을 고칠 때마다 바뀌므로 길잡이로 못 쓴다 */
+    function selOf(el) {
+      /* 뿌리는 «앱의 뿌리» 다 (rootEl 이 아니라 pickRoot). 문서 전체를 뿌리로 잡으면
+         우리 껍데기(.ss-docmode > .ss-stage > …)까지 길에 섞여 들어가, 우리가 껍데기를
+         바꾸는 순간 남의 프로토타입 선택자가 깨진다 (2026-08-30 실측) */
+      const root = pickRoot();
+      /* id 는 «그 요소를 정확히 가리키는가» 로 본다 — 개수만 세면 같은 id 가 둘일 때 엉뚱한 것을 잡는다.
+         [id="..."] 를 쓰는 이유: 이 파일 안에서 CSS 는 «우리 스타일시트 문자열» 이라 브라우저의
+         CSS.escape 가 가려져 있다. 그걸 부르면 조용히 실패한다 (2026-08-30 실측) */
+      const byId = (id) => '[id="' + String(id).replace(/["\\]/g, "\\$&") + '"]';
+      const ok = (n) => {
+        if (!n.id) return false;
+        try { return root.querySelector(byId(n.id)) === n; } catch (e) { return false; }
+      };
+      const parts = [];
+      let node = el;
+      while (node && node !== root && node.nodeType === 1) {
+        if (ok(node)) { parts.unshift(byId(node.id)); break; }
+        const tag = node.tagName.toLowerCase();
+        const kin = [...(node.parentNode ? node.parentNode.children : [])].filter((x) => x.tagName === node.tagName);
+        parts.unshift(kin.length > 1 ? tag + ":nth-of-type(" + (kin.indexOf(node) + 1) + ")" : tag);
+        node = node.parentNode;
+        if (parts.length > 12) return null; /* 너무 깊으면 길이 오히려 약하다 */
+      }
+      const sel = parts.join(" > ");
+      /* «그 요소를 정확히 가리키는가» 로 검사한다 — 개수만 세면 나중에 우리가 넣는 마커 단추 같은 것이
+         같은 모양으로 걸려도 모른다 (2026-08-30: 시트 안 button 이 둘이 됐다) */
+      try { return root.querySelector(sel) === el ? sel : null; } catch (e) { return null; }
+    }
     let pickOn = false, pickEl = null, pickBox = null, pickTip = null;
     const PICK_MIN = 12; /* 이보다 작은 것은 찍을 것이 못 된다 */
 
@@ -2507,6 +2558,9 @@ ${HL_CSS}
       }
       /* 이름은 비워 둔다 — 「새 영역」 이 진짜 글자로 박혀 있으면 타이핑이 그 뒤에 붙는다 (PM 2026-08-29) */
       const sp = { n: list.length + 1, target: tag, title: "", defs: [{ t: "" }] };
+      /* 이름표는 화면에만 붙고 파일에는 안 남는다 — 다시 찾아올 길을 설정에 같이 적는다 (#64) */
+      const sel = selOf(el);
+      if (sel) sp.sel = sel;
       list.push(sp);
       edRenumber();
       edTouched();
@@ -2549,7 +2603,7 @@ ${HL_CSS}
          3) 깊이는 바로 앞 블록보다 한 단까지만 — 허공에 두 단 들어가는 자리는 애초에 안 준다
          4) 블록은 «블록 사이» 로만 간다. 번호와 번호 사이에는 드롭선을 그리지 않는다 (되지도 않는 자리를 보여 주면 안 된다)
        번호(콜아웃)끼리 옮기는 것은 예전 그대로 — 번호 사이로만 간다. */
-    let dragFrom = null, dropMark = null, dropAt = null, dropParent = null;
+    let dragFrom = null, dropMark = null, dropAt = null, dropParent = null; /* dropParent = 박스로 감싼 블록들 */
     function dragInfo(el) {
       const g = el.closest && el.closest("[data-g]");
       if (!g) return null;
@@ -2570,7 +2624,10 @@ ${HL_CSS}
     }
     function dropClear() {
       if (dropMark) { dropMark.remove(); dropMark = null; }
-      if (dropParent) { dropParent.classList.remove("ss-drop-in"); dropParent = null; }
+      if (dropParent) {
+        dropParent.forEach((el) => el.classList.remove("ss-drop-in", "ss-drop-in-a", "ss-drop-in-z"));
+        dropParent = null;
+      }
       dropAt = null;
     }
     function moveAt(arr, from, to) {
@@ -2589,7 +2646,7 @@ ${HL_CSS}
          · 자기 하위 «안» 으로는 못 가므로 → 안 그린다 (전에는 그려 놓고 놓으면 조용히 무시했다.
            선이 떴는데 아무 일도 안 일어나는 것이 PM 이 「버그 같다」고 한 그것이다)
        그래서 선이 뜨면 반드시 무언가 바뀐다. */
-    function blockDrop(overBlk, e) {
+    function blockDrop(overBlk, half, e) {
       const key = edKeyOf(overBlk), sp = specOf(key);
       if (!sp) return null;
       const defs = sp.defs || (sp.defs = []);
@@ -2597,9 +2654,12 @@ ${HL_CSS}
       if (!src || !src.defs) return null;
       const from = dragFrom.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
       const di = Number(overBlk.dataset.di);
-      const r = overBlk.getBoundingClientRect();
-      const after = e.clientY > r.top + r.height / 2;
-      const at = after ? di + subLen(defs, di) : di;
+      /* 넣을 자리는 «눈에 보이는 줄과 줄 사이» 다 (PM 2026-08-30).
+         전에는 「부모의 아래쪽 절반이면 그 하위까지 건너뛴다」 는 규칙이 따로 있었는데,
+         커서에서 가장 가까운 경계로 붙이게 되면서 그 규칙이 오히려 자리를 어긋나게 했다.
+         경계 하나 = 자리 하나 — 규칙이 하나 줄고, 눈에 보이는 것과 결과가 같아진다. */
+      const after = half === "bottom";
+      const at = after ? di + 1 : di;
       if (src === sp && at > from && at < from + n) return null; /* 자기 하위 안으로는 못 간다 */
 
       /* 끌고 있는 덩어리는 «이미 빠진 셈» 으로 본다 (2026-08-30 전수 검증에서 잡힌 뿌리).
@@ -2621,13 +2681,29 @@ ${HL_CSS}
         const at2 = at > from ? at - n : at;
         if (at2 === from && ind === was) return null;
       }
-      /* 깊이가 1 이상이면 «누구의 하위가 되는지» 를 짚어 준다 */
-      let parent = -1;
+      /* 깊이가 1 이상이면 «어느 덩어리 안으로 들어가는지» 를 짚어 준다.
+         부모 한 줄이 아니라 «부모 + 그 하위 전체» 다 — 소속을 말하는 표시이므로 (노션도 같다) */
+      let parent = -1, pEnd = -1;
       if (ind > 0) for (let i = at - 1; i >= 0; i--) {
         if (mine(i)) continue;
-        if (blkInd(defs[i]) === ind - 1) { parent = i; break; }
+        if (blkInd(defs[i]) === ind - 1) { parent = i; pEnd = i + subLen(defs, i); break; }
       }
-      return { sp: sp, defs: defs, at: at, ind: ind, overBlk: overBlk, after: after, parent: parent };
+      return { sp: sp, defs: defs, at: at, ind: ind, overBlk: overBlk, after: after,
+        parent: parent, pEnd: pEnd, key: key };
+    }
+    /* 커서에서 «가장 가까운 넣을 자리» 를 찾는다 (PM 2026-08-30).
+       전에는 블록 위에 정확히 올려야만 자리가 잡혀서, 조금만 벗어나면 아무 표시도 안 났다.
+       노션처럼 마우스를 자유롭게 움직여도 늘 «가장 그럴듯한 자리» 가 잡혀야 한다. */
+    function nearestDrop(e) {
+      let best = null, bd = Infinity;
+      ctx.listEl.querySelectorAll(".ss-b").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (!r.height) return;
+        const d1 = Math.abs(e.clientY - r.top), d2 = Math.abs(e.clientY - r.bottom);
+        if (d1 < bd) { bd = d1; best = { el: el, half: "top" }; }
+        if (d2 < bd) { bd = d2; best = { el: el, half: "bottom" }; }
+      });
+      return best ? blockDrop(best.el, best.half, e) : null;
     }
     function dropShowBlock(d) {
       dropClear();
@@ -2638,10 +2714,16 @@ ${HL_CSS}
       const box = d.overBlk.parentNode;
       const next = box.querySelector('.ss-b[data-di="' + d.at + '"]');
       if (next) box.insertBefore(dropMark, next); else box.appendChild(dropMark);
-      /* 하위로 들어가면 «누구의 하위인지» 를 통째로 밝힌다 — 형제로 붙는 것과 눈으로 갈린다 (#62) */
-      if (d.parent >= 0) {
-        dropParent = box.querySelector('.ss-b[data-di="' + d.parent + '"]');
-        if (dropParent) dropParent.classList.add("ss-drop-in");
+      /* 하위로 들어가면 «어느 덩어리 안인지» 를 박스로 감싼다 — 형제로 붙는 것과 눈으로 갈린다 (#62).
+         박스는 부모 한 줄이 아니라 «부모 + 그 하위 전체» 다: 이 표시가 말하는 것은 자리가 아니라 소속이다 */
+      dropParent = [];
+      for (let i = d.parent; i >= 0 && i < d.pEnd; i++) {
+        const el = box.querySelector('.ss-b[data-di="' + i + '"]');
+        if (!el) continue;
+        el.classList.add("ss-drop-in");
+        if (i === d.parent) el.classList.add("ss-drop-in-a");
+        if (i === d.pEnd - 1) el.classList.add("ss-drop-in-z");
+        dropParent.push(el);
       }
       dropAt = d;
     }
@@ -2676,35 +2758,31 @@ ${HL_CSS}
       });
       ctx.listEl.addEventListener("dragover", (e) => {
         if (!dragFrom) return;
+        /* 끄는 동안에는 «언제나» 받는다. 안 받으면 브라우저가 🚫 커서를 띄우는데,
+           그건 «고장» 처럼 읽힌다 — 무효한 자리는 선을 안 그리는 것으로 충분하다 (PM 2026-08-30) */
+        e.preventDefault();
         if (dragFrom.kind === "item") {
           const row = e.target.closest(".ss-row");
-          if (!row) return;
-          e.preventDefault();
+          if (!row) { dropClear(); return; }
           const r = row.getBoundingClientRect();
           dropShowRow(row, e.clientY > r.top + r.height / 2);
           return;
         }
-        /* 블록은 «블록 사이» 로만 간다. 빈 번호 안이면 그 번호의 첫 자리로 */
-        const blk = e.target.closest(".ss-b");
-        if (blk) {
-          const d = blockDrop(blk, e);
-          /* 바뀌는 게 없는 자리로 들어오면 «앞서 그린 선» 도 지운다.
-             안 지우면 옛 선이 남아 있어 «여기 놓으면 된다» 로 읽힌다 (#62) */
-          if (!d) { dropClear(); return; }
-          e.preventDefault();
-          dropShowBlock(d);
-          return;
-        }
+        /* 빈 번호 안이면 그 번호의 첫 자리로 */
         const kids = e.target.closest(".ss-kids");
         if (kids && !kids.querySelector(".ss-b")) {
           const sp = specOf(edKeyOf(kids));
-          if (!sp) return;
-          e.preventDefault();
+          if (!sp) { dropClear(); return; }
           dropClear();
           dropMark = h("div", { class: "ss-drop-line ss-ui" });
           kids.appendChild(dropMark);
           dropAt = { sp: sp, defs: sp.defs || (sp.defs = []), at: 0, ind: 0 };
+          return;
         }
+        const d = nearestDrop(e);
+        /* 바뀌는 게 없는 자리면 «앞서 그린 선» 도 지운다 — 안 지우면 옛 선이 남아 오해를 부른다 */
+        if (!d) { dropClear(); return; }
+        dropShowBlock(d);
       });
       ctx.listEl.addEventListener("dragleave", (e) => {
         if (!e.relatedTarget || !ctx.listEl.contains(e.relatedTarget)) dropClear();
