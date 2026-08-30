@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.25.0 (2026-08-29) — Notion for product managers
+## v0.25.0 (2026-08-30) — Notion for product managers
 
 **슬로건을 판단 기준으로 삼았다.** PM: 「제품의 마케팅 슬로건을 'notion for product managers' 로 잡고 싶어. 프로토타입에 노션을 씌우는 거야.」 앞으로 UI 가 갈릴 때 「노션은 어떻게 하나」를 먼저 본다.
 
