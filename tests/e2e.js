@@ -1830,6 +1830,36 @@ function check(name, ok, detail) {
       (await defsOf(0)) === "0B" && (await defsOf(1)) === "0X,0A,1a1,1a2",
       [await defsOf(0), await defsOf(1)]);
 
+    /* 6) 「놓으면 무엇이 바뀌나」가 선을 그릴지 정한다 (#62, 노션 영상 분석 2026-08-30)
+       PM: 「지금은 그냥 모든 곳에서 다 뜨는 것 같고 그래서 버그가 발생하는 것으로 보여.」
+       노션은 자기 자리 근처에서 선을 아예 안 띄운다. 뜨면 반드시 무언가 바뀐다. */
+    await setDefs("0A,1B,0C,1D", "0X");
+    const hint = (di, half, lvl) => page.evaluate(([i, h, l]) => {
+      const src = document.querySelector('.ss-b[data-di="1"] .ss-g-grip');
+      const dt = new DataTransfer();
+      src.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      const el = document.querySelector('.ss-b[data-di="' + i + '"]');
+      const r = el.getBoundingClientRect(), step = 16;
+      el.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: dt,
+        clientY: h === "top" ? r.top + 2 : r.bottom - 2, clientX: r.left + step + l * step }));
+      const line = document.querySelector(".ss-drop-line");
+      const par = document.querySelector(".ss-drop-in");
+      const out = { 선: !!line, 왼쪽: line ? line.style.marginLeft : null,
+        부모: par ? par.textContent.replace(/[＋⠿]/g, "").trim() : null };
+      src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
+      return out;
+    }, [di, half, lvl]);
+
+    check("드롭선: 놓아도 그대로인 자리엔 안 그린다 (제자리 위)", (await hint(1, "top", 1)).선 === false, await hint(1, "top", 1));
+    check("드롭선: 놓아도 그대로인 자리엔 안 그린다 (제자리 아래)", (await hint(1, "bottom", 1)).선 === false, await hint(1, "bottom", 1));
+    check("드롭선: 앞 블록 아래 같은 깊이도 제자리면 안 그린다", (await hint(0, "bottom", 1)).선 === false, await hint(0, "bottom", 1));
+    check("드롭선: 자리는 같아도 깊이가 바뀌면 그린다", (await hint(1, "bottom", 0)).선 === true, await hint(1, "bottom", 0));
+    check("드롭선: 맨 위로는 그린다", (await hint(0, "top", 0)).선 === true, await hint(0, "top", 0));
+    const inC = await hint(2, "bottom", 1);
+    check("드롭선: 하위로 들어가면 부모가 될 블록을 밝힌다", inC.선 === true && inC.부모 === "C" && inC.왼쪽 === "16px", inC);
+    const sib = await hint(2, "bottom", 0);
+    check("드롭선: 형제로 붙을 때는 부모를 안 밝힌다", sib.선 === true && sib.부모 === null && sib.왼쪽 === "0px", sib);
+
     /* 5) 하위 하나만 남의 번호로 보낼 수도 있다 */
     await setDefs("0A,1a1,1a2", "0X");
     await dragTo('[data-defrow="1"] .ss-b[data-di="1"] .ss-g-grip', '[data-defrow="2"] .ss-b[data-di="0"]', true, 0);

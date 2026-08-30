@@ -523,6 +523,9 @@
   .ss-drop-line::before{content:"";position:absolute;left:-3px;top:-2px;width:6px;height:6px;
     border-radius:99px;background:var(--ss-accent)}
   .ss-dragging{opacity:.4}
+  /* 하위로 들어갈 때 부모가 될 블록 — 노션과 같은 «통째로 밝히기», 색은 우리 액센트 (PM 2026-08-30) */
+  .ss-drop-in{background:var(--ss-accent-soft);border-radius:5px;
+    box-shadow:-6px 0 0 var(--ss-accent-soft),6px 0 0 var(--ss-accent-soft)}
   /* 빈 번호도 «놓을 수 있는 자리» 여야 한다 — 높이가 0 이면 마우스가 닿지 않는다 */
   .ss-kids{min-height:14px}
   /* 항목 삭제 — 제목 줄 오른쪽 끝. 마우스를 올린 블록에만 나온다 */
@@ -2505,7 +2508,7 @@ ${HL_CSS}
          3) 깊이는 바로 앞 블록보다 한 단까지만 — 허공에 두 단 들어가는 자리는 애초에 안 준다
          4) 블록은 «블록 사이» 로만 간다. 번호와 번호 사이에는 드롭선을 그리지 않는다 (되지도 않는 자리를 보여 주면 안 된다)
        번호(콜아웃)끼리 옮기는 것은 예전 그대로 — 번호 사이로만 간다. */
-    let dragFrom = null, dropMark = null, dropAt = null;
+    let dragFrom = null, dropMark = null, dropAt = null, dropParent = null;
     function dragInfo(el) {
       const g = el.closest && el.closest("[data-g]");
       if (!g) return null;
@@ -2526,6 +2529,7 @@ ${HL_CSS}
     }
     function dropClear() {
       if (dropMark) { dropMark.remove(); dropMark = null; }
+      if (dropParent) { dropParent.classList.remove("ss-drop-in"); dropParent = null; }
       dropAt = null;
     }
     function moveAt(arr, from, to) {
@@ -2538,6 +2542,12 @@ ${HL_CSS}
       return specs().find((sp) => String(sp.n) === String(key));
     }
     /* 블록을 놓을 자리 계산 — «어느 번호의 몇 번째, 몇 단» 인지까지 한 번에 정한다 */
+    /* 놓을 자리 계산 (#62, 노션 영상 분석 2026-08-30).
+       핵심: «선을 그릴까» 를 «놓으면 무엇이 바뀌나» 로 정한다.
+         · 자리도 깊이도 그대로면 → 안 그린다 (노션은 자기 자리 근처에서 선을 안 띄운다)
+         · 자기 하위 «안» 으로는 못 가므로 → 안 그린다 (전에는 그려 놓고 놓으면 조용히 무시했다.
+           선이 떴는데 아무 일도 안 일어나는 것이 PM 이 「버그 같다」고 한 그것이다)
+       그래서 선이 뜨면 반드시 무언가 바뀐다. */
     function blockDrop(overBlk, e) {
       const key = edKeyOf(overBlk), sp = specOf(key);
       if (!sp) return null;
@@ -2545,14 +2555,24 @@ ${HL_CSS}
       const di = Number(overBlk.dataset.di);
       const r = overBlk.getBoundingClientRect();
       const after = e.clientY > r.top + r.height / 2;
-      /* 놓일 자리 바로 앞 블록 — 그 블록보다 한 단 깊은 곳까지만 갈 수 있다 */
-      let at = after ? di + subLen(defs, di) : di;
-      if (dragFrom.key === key && at > dragFrom.di) at -= 0; /* 자기 뒤로 갈 때의 보정은 splice 에서 한다 */
+      const at = after ? di + subLen(defs, di) : di;
       const prev = defs[at - 1];
-      const cap = prev ? Math.min(2, blkInd(prev) + 1) : 0;
+      const cap = prev ? Math.min(2, blkInd(prev) + 1) : 0; /* 앞 블록보다 한 단까지 */
       const step = markPx();
       const lvl = Math.round((e.clientX - (r.left + step)) / step);
-      return { sp: sp, defs: defs, at: at, ind: Math.max(0, Math.min(cap, lvl)), overBlk: overBlk, after: after };
+      const ind = Math.max(0, Math.min(cap, lvl));
+
+      const src = specOf(dragFrom.key);
+      if (!src || !src.defs) return null;
+      const from = dragFrom.di, n = subLen(src.defs, from), was = blkInd(src.defs[from]);
+      if (src === sp) {
+        if (at > from && at < from + n) return null;          /* 자기 하위 안 */
+        if ((at === from || at === from + n) && ind === was) return null; /* 놓아도 그대로 */
+      }
+      /* 깊이가 1 이상이면 «누구의 하위가 되는지» 를 짚어 준다 */
+      let parent = -1;
+      if (ind > 0) for (let i = at - 1; i >= 0; i--) if (blkInd(defs[i]) === ind - 1) { parent = i; break; }
+      return { sp: sp, defs: defs, at: at, ind: ind, overBlk: overBlk, after: after, parent: parent };
     }
     function dropShowBlock(d) {
       dropClear();
@@ -2563,6 +2583,11 @@ ${HL_CSS}
       const box = d.overBlk.parentNode;
       const next = box.querySelector('.ss-b[data-di="' + d.at + '"]');
       if (next) box.insertBefore(dropMark, next); else box.appendChild(dropMark);
+      /* 하위로 들어가면 «누구의 하위인지» 를 통째로 밝힌다 — 형제로 붙는 것과 눈으로 갈린다 (#62) */
+      if (d.parent >= 0) {
+        dropParent = box.querySelector('.ss-b[data-di="' + d.parent + '"]');
+        if (dropParent) dropParent.classList.add("ss-drop-in");
+      }
       dropAt = d;
     }
     function dropShowRow(row, after) {
@@ -2606,7 +2631,9 @@ ${HL_CSS}
         const blk = e.target.closest(".ss-b");
         if (blk) {
           const d = blockDrop(blk, e);
-          if (!d) return;
+          /* 바뀌는 게 없는 자리로 들어오면 «앞서 그린 선» 도 지운다.
+             안 지우면 옛 선이 남아 있어 «여기 놓으면 된다» 로 읽힌다 (#62) */
+          if (!d) { dropClear(); return; }
           e.preventDefault();
           dropShowBlock(d);
           return;
@@ -2641,9 +2668,8 @@ ${HL_CSS}
         } else {
           const src = specOf(dragFrom.key);
           if (!src || !src.defs) { edDragEnd(); return; }
+          /* 갈 수 없는 자리·바뀌는 게 없는 자리는 blockDrop 이 이미 걸렀다 (#62) */
           const n = subLen(src.defs, dragFrom.di);
-          /* 자기 자신(또는 자기 자식) 안으로는 못 들어간다 */
-          if (src === d.sp && d.at > dragFrom.di && d.at < dragFrom.di + n) { edDragEnd(); return; }
           const cut = src.defs.splice(dragFrom.di, n);
           if (!cut.length) { edDragEnd(); return; }
           let at = d.at;
