@@ -98,14 +98,32 @@ try {
 /* 6) LICENSE */
 check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 
-/* 7) 문서 드리프트 — 폐기된 설계의 용어·클래스가 살아 있으면 에이전트가 옛 구조를 믿는다 */
+/* 7) 문서 드리프트 — 없는 기능을 설명하면 사람도 에이전트도 그걸 믿는다.
+      2026-08-30 실측: README 가 1a·1b 자동 번호(v0.23 폐기)와 「↳ 이유:」(v0.25 폐기)를,
+      llms.txt 가 parts·why 를, SKILL.md 가 「편집」 버튼을 여전히 설명하고 있었다.
+
+      «없앴다» 고 적은 줄은 통과시킨다 — 폐기 기록은 문서의 정당한 일부다.
+      설정 예시(parts:·why:·subs:)는 «문서에서» 만 잡는다. 라이브러리 안의 why 는 내보내기 결과 필드다. */
 {
-  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"(?![^\n]*(폐기|deprecated))|상위 \d+ · 하위|패널 ⇄|SpecLayer(?![^\n]*(별칭|alias|호환|legacy))|`1a`|1a·1b|↳ 이유|편집 모드로 들어|편집 버튼|자동 번호를 매긴/g;
-  for (const f of ["README.md", "SKILL.md", "screenspec.js"]) {
-    const d = fs.readFileSync(path.join(REPO, f), "utf8");
-    const hits = [...d.matchAll(STALE)].map((m) => m[0]);
-    check(f + " 폐기 용어 없음", hits.length === 0, JSON.stringify([...new Set(hits)]));
+  /* 어디에 있든 틀린 것 */
+  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"|상위 \d+ · 하위|패널 ⇄|SpecLayer|1a·1b|↳ 이유|편집 모드로 들어|편집.{0,3}\s?버튼|자동 번호를 매긴/;
+  /* 설정 예시 — 문서에서만 (코드에는 같은 이름의 다른 필드가 산다) */
+  const STALE_DOC = /(^|[^\w.])(parts|subs)\s*:|\bwhy\s*:\s*"/;
+  /* 이 말이 줄에 있으면 «폐기를 설명하는 줄» 이다 */
+  const KEEP = /폐기|없앴|없어졌|deprecated|legacy|별칭|alias|호환|더 이상|옛 /;
+  for (const f of ["README.md", "SKILL.md", "AGENTS.md", "llms.txt", "docs/config.md", "screenspec.js"]) {
+    const isDoc = /\.md$|\.txt$/.test(f);
+    const hits = [];
+    fs.readFileSync(path.join(REPO, f), "utf8").split("\n").forEach((line, i) => {
+      if (KEEP.test(line)) return;
+      const m = line.match(STALE) || (isDoc ? line.match(STALE_DOC) : null);
+      if (m) hits.push(f + ":" + (i + 1) + " " + m[0].trim());
+    });
+    check(f + " 폐기 용어 없음", hits.length === 0, JSON.stringify(hits));
   }
+  /* 음성 테스트 — 검사가 실제로 잡는지, 그리고 «폐기라고 적은 줄» 은 봐주는지 */
+  check("(자체검사) 폐기 용어 검사가 잡는다", STALE.test("하위 항목 1a·1b 자동 번호"));
+  check("(자체검사) 폐기를 설명하는 줄은 봐준다", KEEP.test("예전의 1a·1b 는 없앴다"));
 }
 
 /* 8) README 예제 목록 ↔ examples/ 파일, 참조 이미지 존재 */

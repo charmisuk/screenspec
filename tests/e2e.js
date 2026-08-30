@@ -2154,6 +2154,75 @@ function check(name, ok, detail) {
     page.off("pageerror", onErr);
   }
 
+  /* ============ 위계: Tab 과 드래그는 «같은 규칙» 이다 ============
+     PM QA 2026-08-30: 「같은 위계 불릿과 그 밑에 들어가는 불릿이 될 때도 있고 안 될 때도 있다.」
+     원인은 Tab 이 그 줄의 숫자만 1 올리고 있었던 것 — 잡아 끌 때의 규칙과 갈라져 있었다.
+     규칙은 하나여야 한다: 바로 앞 블록보다 한 단까지 · 딸린 하위는 통째로 따라온다. */
+  console.log("[tier] 위계 — Tab 과 드래그가 같은 규칙");
+  {
+    const mk = (t) => "[" + t.split(",").filter(Boolean).map((x) => Number(x[0])
+      ? "{t:'" + x.slice(1) + "',indent:" + Number(x[0]) + "}" : "{t:'" + x.slice(1) + "'}").join(",") + "]";
+    const setup = async (defs) => {
+      await page.goto("about:blank");
+      await page.setContent('<div id="a" data-spec="1">가</div>' +
+        "<script>window.SCREENSPEC={screen:{id:'S-T',name:'위계'},specs:[{n:1,target:'1',title:'T',defs:" + mk(defs) + "}]};<" + "/script>");
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+    };
+    const now = () => page.evaluate(() =>
+      window.SCREENSPEC.specs[0].defs.map((d) => (d.indent || 0) + d.t).join(","));
+    const tab = async (di, shift) => {
+      await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="' + di + '"]');
+      await page.keyboard.press(shift ? "Shift+Tab" : "Tab");
+      await page.waitForTimeout(250);
+    };
+    const said = () => page.locator(".ss-edmsg").textContent();
+
+    await setup("0A,0B,0C");
+    await tab(0);
+    check("위계: 맨 앞 줄은 Tab 으로 들어갈 수 없다 (부모 없는 하위 X)",
+      (await now()) === "0A,0B,0C" && (await said()).indexOf("맨 앞") >= 0, [await now(), await said()]);
+
+    await setup("0A,0B,0C");
+    await tab(1);
+    check("위계: Tab 은 앞 줄의 하위가 된다", (await now()) === "0A,1B,0C", await now());
+    await tab(1);
+    check("위계: Tab 을 또 눌러도 두 단은 건너뛰지 않는다",
+      (await now()) === "0A,1B,0C" && (await said()).indexOf("한 단까지만") >= 0, [await now(), await said()]);
+
+    await setup("0A,1a1,1x,0B");
+    await tab(2);
+    check("위계: 앞이 1단이면 2단까지 들어간다", (await now()) === "0A,1a1,2x,0B", await now());
+
+    await setup("0A,1a1,1a2,0B,0C");
+    await tab(3);
+    check("위계: Tab 은 딸린 하위를 두고 가지 않는다 (부모+자식 함께)",
+      (await now()) === "0A,1a1,1a2,1B,0C", await now());
+
+    await setup("0A,1a1,2a1a,0B");
+    await tab(1, true);
+    check("위계: Shift+Tab 도 손자까지 함께 나온다 (고아 X)",
+      (await now()) === "0A,0a1,1a1a,0B", await now());
+
+    /* 앞 줄이 허락해도 «딸린 하위» 가 3단이 되어 버리면 막는다 (최대 2단) */
+    await setup("0A,1p,1c,2cc");
+    await tab(2);
+    check("위계: 하위가 너무 깊어지는 Tab 은 막는다",
+      (await now()) === "0A,1p,1c,2cc" && (await said()).indexOf("깊어") >= 0, [await now(), await said()]);
+
+    /* 글머리 세로 위치 — 글자의 잉크 중심에 맞춘다 (PM QA 2026-08-30: 「살짝 위에 있는 것 같아」) */
+    await setup("0A,1a1");
+    check("위계: 글머리가 줄 상자가 아니라 «글자» 에 맞춰 내려와 있다", await page.evaluate(() => {
+      const d = document.querySelector(".ss-b-dot");
+      const t = getComputedStyle(d).transform;
+      if (t === "none") return false;
+      const m = t.match(/matrix\(([^)]+)\)/);
+      return m ? parseFloat(m[1].split(",")[5]) > 0 : false;
+    }), await page.evaluate(() => getComputedStyle(document.querySelector(".ss-b-dot")).transform));
+  }
+
   /* ============ 자동저장 ============
      PM 2026-08-29: 「번호 넣고 입력하면 구글 시트 자동저장되듯이 로컬에 계속 저장되면서 가면
      그게 프로토타입 파일에 반영되고 그걸 또 클로드가 픽스하고 핑퐁이 되지 않을까.」

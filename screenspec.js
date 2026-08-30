@@ -408,7 +408,11 @@
     /* 블록 규격 (#60, PM 2026-08-29) — 노션 실측을 좁은 패널에 맞춰 조인 한 벌.
        노션: 글머리칸 24 · 들여쓰기 24 · 블록 위아래 8(=사이 16) · 줄높이 24.
        우리: 그 구조를 그대로 두고 4분의 3으로. 글머리칸 = 들여쓰기 한 단 이라 자릿수가 어긋나지 않는다 */
-    --ss-blk-fs:12.5px;--ss-blk-lh:20px;--ss-blk-py:3px;--ss-blk-mark:16px;--ss-gut-w:28px}
+    --ss-blk-fs:12.5px;--ss-blk-lh:20px;--ss-blk-py:3px;--ss-blk-mark:16px;--ss-gut-w:28px;
+    /* 글자의 «잉크» 중심은 줄 상자 중심보다 아래에 있다 — 한글은 밑선 위로 넓게 앉기 때문이다.
+       줄 상자 기준으로 글머리를 가운데 두면 눈에는 살짝 위로 뜬다 (PM 2026-08-30).
+       12.5px/20px Pretendard 실측: 0.88px. 글머리를 그만큼 내린다 */
+    --ss-blk-ink:0.9px}
   body.ss-wrap{margin:0;background:var(--ss-canvas)}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -634,9 +638,11 @@
     line-height:var(--ss-blk-lh);padding:var(--ss-blk-py) 0;border-radius:4px}
   .ss-b .ss-dt{flex:1;min-width:0;padding-inline:2px}
   /* 글머리는 «칸» 이다 — 줄높이만큼 키우고 가운데 놓으면 글자 크기가 바뀌어도 눈금이 안 흔들린다 */
-  .ss-b-dot,.ss-b-arrow{flex:none;width:var(--ss-blk-mark);height:var(--ss-blk-lh);display:grid;place-items:center}
+  .ss-b-dot,.ss-b-arrow{flex:none;width:var(--ss-blk-mark);height:var(--ss-blk-lh);display:grid;place-items:center;
+    transform:translateY(var(--ss-blk-ink))}
   .ss-b-dot::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--ss-ink)}
-  .ss-b-arrow{color:var(--ss-ink3);font-size:11px}
+  /* ↳ 글리프는 밑선보다 위에 앉는 문자다 — 실측으로 본문 잉크보다 1px 높다. 그만큼 더 내린다 */
+  .ss-b-arrow{color:var(--ss-ink3);font-size:11px;transform:translateY(calc(var(--ss-blk-ink) + 1px))}
   .ss-b-why{color:var(--ss-ink3)}
   .ss-b-dev{color:var(--ss-ink2)}
   /* 들여쓰기 한 단 = 글머리칸. 안쪽 블록의 글머리가 바깥 블록의 글자 자리에 딱 선다 */
@@ -2261,18 +2267,34 @@ ${HL_CSS}
       defs.splice(at, 0, nb);
       edGo(p.key, at);
     }
-    /* Tab / Shift+Tab — 들여쓰기는 숫자 하나다 (0~2) */
+    /* Tab / Shift+Tab — 잡아 끄는 것과 «같은 위계 규칙» 이어야 한다 (#61, PM 2026-08-30).
+       예전에는 Tab 이 그 줄의 숫자만 1 올렸다. 그래서 맨 앞 줄이 부모 없이 하위가 되고,
+       두 번 누르면 0단 밑에 2단이 생기고, 하위 달린 줄을 들이면 자식이 제자리에 남아 관계가 끊겼다.
+       규칙은 하나다: 바로 앞 블록보다 한 단까지 · 딸린 하위는 통째로 따라온다. */
     function edIndent(deeper) {
       const p = edPos();
       if (!p) return;
       edFinish(true);
-      const d = edLines(p)[p.di];
+      const defs = edLines(p), d = defs[p.di];
       if (!d) return;
-      const now = d.indent || 0;
-      const next = Math.max(0, Math.min(2, now + (deeper ? 1 : -1)));
-      if (next === now) { edSay(deeper ? "더 들어갈 수 없습니다" : "더 나올 수 없습니다"); return; }
+      const now = blkInd(d);
+      const prev = defs[p.di - 1];
+      const cap = prev ? Math.min(2, blkInd(prev) + 1) : 0; /* 맨 앞 줄엔 부모가 없다 */
+      const next = deeper ? Math.min(cap, now + 1) : Math.max(0, now - 1);
+      if (next === now) {
+        edSay(deeper ? (prev ? "앞 줄보다 한 단까지만 들어갑니다" : "맨 앞 줄은 더 들어갈 수 없습니다")
+                     : "더 나올 수 없습니다");
+        return;
+      }
+      const n = subLen(defs, p.di), shift = next - now;
+      let deepest = 0;
+      for (let i = 0; i < n; i++) deepest = Math.max(deepest, blkInd(defs[p.di + i]));
+      if (deepest + shift > 2) { edSay("딸린 하위가 너무 깊어집니다"); return; }
       edSnap();
-      if (next) d.indent = next; else delete d.indent;
+      for (let i = 0; i < n; i++) {
+        const v = blkInd(defs[p.di + i]) + shift;
+        if (v) defs[p.di + i].indent = v; else delete defs[p.di + i].indent;
+      }
       edTouched();
       edGo(p.key, p.di);
     }
