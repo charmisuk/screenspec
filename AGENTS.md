@@ -95,15 +95,19 @@
 
 `tests/lint.js` 가 이 규칙을 강제한다 — `docs/product/`·`docs/sprint/`·`_private/` 가 git 에 추적되면 FAIL.
 
-## 검증 — 매번 도는 것과 필요할 때 켜는 것 (PM 구조 2026-08-30)
+## 검증 — 무엇을 어디서 도는가
 
-**매번 (커밋 전 반드시. CI 도 push·PR·태그마다 같은 것을 돈다):**
+> 커밋 전에 **전체** 를 도는 규칙은 2026-08-31 에 바뀌었다. 위 「게이트는 층으로 나눈다」 를 먼저 읽어라.
+
+**커밋 전 (로컬 · 20초):**
 
 ```bash
-node tests/lint.js   # 의존성 없음, 1초
-node tests/e2e.js    # playwright 설치된 폴더에서, ~2분
-node tests/smoke.js  # 예제 전수 클릭 — JS 에러 0
+node tests/lint.js                 # 의존성 없음, 0초
+node tests/e2e.js --only <섹션>     # 건드린 섹션만. 목록은 --list (34개)
+node scripts/mutate.js <id>        # 새 기능·수정을 넣었으면 그 돌연변이 하나
 ```
+
+**push 후 (CI · 3분 31초):** lint + e2e 전체 + smoke + 릴리스 게이트. **빨간 채로 다음 일을 시작하지 않는다.**
 
 **필요할 때만 (기본 꺼짐 — 느리거나, 특정 규칙을 손댔을 때만 의미가 있다):**
 
@@ -114,12 +118,13 @@ node scripts/qa-drag.js    # 같은 검사 + 사람이 볼 리포트(_qa/drag-re
 
 어느 쪽인지 갈리면 이 기준으로:
 
-| 바꾼 것 | 돌릴 것 |
+| 바꾼 것 | 로컬에서 돌릴 것 (전체는 언제나 CI) |
 |---|---|
 | 문서·예제·카피 | lint |
-| 코드 (기능 추가·수정, 슬래시 항목 추가 포함) | lint + e2e + smoke |
-| CSS·디자인만 | 같다 — lint + e2e + smoke. 「디자인이라 영향 없다」는 틀린 적이 있다: CSS 한 줄 오타가 뒤 규칙 전부를 조용히 죽였다 (v0.24 사고, lint 22 가 그래서 생겼다) |
-| 드래그·Tab·드롭선 «위계 규칙» | 위 셋 + `--grid` (또는 qa-drag) |
+| 코드 (기능 추가·수정) | lint + 그 기능의 섹션 `--only` + 새로 등록한 돌연변이 |
+| **여러 곳이 쓰는 것** (슬래시 메뉴·행 렌더·저장 경로) | 쓰는 쪽 섹션도 같이 `--only` — 슬래시에 항목을 더했다가 `[edit]`·`[blk]` 를 안 돌려 CI 를 빨갛게 만든 적이 있다 (2026-08-31) |
+| CSS·디자인만 | 같다. 「디자인이라 영향 없다」는 틀린 적이 있다: CSS 한 줄 오타가 뒤 규칙 전부를 조용히 죽였다 (v0.24 사고, lint 22 가 그래서 생겼다) |
+| 드래그·Tab·드롭선 «위계 규칙» | 위에 더해 `--grid` (또는 qa-drag) |
 
 간헐 도구도 **이 저장소에 둔다** — 규칙(참조 구현)이 곧 라이브러리의 계약이라 코드와 같이 버전이 돌아야 한다. `_private/`(개인 레포)에는 계획·기록만 둔다. 리포트 출력물(`_qa/`)은 gitignore.
 
@@ -166,7 +171,7 @@ node scripts/backlog-sync.js --apply   # 노션 쪽을 맞추고 실행 후 자�
 
 1. lint·e2e·smoke 통과 확인
 2. `CHANGELOG.md`에 항목 추가 (최상단 `## vX.Y.Z`)
-3. 버전 문자열 갱신: `screenspec.js` 헤더·배지, `README.md`·`SKILL.md`의 `@vX.Y.Z`
+3. 버전 문자열 갱신 — **일곱 곳이다**: `screenspec.js` 헤더 1 · 워터마크 배지 2 · `console.info` 2 · `README.md` CDN 태그 1 · `SKILL.md` CDN 태그 1. 빠뜨리면 lint 가 막는다(서로 같은지 검사). 한 번에 올리는 `--bump` 는 #86
 4. commit → **main 에 올린 뒤** 둘 중 하나로 내보낸다
 
 **A. Actions 버튼** (터미널 없이 · 태그 푸시 권한이 없는 환경에서도)
@@ -180,7 +185,13 @@ node scripts/release.js           # 검사만 — 나갈 준비가 됐는지
 node scripts/release.js --apply   # 태그 → 푸시 → jsDelivr 퍼지 → 실물 확인
 ```
 
-5. B 로 냈다면 스크립트가 마지막에 출력하는 `gh release create vX.Y.Z` 를 실행 (본문은 같이 출력되는 CHANGELOG 절). A 는 이 단계까지 자동이다
+5. B 로 냈다면 `gh release create vX.Y.Z --verify-tag --notes-file <(node scripts/release.js --notes)` 로 Release 를 발행한다. A 는 이 단계까지 자동이다
+
+> **버전만 올려 push 하면 main 이 잠깐 빨개진다** — 문서가 아직 없는 태그를 가리키므로 릴리스 게이트가 걸린다.
+> 태그를 만들면 풀린다(실패한 판은 `gh run rerun` 으로 다시 돌린다). #86 으로 버전 커밋과 태그가 같이 나가면 이 창이 사라진다.
+
+> **`@0` 은 파일이 먼저, 메타 API 가 나중이다.** 퍼지 직후 실물 파일은 새 판을 서빙하는데
+> `data.jsdelivr.com/…/resolved` 는 며칠 옛 번호를 답한다. 확인은 «실물 파일 헤더» 로 한다 (2026-08-31).
 
 > **CI 가 상시 감시한다.** main 에 push 될 때마다 `node scripts/release.js --tag-gate` 가 돌아
 > 「문서가 가리키는 버전의 태그가 원격에 실재하는가」를 본다. 릴리스를 안 하면 main 이 빨강으로 남는다 —

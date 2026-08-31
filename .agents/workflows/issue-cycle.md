@@ -9,6 +9,8 @@ description: 이슈 사이클 — GitHub 이슈를 중요순으로 1건씩 plan�
 > v1.1 (2026-08-24 회고 반영): dev 라우팅 기준(소형은 메인 직접) · plan.accept 기본 체크 · smoke 내장 · 기획자 눈높이 보고 규칙 · 회고의 lint 질문
 
 **입력**: `_private/sprint/{cycle}/tasks.json` (이슈 목록·우선순위·게이트 상태) + GitHub 이슈 본문
+
+> **tasks.json 이 없는 판도 있다.** PM 이 대화로 바로 지시하면 그게 곧 우선순위다 — 없는 파일을 만들려고 멈추지 말고, GitHub 이슈를 열어 그것으로 «이슈 1건 = 커밋 1건» 을 지킨다. 이슈 개설·종료는 Claude 가 직접 한다 (2026-08-31 PM 결정).
 **출력**: 이슈당 커밋 1개 + tasks.json 증거 + `log.md` 회고 원료
 
 ## Phase 0 — 세션 시작
@@ -50,8 +52,10 @@ description: 이슈 사이클 — GitHub 이슈를 중요순으로 1건씩 plan�
 - **log.md**: 작업 중 "프로토콜이 빠뜨린 것 / 불필요했던 것 / 통찰" 이 생기면 그 즉시 `_private/sprint/{cycle}/log.md` 에 1줄 적는다. 회고 원료.
 
 ## Phase 2 — 사이클 종료
-1. 전체 QA: `node tests/lint.js` + `node tests/e2e.js` + `node tests/smoke.js`(예제 전수 클릭, v1.1 부터 저장소 내장). 결과를 tasks.json `cycle_qa` 에 기록. smoke 경고는 main 브랜치와 비교해 회귀인지 판별한다.
-2. 버전 bump(헤더 주석·워터마크·문서 CDN 태그 — lint 가 정합 검사) + CHANGELOG 작성 → 커밋 1개.
+1. 전체 QA: **로컬에서 e2e 전체를 돌리지 않는다** — CI 가 push 마다 lint + e2e 전체 + smoke 를 3분 31초에 돈다(AGENTS.md 「게이트는 층으로 나눈다」, 2026-08-31). 마지막 커밋의 CI 가 초록인지 확인하는 것이 이 단계다. `gh run watch --exit-status`.
+1-1. 손으로 눌러 보는 QA 는 `node scripts/qa.js --open` — 시나리오 하나 = 화면 하나, 절차는 그 화면의 정의서에 적혀 있다. 이번 판에서 고친 것이 있으면 그 화면에 확인 항목을 **더한다**.
+1-2. 새로 넣은 기능·수정마다 `scripts/mutate.js` 에 돌연변이를 한 줄 등록했는지 본다. 등록했으면 `node scripts/mutate.js` 가 전부 «잡음» 인지 확인한다 — 초록불이 «고쳐졌다» 를 뜻하려면 빨간불을 본 적이 있어야 한다.
+2. 버전 bump — **일곱 곳이다**: `screenspec.js` 헤더 1 · 워터마크 배지 2 · `console.info` 2 · `README.md` 1 · `SKILL.md` 1 (lint 가 정합 검사) + CHANGELOG 작성 → 커밋 1개. 한 번에 올리는 `--bump` 는 #86.
 2-1. **배포는 4단계다: main 머지 → 태그 push → `gh release create` → CDN purge.** 태그만 밀면 저장소 첫 화면(모바일 포함)의 버전은 갱신되지 않는다 — GitHub 은 Release 를 기준으로 표시한다. 릴리스 노트는 그 버전의 CHANGELOG 절을 그대로 쓴다. (2026-08-24: v0.14~v0.18 을 태그만 밀어 저장소가 v0.13.1 로 보였다)
 3. 사용자 브리핑: 처리 목록(커밋 sha) · **사용자 QA 필요 항목**(자동화로 못 보는 것: 실제 Next.js 앱에서의 체감 등) · 보류/차단 항목 · push/PR 여부 질문. 문장은 §보고 규칙.
 
