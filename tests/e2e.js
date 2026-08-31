@@ -753,26 +753,41 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(400);
-    /* 만드는 자리는 «목록 맨 위» 다 — 툴바에 두면 만들 수 있다는 걸 그 자리에서 모른다 (PM 2026-08-31) */
-    check("개요가 없으면 목록 맨 위에 «개요 자리» 가 흐리게 있다 (#82)",
-      (await page.locator("[data-briefadd]").isVisible()) === true &&
-      (await page.evaluate(() => {
-        const a = document.querySelector("[data-briefadd]");
-        return !!(a && a.parentElement.classList.contains("ss-defs-list") && a === a.parentElement.firstElementChild);
-      })) === true);
-    check("«개요» 딱지가 한 줄로 들어간다 (#82)", await page.evaluate(() => {
-      const n = document.querySelector("[data-briefadd] .ss-no");
-      return !!n && n.getBoundingClientRect().height < 26;
-    }), await page.evaluate(() => { const n = document.querySelector("[data-briefadd] .ss-no"); return n ? Math.round(n.getBoundingClientRect().height) : -1; }));
-    await page.locator("[data-briefadd]").click();
+    /* 만드는 손짓은 «빈 줄에서 슬래시» 하나로 통일한다 (PM 2026-08-31: 「노션처럼 깔끔한 상태에서
+       쌓아나가는 것이 철학에 더 맞다」). 화면에 늘 떠 있는 «만들 자리» 는 두지 않는다 */
+    await page.locator('[data-defrow="1"] .ss-kids [data-ed]').first().click();
+    await page.waitForTimeout(200);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    await page.keyboard.type("/");
     await page.waitForTimeout(400);
-    check("눌러서 만들면 맨 위에 개요가 생긴다 (#82)",
+    check("빈 줄에서 슬래시를 치면 «화면» 묶음에 화면 개요가 있다 (#82)",
+      (await page.locator('.ss-slash [data-sl="brief"]').count()) === 1 &&
+      (await page.locator(".ss-slash .ss-slash-g").nth(1).textContent()) === "화면",
+      await page.locator(".ss-slash").textContent());
+    await page.locator('.ss-slash [data-sl="brief"]').click();
+    await page.waitForTimeout(400);
+    check("골라서 만들면 맨 위에 개요가 생긴다 (#82)",
       (await rows())[0] === "개요|화면 개요", JSON.stringify(await rows()));
-    check("만들고 나면 그 자리가 사라진다 (화면당 하나) (#82)",
-      (await page.locator("[data-briefadd]").count()) === 0);
+    check("슬래시를 친 빈 줄은 남지 않는다 (#82)",
+      (await page.evaluate(() => [...document.querySelectorAll('[data-defrow="1"] .ss-kids [data-ed]')]
+        .filter((e) => !e.textContent.trim()).length)) === 0);
     check("만들자마자 그 자리에서 쓸 수 있다 (#82)",
       (await page.locator('[data-defrow="0"] .ss-kids [data-ed]').first().getAttribute("contenteditable")) === "true");
     check("기존 항목 번호는 그대로 1부터다 (#82)", (await rows())[1] === "1|제목 영역", JSON.stringify(await rows()));
+    /* 화면당 하나 — 이미 있으면 메뉴에 안 나온다 */
+    await page.locator('[data-defrow="1"] .ss-kids [data-ed]').first().click();
+    await page.waitForTimeout(200);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    await page.keyboard.type("/");
+    await page.waitForTimeout(400);
+    check("개요가 이미 있으면 슬래시에 «화면 개요» 가 안 나온다 (#82)",
+      (await page.locator('.ss-slash [data-sl="brief"]').count()) === 0);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
     /* 고른 상태에서 딱지가 «파란 배경 + 회색 글자» 로 남으면 안 읽힌다 (PM 2026-08-31 지적) */
     await page.locator('[data-defrow="0"] .ss-t').click();
     await page.waitForTimeout(300);

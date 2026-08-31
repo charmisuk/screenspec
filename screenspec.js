@@ -674,16 +674,6 @@
      회색 글자가 파란 배경 위에 남아 안 보였다 (PM 2026-08-31 지적) */
   .ss-row.ss-brief.ss-active .ss-no{background:var(--ss-accent);color:#fff}
   .ss-row.ss-brief{border-bottom:1px solid var(--ss-line)}
-  /* 개요 자리 (#82) — 없을 때 목록 «맨 위» 에 흐리게 둔다. 노션이 빈 블록에 안내문을 두는 방식이다.
-     항목을 만드는 일은 툴바(번호 찍기)와 같은 층이지만, 만들 수 있다는 것을 «그 자리에서» 알게 한다 */
-  .ss-briefadd{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;
-    border:0;border-bottom:1px dashed var(--ss-line2);padding:9px 8px 9px 0;cursor:pointer;
-    font-family:inherit;font-size:12.5px;color:var(--ss-ink3);opacity:.75;transition:opacity .12s}
-  .ss-briefadd:hover{opacity:1;color:var(--ss-ink2)}
-  .ss-briefadd .ss-no{width:auto;height:auto;padding:2px 7px;border-radius:6px;white-space:nowrap;
-    background:transparent;border:1px dashed var(--ss-line2);color:var(--ss-ink3);
-    font-size:10.5px;font-weight:800;letter-spacing:.2px}
-  .ss-briefadd b{font-weight:700}
   .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
   .ss-row:hover{background:#F4F4F2}
   .ss-row.ss-active{background:var(--ss-accent-soft)}
@@ -1150,12 +1140,6 @@ ${HL_CSS}
     btn.textContent = on ? PV_OFF_LABEL : (btn.dataset.pvlabel || btn.textContent);
   }
   /* 기능정의 행 HTML (wrap·overlay 공용) — 행은 상위 하나. parts 는 그 안에 한 단 들여쓴 블록으로 (#25) */
-  /* 개요가 없을 때만 뜨는 «만들 자리» (#82) */
-  function briefAddHTML(specs) {
-    if (!EDIT || (specs || []).some(isBrief)) return "";
-    return '<button type="button" class="ss-briefadd ss-ui" data-briefadd>' +
-      '<span class="ss-no">개요</span><span>＋ <b>화면 개요</b> · 이 화면 전체를 설명합니다</span></button>';
-  }
   function defsRowsHTML(specs) {
     let out = "";
     inOrder(specs).forEach((s) => {
@@ -1329,7 +1313,7 @@ ${HL_CSS}
         return;
       }
       /* 개발 정의는 «언제나 기획 다음» 이다 — 항목 안에서도, 화면 층에서도 (#41) */
-      ctx.listEl.innerHTML = briefAddHTML(specs()) + defsRowsHTML(specs()) + devCommonHTML(current) + covBlockHTML(current);
+      ctx.listEl.innerHTML = defsRowsHTML(specs()) + devCommonHTML(current) + covBlockHTML(current);
       if (previewKey != null) pvSetBtn(pvBtn(previewKey), true); /* 재렌더돼도 켜진 스위치는 켜진 채로 — 라벨(원래대로)까지 (#27·#29) */
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
@@ -2766,18 +2750,27 @@ ${HL_CSS}
       { k: "bul", ico: "•", nm: "불릿", key: "-" },
       { k: "why", ico: "↳", nm: "화살표", key: ">" },
     ];
+    /* «화면» 묶음 (#82, PM 2026-08-31) — 노션의 슬래시도 묶음으로 나뉘어 있다(기본 블록 · 고급).
+       개요는 줄이 아니라 항목 수준이라 한 층 위지만, 만드는 손짓은 «빈 줄에서 슬래시» 하나로 통일한다:
+       「우리가 새 개념을 만들지 않는다 · 그 밖은 노션을 따른다」(AGENTS.md).
+       화면 위에 늘 떠 있는 «만들 자리» 를 두는 대신, 깔끔한 상태에서 쌓아 올리게 한다 */
+    const SLASH_SCREEN = [
+      { k: "brief", ico: "▤", nm: "화면 개요", key: "맨 위에" },
+    ];
     let edMenu = null, edMenuAt = 0;
     function edSlashClose() { if (edMenu) { edMenu.remove(); edMenu = null; } }
     function edSlash() {
       const p = edPos();
       if (!p) return;
       edSlashClose();
+      const row = (x, i) =>
+        '<button type="button" data-sl="' + x.k + '"' + (i === 0 ? ' class="on"' : "") + '>' +
+        '<span class="ss-sl-ico">' + x.ico + "</span><span class=\"ss-sl-nm\">" + x.nm + "</span>" +
+        '<span class="ss-sl-key">' + esc(x.key) + "</span></button>";
+      const screenPart = specs().some(isBrief) ? "" /* 개요는 화면당 하나다 */
+        : '<div class="ss-slash-g">화면</div>' + SLASH_SCREEN.map((x) => row(x, -1)).join("");
       edMenu = h("div", { class: "ss-slash ss-ui" },
-        '<div class="ss-slash-g">넣기</div>' +
-        SLASH.map((x, i) =>
-          '<button type="button" data-sl="' + x.k + '"' + (i === 0 ? ' class="on"' : "") + '>' +
-          '<span class="ss-sl-ico">' + x.ico + "</span><span class=\"ss-sl-nm\">" + x.nm + "</span>" +
-          '<span class="ss-sl-key">' + esc(x.key) + "</span></button>").join(""));
+        '<div class="ss-slash-g">넣기</div>' + SLASH.map(row).join("") + screenPart);
       document.body.appendChild(edMenu);
       edMenuAt = 0;
       const r = edEl.getBoundingClientRect();
@@ -2808,6 +2801,7 @@ ${HL_CSS}
       if (kind === "num") { edFinish(true); pickStart(); return; }
       if (kind === "bul") { edSetKind(B_BULLET); return; }
       if (kind === "why") { edSetKind(B_WHY); return; }
+      if (kind === "brief") { edKillLine(); edAddBrief(); return; } /* 슬래시를 친 빈 줄은 «자리 잡던 줄» 이라 치운다 (#82) */
     }
 
     /* ---- 번호 찍기 (#43) ----
@@ -3676,7 +3670,6 @@ ${HL_CSS}
         if (!EDIT) return;
         if (e.target.closest("[data-add]")) return; /* ＋ 는 mousedown 에서 처리한다 (아래) */
         edSlashClose();
-        if (e.target.closest("[data-briefadd]")) { e.stopPropagation(); edAddBrief(); return; }
         if (e.target.closest('[data-ftue="pick"]')) { e.stopPropagation(); pickStart(); return; }
         const cmd = e.target.closest("[data-ec]");
         if (cmd && cmd.tagName !== "SELECT") { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }
