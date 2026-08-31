@@ -648,6 +648,36 @@ function check(name, ok, detail) {
     check("옛 popup → ▶ 버튼이 선다 (action 과 동일)", await page.locator(".ss-play").count() >= 1);
   }
 
+  /* ============ 파일에 연결 안 되면 못 고친다 (#68) ============
+     자동저장을 안 켠 채로 고치면 그 수정은 브라우저 메모리에만 남는다 — 파일을 읽는
+     사람도 AI 도 못 본다. 그래서 «고치기 전에» 붙잡는다. 단 로컬 파일로 열었을 때만이다 */
+  console.log("[편집] 파일에 연결 안 되면 붙잡는다 (#68)");
+  {
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    const cell = page.locator("[data-ed]").first();
+    await cell.click();
+    await page.waitForTimeout(200);
+    check("로컬 파일: 연결 전에는 글자가 안 고쳐진다",
+      (await cell.getAttribute("contenteditable")) !== "true");
+    check("로컬 파일: 「파일을 골라 주세요」 띠가 뜬다",
+      await page.locator(".ss-link.ss-show").count() === 1);
+    /* 주소로 받아 온 문서는 쓸 파일이 애초에 없다 — 막지 않는다 (「설명 복사」가 유일한 길) */
+    await page.goto("about:blank");
+    await page.setContent('<h1 data-spec="1">A</h1><script>window.SCREENSPEC={screen:{id:"S-G",name:"g"},' +
+      'specs:[{n:1,target:"1",title:"제목",defs:[{t:"정의"}]}]}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    const cell2 = page.locator("[data-ed]").first();
+    await cell2.click();
+    await page.waitForTimeout(200);
+    check("파일이 아닌 문서는 그대로 고쳐진다", (await cell2.getAttribute("contenteditable")) === "true");
+  }
+
   /* ============ root 없는 화면도 전환된다 (#67) ============
      목차에서 골라도 «설명만» 바뀌고 프로토타입은 그대로였다. 정의가 가리키는 요소의
      공통 조상을 찾아 세운다. 어느 요소인지 모호하면 세우지 않고 «말로» 알린다. */

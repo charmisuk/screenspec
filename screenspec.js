@@ -496,6 +496,9 @@
   /* 밖에서 바뀐 파일 띠 (#63) — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
   .ss-outside{background:#EAF1FF;border-bottom-color:#C7D8F5;color:#1B4A9C}
   .ss-outside button{border-color:#B9CDF0;color:#1B4A9C}
+  /* 파일에 연결 안 됨 띠 (#68) — 같은 자리·같은 모양. 고치기 전에 붙잡는 자리라 노란색이다 */
+  .ss-link{background:#FFF8E6;border-bottom-color:#F0DEB4;color:#8A5A12}
+  .ss-link button{border-color:#E6CE9A;color:#8A5A12}
   .ss-wipeall:hover{border-color:#E0522F;color:#E0522F}
   .ss-edbar{display:none;align-items:center;gap:6px;padding:8px 18px;border-bottom:1px solid var(--ss-line);
     background:#FAFAF9;font-size:11.5px;color:var(--ss-ink3);flex-wrap:wrap}
@@ -2178,6 +2181,7 @@ ${HL_CSS}
     function edSay(msg) { if (edMsg) edMsg.textContent = msg || ""; }
     /* 전부 삭제 — 되돌릴 길(Ctrl+Z)이 있어야 물어보는 것이 형식적이지 않다 */
     function edWipeAll() {
+      if (!edGate()) return;
       const list = specs();
       if (!list.length) { edSay("지울 것이 없습니다"); return; }
       if (!confirm("이 화면의 기능 설명 " + list.length + "개를 전부 지웁니다. 되돌리려면 Ctrl+Z 를 누르세요.")) return;
@@ -2189,9 +2193,78 @@ ${HL_CSS}
     }
     let edSavedAt = "", edStat = null, edSvBtn = null, edSaving = false, edAutoT = null, edSnapped = false;
     let edMtime = 0, edOutside = false, edWatchT = null, edBar2 = null;
+    let edLinkBar = null, edKnown = null; /* edKnown = 기억해 둔 손잡이 (아직 권한을 못 받았을 수 있다) */
     const AUTO_MS = 1200;   /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
     const WATCH_MS = 3000;  /* 파일이 밖에서 바뀌었는지 보는 주기. 아래 edWatch 주석 참고 */
     function edCanFile() { return typeof window.showOpenFilePicker === "function"; }
+    /* ---- 고른 파일을 기억한다 (#68, PM 2026-08-31) ----
+       브라우저는 «이 페이지가 열린 그 파일» 에 스스로 쓰게 해 주지 않는다. 로컬 파일이어도 마찬가지다 —
+       사람이 한 번 「이 파일」 을 골라 줘야만 쓸 수 있다. 그 한 번을 «문서당 한 번» 으로 줄인다:
+       고른 손잡이를 브라우저 저장소에 담아 두고 같은 문서를 다시 열면 되꺼낸다.
+       (로컬 파일에서도 이 저장소가 유지되는 것은 실측으로 확인했다.) */
+    const HD_DB = "screenspec", HD_ST = "handles";
+    const hdKey = () => "file:" + (location.pathname || "");
+    function hdOpen() {
+      return new Promise((res, rej) => {
+        let r;
+        try { r = indexedDB.open(HD_DB, 1); } catch (e) { return rej(e); }
+        r.onupgradeneeded = () => { try { r.result.createObjectStore(HD_ST); } catch (e) { /* 이미 있다 */ } };
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+    }
+    async function hdPut(hd) {
+      try { (await hdOpen()).transaction(HD_ST, "readwrite").objectStore(HD_ST).put(hd, hdKey()); }
+      catch (e) { /* 저장소가 막힌 브라우저 — 기억을 못 할 뿐, 쓰기는 된다 */ }
+    }
+    async function hdGet() {
+      try {
+        const db = await hdOpen();
+        return await new Promise((res) => {
+          const g = db.transaction(HD_ST, "readonly").objectStore(HD_ST).get(hdKey());
+          g.onsuccess = () => res(g.result || null);
+          g.onerror = () => res(null);
+        });
+      } catch (e) { return null; }
+    }
+    /* 다시 열었을 때: 권한이 살아 있으면 조용히 잇고, 브라우저가 확인을 요구하면 «한 번 눌러» 잇는다 */
+    async function edRelink() {
+      if (!edCanFile() || edHandle) return;
+      const hd = await hdGet();
+      if (!hd) return;
+      edKnown = hd;
+      let perm = "prompt";
+      try { perm = await hd.queryPermission({ mode: "readwrite" }); } catch (e) { return; }
+      if (perm === "granted") { edAdopt(hd); return; }
+      edLinkShow(true);
+    }
+    function edAdopt(hd) {
+      edHandle = hd;
+      edKnown = hd;
+      edMtime = 0;
+      edLinkShow(false);
+      edWatch();
+      edPeekFile();
+      edSync();
+      edSay("「" + hd.name + "」 에 이어서 저장합니다.");
+    }
+    function edLinkShow(on) {
+      if (!edLinkBar) return;
+      edLinkBar.classList.toggle("ss-show", !!on);
+      const again = edLinkBar.querySelector("[data-lc=again]");
+      if (again) again.hidden = !edKnown;
+    }
+    /* 파일에 연결되지 않은 채로 고치면 그 수정은 어디에도 안 남는다 (#68).
+       PM: 「수정 열심히 하면 뭐해? 반영이 안 되는데.」 그래서 다 고친 뒤가 아니라 «고치기 전에» 붙잡는다.
+       파일에 못 쓰는 브라우저(사파리·모바일)에서는 막지 않는다 — 막으면 거기서는 아예 못 쓴다 */
+    function edGate() {
+      /* 붙잡는 것은 «로컬 파일로 연» 문서뿐이다. 주소로 받아 온 문서(사내 서버·깃허브 페이지)는
+         애초에 쓸 파일이 없으므로 막을 이유가 없다 — 거기서는 「설명 복사」가 유일한 길이다 */
+      if (edHandle || !edCanFile() || location.protocol !== "file:") return true;
+      edLinkShow(true);
+      edSay("이 문서는 아직 파일에 연결되지 않았습니다. 파일을 한 번 골라 주면 그 뒤로는 알아서 저장합니다.");
+      return false;
+    }
     /* 오른쪽 위 한 줄로 «지금 어떤 상태인가» 를 말한다. 사람이 저장을 신경 쓰지 않아도 되게 */
     function edSync() {
       if (edWhen) edWhen.textContent = edDirty ? "저장 안 됨" : (edSavedAt ? "마지막 저장 " + edSavedAt : "");
@@ -2293,6 +2366,7 @@ ${HL_CSS}
     }
     function edBegin(el) {
       if (edEl === el) return;
+      if (!edGate()) return; /* 파일에 연결되기 전에는 고치지 않는다 (#68) */
       if (edEl) edFinish(true);
       edEl = el;
       edSnapped = false; /* 이 칸을 고치는 동안은 «한 걸음» 이다 — Ctrl+Z 가 통째로 되돌린다 */
@@ -2711,6 +2785,7 @@ ${HL_CSS}
       pickEl = null;
     }
     function pickStart() {
+      if (!edGate()) return;
       if (pickOn) return;
       pickOn = true;
       pickBox = h("div", { class: "ss-pick-box ss-ui" });
@@ -3042,7 +3117,7 @@ ${HL_CSS}
         d.addEventListener("dragover", d === document ? over : allow, true);
       });
 
-      ctx.listEl.addEventListener("dragstart", (e) => { dragBegin(e); });
+      ctx.listEl.addEventListener("dragstart", (e) => { if (!edGate()) { e.preventDefault(); return; } dragBegin(e); });
       ctx.listEl.addEventListener("drop", (e) => {
         if (!drag) return;
         e.preventDefault();
@@ -3057,6 +3132,7 @@ ${HL_CSS}
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
     function edRenumber() { specs().forEach((s, i) => (s.n = i + 1)); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
     function edCmd(btn) {
+      if (!edGate()) return;
       const key = edKeyOf(btn), c = btn.dataset.ec, di = Number(btn.dataset.di), si = Number(btn.dataset.si);
       if (edEl) edFinish(true); /* 고치던 글자를 먼저 확정 — 재렌더에 날아가지 않게 */
       edSnap();
@@ -3199,6 +3275,9 @@ ${HL_CSS}
       if (bad) { edHandle = null; edSay(bad + " 지금 보고 있는 프로토타입 HTML 을 골라 주세요."); edSync(); return; }
       edSavedNow();
       edWatch();
+      edKnown = edHandle;
+      hdPut(edHandle);   /* 다음에 이 문서를 열면 되꺼낸다 (#68) */
+      edLinkShow(false);
       edSync();
       edSay("「" + edHandle.name + "」 에 저장합니다. 이제 고칠 때마다 알아서 저장됩니다.");
     }
@@ -3285,6 +3364,23 @@ ${HL_CSS}
         edAutoPlan();
         edSay("내 것을 유지합니다. 다음 저장이 파일의 설정 블록을 덮어씁니다.");
       });
+      /* 파일에 연결 안 됨 (#68) — 고치려는 순간 여기서 붙잡는다. 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다 */
+      edLinkBar = h("div", { class: "ss-draft ss-link ss-ui" },
+        '고친 내용을 파일에 남기려면 이 파일을 한 번 골라 주세요 ' +
+        '<button type="button" data-lc="again" hidden>이어서 저장</button>' +
+        '<button type="button" data-lc="pick">파일 고르기</button>');
+      edLinkBar.addEventListener("click", async (e) => {
+        const b3 = e.target.closest("[data-lc]");
+        if (!b3) return;
+        if (b3.dataset.lc === "again" && edKnown) {
+          let perm = "denied";
+          try { perm = await edKnown.requestPermission({ mode: "readwrite" }); } catch (err) { perm = "denied"; }
+          if (perm === "granted") { edAdopt(edKnown); return; }
+          edSay("파일에 쓸 권한을 받지 못했습니다. 「파일 고르기」로 다시 골라 주세요.");
+          return;
+        }
+        edSaveFile();
+      });
       edDraftBar = h("div", { class: "ss-draft ss-ui" },
         '저장 안 된 초안이 있습니다 (<span class="ss-draft-when"></span>) ' +
         '<button type="button" data-dc="take">이어서</button><button type="button" data-dc="drop">버리기</button>');
@@ -3294,10 +3390,12 @@ ${HL_CSS}
         '<span class="ss-edwhen"></span><span class="ss-edmsg"></span>');
       /* 초안 띠가 먼저다 — 둘 다 .ss-draft 모양을 쓰므로 순서가 바뀌면 «첫 .ss-draft» 가 달라진다 */
       head.parentNode.insertBefore(edDraftBar, head.nextSibling);
+      head.parentNode.insertBefore(edLinkBar, edDraftBar.nextSibling);
       head.parentNode.insertBefore(edBar2, edDraftBar.nextSibling);
       head.parentNode.insertBefore(edBar, edDraftBar.nextSibling);
       edWhen = edBar.querySelector(".ss-edwhen");
       edMsg = edBar.querySelector(".ss-edmsg");
+      edRelink(); /* 전에 고른 파일이 있으면 되잇는다 (#68) */
       edBar.addEventListener("mousedown", (e) => {
         const f = e.target.closest("[data-fm]");
         if (!f) return;
