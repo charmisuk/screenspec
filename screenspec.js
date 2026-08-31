@@ -502,6 +502,10 @@
   /* 밖에서 바뀐 파일 띠 — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
   .ss-outside{background:#EAF1FF;border-bottom-color:#C7D8F5;color:#1B4A9C}
   .ss-outside button{border-color:#B9CDF0;color:#1B4A9C}
+  /* 파일에 못 쓰는 문서 (#84) — 막는 것이 아니라 알리는 것이라 «잠깐 보고 닫는» 띠다 */
+  .ss-nofile{background:#FFF8E6;border-bottom-color:#F0DEB4;color:#8A5A12}
+  .ss-nofile button{border-color:#E6CE9A;color:#8A5A12}
+  .ss-nofile .ss-nofile-why{opacity:.85}
   .ss-outside .ss-out-what{font-weight:800}
   .ss-outside .ss-out-why,.ss-outside .ss-out-stuck{opacity:.8}
   .ss-outside .ss-out-stuck{flex-basis:100%;font-weight:700}
@@ -2278,7 +2282,7 @@ ${HL_CSS}
     }
     let edSavedAt = "", edStat = null, edSvBtn = null, edSaving = false, edAutoT = null, edSnapped = false;
     let edMtime = 0, edOutside = false, edWatchT = null, edBar2 = null;
-    let edLinkBar = null, edKnown = null; /* edKnown = 기억해 둔 손잡이 (아직 권한을 못 받았을 수 있다) */
+    let edLinkBar = null, edNoFileBar = null, edKnown = null; /* edKnown = 기억해 둔 손잡이 (아직 권한을 못 받았을 수 있다) */
     /* 밖에서 바뀐 것이 «무엇인가» 를 가리려면 기준이 있어야 한다 (#83) — 우리가 마지막으로 읽거나 쓴 파일 내용 */
     let edBase = null, edOutCfg = false;
     const AUTO_MS = 1200;   /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
@@ -2349,6 +2353,13 @@ ${HL_CSS}
       const box = edLinkBar && edLinkBar.querySelector(".ss-lay-msg");
       if (box) box.textContent = msg || "";
     }
+    /* 파일에 못 쓰는 문서라고 한 번만 알린다 — 매번 뜨면 잔소리가 된다 (#84) */
+    let edNoFileTold = false;
+    function edNoFileTell() {
+      if (edNoFileTold || !edNoFileBar) return;
+      edNoFileTold = true;
+      edNoFileBar.classList.add("ss-show");
+    }
     function edLinkShow(on) {
       if (!edLinkBar) return;
       if (on) {
@@ -2363,9 +2374,12 @@ ${HL_CSS}
        PM: 「수정 열심히 하면 뭐해? 반영이 안 되는데.」 그래서 다 고친 뒤가 아니라 «고치기 전에» 붙잡는다.
        파일에 못 쓰는 브라우저(사파리·모바일)에서는 막지 않는다 — 막으면 거기서는 아예 못 쓴다 */
     function edGate() {
-      /* 붙잡는 것은 «로컬 파일로 연» 문서뿐이다. 주소로 받아 온 문서(사내 서버·깃허브 페이지)는
-         애초에 쓸 파일이 없으므로 막을 이유가 없다 — 거기서는 「설명 복사」가 유일한 길이다 */
-      if (edHandle || !edCanFile() || location.protocol !== "file:") return true;
+      if (edHandle) return true;
+      /* 붙잡는 것은 «로컬 파일로 연» 문서뿐이다. 주소로 받아 온 문서(사내 서버·깃허브 페이지)와
+         파일에 못 쓰는 브라우저는 애초에 쓸 파일이 없으므로 막을 이유가 없다 —
+         거기서는 「설명 복사」가 유일한 길이다. 다만 그 사실을 «고치는 순간» 한 번은 말해 준다 (#84):
+         조작하는 곳(패널 안)과 「자동저장 안 됨」 표시(툴바 구석)가 떨어져 있어 눈에 안 들어온다 */
+      if (!edCanFile() || location.protocol !== "file:") { edNoFileTell(); return true; }
       edLinkShow(true);
       edSay("이 문서는 아직 파일에 연결되지 않았습니다. 파일을 한 번 골라 주면 그 뒤로는 알아서 저장합니다.");
       return false;
@@ -3579,6 +3593,21 @@ ${HL_CSS}
         }
         edSaveFile();
       });
+      /* 주소로 연 문서 · 파일에 못 쓰는 브라우저 (#84) — 막지는 않되 «어디로 옮겨야 하는지» 를 말한다 */
+      edNoFileBar = h("div", { class: "ss-draft ss-nofile ss-ui" },
+        '<b>이 문서는 파일에 못 씁니다</b>' +
+        '<span class="ss-nofile-why"></span> ' +
+        '<button type="button" data-nc="copy">설명 복사</button>' +
+        '<button type="button" data-nc="close">알겠습니다</button>');
+      edNoFileBar.addEventListener("click", (e) => {
+        const b4 = e.target.closest("[data-nc]");
+        if (!b4) return;
+        if (b4.dataset.nc === "copy") { edCopyBlock(); return; }
+        edNoFileBar.classList.remove("ss-show");
+      });
+      edNoFileBar.querySelector(".ss-nofile-why").textContent = edCanFile()
+        ? " · 주소로 연 문서라 쓸 파일이 없습니다. 다 고친 뒤 「설명 복사」 로 원본에 옮기세요"
+        : " · 이 브라우저는 파일에 직접 못 씁니다 (크롬·엣지에서는 됩니다). 「설명 복사」 로 옮기세요";
       edDraftBar = h("div", { class: "ss-draft ss-ui" },
         '저장 안 된 초안이 있습니다 (<span class="ss-draft-when"></span>) ' +
         '<button type="button" data-dc="take">이어서</button><button type="button" data-dc="drop">버리기</button>');
@@ -3588,6 +3617,7 @@ ${HL_CSS}
         '<span class="ss-edwhen"></span><span class="ss-edmsg"></span>');
       /* 초안 띠가 먼저다 — 둘 다 .ss-draft 모양을 쓰므로 순서가 바뀌면 «첫 .ss-draft» 가 달라진다 */
       head.parentNode.insertBefore(edDraftBar, head.nextSibling);
+      head.parentNode.insertBefore(edNoFileBar, edDraftBar.nextSibling);
       head.parentNode.appendChild(edLinkBar); /* 레이어는 패널 전체를 덮는다 (#78) */
       head.parentNode.insertBefore(edBar2, edDraftBar.nextSibling);
       head.parentNode.insertBefore(edBar, edDraftBar.nextSibling);

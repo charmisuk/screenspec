@@ -802,6 +802,21 @@ function check(name, ok, detail) {
     await cell2.click();
     await page.waitForTimeout(200);
     check("파일이 아닌 문서는 그대로 고쳐진다", (await cell2.getAttribute("contenteditable")) === "true");
+    /* 막지는 않되 «어디로 옮겨야 하는지» 를 한 번은 말해 준다 (#84) —
+       조작하는 곳(패널 안)과 「자동저장 안 됨」 표시(툴바 구석)가 떨어져 있어 눈에 안 들어온다 */
+    check("주소로 연 문서: 첫 편집에서 «파일에 못 쓴다» 고 알린다 (#84)",
+      await page.locator(".ss-nofile.ss-show").count() === 1);
+    check("어디로 옮겨야 하는지 말한다 (설명 복사) (#84)",
+      (await page.locator(".ss-nofile").textContent()).indexOf("설명 복사") >= 0,
+      await page.locator(".ss-nofile").textContent());
+    await page.locator('.ss-nofile [data-nc="close"]').click();
+    await page.waitForTimeout(200);
+    check("닫으면 내려간다 (#84)", await page.locator(".ss-nofile.ss-show").count() === 0);
+    await cell2.click();
+    await page.keyboard.type("가");
+    await page.waitForTimeout(300);
+    check("한 번만 알린다 — 다시 고쳐도 또 안 뜬다 (#84)",
+      await page.locator(".ss-nofile.ss-show").count() === 0);
   }
 
   /* ============ root 없는 화면도 전환된다 (#67) ============

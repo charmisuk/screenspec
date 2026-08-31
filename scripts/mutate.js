@@ -60,6 +60,15 @@ const MUTS = [
   { id: "race-off", only: "[auto]", why: "자동저장이 감시보다 빨라 밖의 변경을 덮는다 (#83)",
     find: "      await edPeekFile();\n      if (edOutside) return;",
     to:   "" },
+  { id: "brief-off", only: "[개요]", why: "개요가 맨 위로 안 온다 (#82)",
+    find: "  const inOrder = (specs) => (specs || []).slice().sort((a, b) => (isBrief(a) ? 0 : 1) - (isBrief(b) ? 0 : 1));",
+    to:   "  const inOrder = (specs) => (specs || []).slice();" },
+  { id: "brief-marker-on", only: "[개요]", why: "개요에도 마커를 만든다 (#82)",
+    find: "        if (isBrief(it.spec)) return; /* 개요는 화면 위 요소가 아니다",
+    to:   "        if (false) return; /* 개요는 화면 위 요소가 아니다" },
+  { id: "nofile-off", only: "[편집] 파일에 연결", why: "주소로 연 문서에서 아무 말도 안 한다 (#84)",
+    find: "      if (!edCanFile() || location.protocol !== \"file:\") { edNoFileTell(); return true; }",
+    to:   "      if (!edCanFile() || location.protocol !== \"file:\") { return true; }" },
 ];
 
 const argv = process.argv.slice(2);
