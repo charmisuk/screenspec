@@ -510,7 +510,6 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     check("빠른 시작: 화면 ID 헤더", await page.evaluate(() => document.body.innerText.includes("SCR-RPT-001")));
     check("빠른 시작: 기능 설명 2행", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
-    check("위치 힌트 자동 (헤더 → '상단' 포함)", await page.evaluate(() => (document.querySelector('[data-defrow="1"] .ss-pos') || {}).textContent?.startsWith("상단") === true));
     check("빠른 시작: 마커 2개", (await page.locator(".ss-marker").count()) === 2);
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="2"]');
     await page.waitForTimeout(400);

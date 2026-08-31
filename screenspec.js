@@ -642,8 +642,6 @@
   .ss-main{flex:1;padding:0;min-width:0}
   .ss-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}
   .ss-title .ss-t{font-size:13.5px;font-weight:800;color:var(--ss-ink)}
-  .ss-title .ss-pos{font-size:10.5px;color:var(--ss-ink3);white-space:nowrap}
-  .ss-title .ss-pos:empty{display:none}
   .ss-title .ss-tag{font-size:10px;font-weight:700;color:var(--ss-ink3);border:1px solid var(--ss-line2);border-radius:5px;padding:1px 6px;margin-left:auto;flex-shrink:0}
   .ss-row.ss-active .ss-tag{color:var(--ss-accent);border-color:var(--ss-accent)}
   /* 블록 (#55) — 번호·불릿·화살표·글이 모두 같은 «블록» 이다. 들여쓰기는 블록의 성질이다 */
@@ -1105,7 +1103,7 @@ ${HL_CSS}
       out += `<div class="ss-row ss-blk" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         ${edGut("item")}<div class="ss-no">${s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-pos"></span><span class="ss-nowtag">현재 미표시</span>${edRowDel()}</div>
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-nowtag">현재 미표시</span>${edRowDel()}</div>
           <div class="ss-kids">${blocksHTML(s.defs, "plan", String(s.n))}</div>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}
         </div></div>`;
     });
@@ -1372,17 +1370,6 @@ ${HL_CSS}
       setCurrent(next);
     }
 
-    /* 위치 힌트 — 실무 정의서의 "상단 타이틀 영역·하단 버튼 영역" 을 사람이 적게 하지 않고, 마커가 찍힌 실제 좌표에서 계산한다.
-       화면(뷰포트) 기준: 세로 상단/중앙/하단(⅓ 경계) · 가로 전체폭(≥70%)/좌측/우측/중앙. 화면 없이 패널만 읽을 때 어디인지 알게 */
-    function posHint(t) {
-      if (!ctx.viewRect) return "";
-      const v = ctx.viewRect(), r = ctx.rectOf(t);
-      if (!v.w || !v.h) return "";
-      const cy = ((r.t + r.b) / 2 - v.y) / v.h, cx = ((r.l + r.r) / 2 - v.x) / v.w, wr = (r.r - r.l) / v.w;
-      const vert = cy < 1 / 3 ? "상단" : cy > 2 / 3 ? "하단" : "중앙";
-      const horz = wr >= 0.7 ? "전체폭" : cx < 1 / 3 ? "좌측" : cx > 2 / 3 ? "우측" : "중앙";
-      return vert === "중앙" && horz === "중앙" ? "중앙" : vert + " · " + horz;
-    }
     function placeMarkers() {
       let moved = false;
       wireMoves();
@@ -1393,10 +1380,6 @@ ${HL_CSS}
         if (blk) { /* 정의는 있는데 지금 화면엔 없음: 패널에서 구분 (#27) */
           blk.classList.toggle("ss-now-hidden", hidden);
           pvTagWire(blk.querySelector(".ss-main > .ss-title > .ss-nowtag"), it, hidden);
-        }
-        if (blk && !hidden) { /* 위치 힌트는 상위·하위 각자의 블록에 (#25) */
-          const ph = blk.querySelector(".ss-main > .ss-title > .ss-pos");
-          if (ph) ph.textContent = posHint(t);
         }
         if (!m) return;
         if (hidden) { m.style.display = "none"; return; }

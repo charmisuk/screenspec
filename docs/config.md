@@ -44,7 +44,7 @@ type Spec = {
   n:        number,     // 필수. 마커 번호
   target:   string,     // 필수. data-spec 속성값 (문자열)
   anno?:    "box"|"arrow"|"state"|"action"|"flow",  // 기본 box. 옛 input·motion → box, popup → action
-  title?:   string,     // 영역명 (위치 힌트는 자동)
+  title?:   string,     // 영역명
   optional?: boolean,   // 조건부 요소 — 누락 경고 제외
   defs?:    Def[],      // 기능 설명 줄
   play?:    { selector: string, label: string },  // anno action·flow: 재생 버튼
@@ -267,7 +267,7 @@ window.SCREENSPEC = {
 | `target` | string | ✔ | 대상 요소의 `data-spec` 속성값. 요소를 못 찾으면 마커가 숨겨지고 콘솔 경고 |
 | `sel` | string | | 그 요소를 다시 찾아올 CSS 선택자. **「화면에서 번호 찍기」가 자동으로 적는다** — 손으로 적을 일은 없다. `data-spec` 이 없으면 이 선택자로 찾아 속성을 다시 붙인다(자가 복구). 프로토타입을 고치다 속성이 지워져도 번호가 살아 돌아온다 |
 | `anno` | 5종 중 하나 | | 아래 표 참조. 생략하면 `box` |
-| `title` | string | | 영역명. 패널에서는 제목 옆에 마커 실제 위치에서 계산한 위치 힌트(상단·하단 / 좌측·우측·전체폭)가 자동으로 붙는다 — 화면 없이 읽어도 어디인지 알 수 있게 |
+| `title` | string | | 영역명 |
 | `optional` | boolean | | 조건부 요소(예: 특정 상태에서만 서는 버튼). `anno`와 무관하게 「못 찾은 정의」 경고에서 제외 |
 | `defs` | Def[] | | 기능 설명. 항목당 1~4줄 권장 |
 | `play` | `{selector, label}` | anno에 따라 | `action`은 필수, `flow`는 선택. `selector`는 실제로 클릭할 요소, `label`은 버튼 문구 |
