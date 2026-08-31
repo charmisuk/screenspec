@@ -496,9 +496,27 @@
   /* 밖에서 바뀐 파일 띠 — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
   .ss-outside{background:#EAF1FF;border-bottom-color:#C7D8F5;color:#1B4A9C}
   .ss-outside button{border-color:#B9CDF0;color:#1B4A9C}
-  /* 파일에 연결 안 됨 띠 (#68) — 같은 자리·같은 모양. 고치기 전에 붙잡는 자리라 노란색이다 */
-  .ss-link{background:#FFF8E6;border-bottom-color:#F0DEB4;color:#8A5A12}
-  .ss-link button{border-color:#E6CE9A;color:#8A5A12}
+  /* 파일 연결 관문 (#78) — 띠가 아니라 레이어다. 띠는 «알림» 처럼 생겨서 무시하고 지나갔는데,
+     이건 무시하면 아무것도 못 하는 관문이다. 단 «패널 안쪽» 에만 깐다 —
+     프로토타입 위에 팝업을 띄우지 않는다는 것이 이 제품의 전제다 (고치려 누른 순간이라 시선도 여기 있다) */
+  .ss-lay{display:none;position:absolute;inset:0;z-index:30;background:rgba(26,26,25,.30);
+    align-items:center;justify-content:center;padding:22px}
+  .ss-lay.ss-show{display:flex}
+  .ss-lay-card{width:100%;max-width:340px;background:#fff;border:1px solid var(--ss-line2);border-radius:14px;
+    box-shadow:0 14px 36px rgba(0,0,0,.18);padding:20px 20px 14px}
+  .ss-lay-card h3{margin:0 0 7px;font-size:14px;font-weight:800;color:var(--ss-ink)}
+  .ss-lay-card p{margin:0;font-size:12px;line-height:1.65;color:var(--ss-ink2)}
+  .ss-lay-where{margin:12px 0 14px;padding:9px 11px;background:#FAFAF9;border:1px solid var(--ss-line);
+    border-radius:9px;font-size:11px;line-height:1.6;color:var(--ss-ink3);word-break:break-all}
+  .ss-lay-where b{display:block;font-family:var(--ss-mono);font-size:12px;color:var(--ss-ink);font-weight:800}
+  .ss-lay-go{display:block;width:100%;border:0;background:var(--ss-accent);color:#fff;font-weight:800;
+    font-size:12.5px;padding:11px 12px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .ss-lay-go:hover{filter:brightness(1.07)}
+  .ss-lay-later{display:block;width:100%;margin-top:6px;border:0;background:transparent;color:var(--ss-ink3);
+    font-size:11.5px;font-weight:700;padding:7px;cursor:pointer;font-family:inherit}
+  .ss-lay-later:hover{color:var(--ss-ink2)}
+  .ss-lay-msg{margin-top:10px;font-size:11.5px;line-height:1.6;color:#B4442A}
+  .ss-lay-msg:empty{display:none}
   .ss-wipeall:hover{border-color:#E0522F;color:#E0522F}
   .ss-edbar{display:none;align-items:center;gap:6px;padding:8px 18px;border-bottom:1px solid var(--ss-line);
     background:#FAFAF9;font-size:11.5px;color:var(--ss-ink3);flex-wrap:wrap}
@@ -2270,11 +2288,26 @@ ${HL_CSS}
       edSync();
       edSay("「" + hd.name + "」 에 이어서 저장합니다.");
     }
+    /* 주소로 이미 아는 것은 말해 준다 — 「무슨 파일을 고르라는 건지」가 가장 큰 혼란이었다 (#78) */
+    function edHere() {
+      const raw = location.pathname || "";
+      let full = raw;
+      try { full = decodeURIComponent(raw); } catch (e) { full = raw; }
+      return { name: full.split("/").pop() || "이 HTML 파일", dir: full.replace(/[^/]*$/, "") };
+    }
+    function edLinkSay(msg) {
+      const box = edLinkBar && edLinkBar.querySelector(".ss-lay-msg");
+      if (box) box.textContent = msg || "";
+    }
     function edLinkShow(on) {
       if (!edLinkBar) return;
+      if (on) {
+        const at = edHere(), go = edLinkBar.querySelector(".ss-lay-go");
+        edLinkBar.querySelector(".ss-lay-name").textContent = edKnown ? edKnown.name : at.name;
+        edLinkBar.querySelector(".ss-lay-dir").textContent = at.dir;
+        if (go) go.textContent = edKnown ? "「" + edKnown.name + "」 에 이어서 저장" : "「" + at.name + "」 고르기";
+      } else edLinkSay("");
       edLinkBar.classList.toggle("ss-show", !!on);
-      const again = edLinkBar.querySelector("[data-lc=again]");
-      if (again) again.hidden = !edKnown;
     }
     /* 파일에 연결되지 않은 채로 고치면 그 수정은 어디에도 안 남는다 (#68).
        PM: 「수정 열심히 하면 뭐해? 반영이 안 되는데.」 그래서 다 고친 뒤가 아니라 «고치기 전에» 붙잡는다.
@@ -3298,9 +3331,17 @@ ${HL_CSS}
       edFlush();
       try {
         if (!edHandle) {
-          const picked = await window.showOpenFilePicker({
-            types: [{ description: "프로토타입 HTML", accept: { "text/html": [".html", ".htm"] } }],
-          });
+          /* 고르기 창이 «엉뚱한 폴더» 에서 열리던 것 (#78, PM 2026-08-31: 「그냥 제일 최근에 했던 위치가 뜬다」).
+             id 를 주면 브라우저가 «우리가 마지막에 고른 곳» 을 따로 기억하고,
+             startIn 에 기억해 둔 손잡이를 주면 두 번째부터는 그 파일이 있는 폴더에서 열린다.
+             둘 다 모르는 브라우저가 있을 수 있으므로 실패하면 기본 옵션으로 한 번 더 부른다 */
+          const types = [{ description: "프로토타입 HTML", accept: { "text/html": [".html", ".htm"] } }];
+          let picked;
+          try { picked = await window.showOpenFilePicker({ types, id: "screenspec", startIn: edKnown || "documents" }); }
+          catch (e2) {
+            if (e2 && e2.name === "AbortError") return;
+            picked = await window.showOpenFilePicker({ types });
+          }
           edHandle = picked[0];
         }
         let perm = await edHandle.queryPermission({ mode: "readwrite" });
@@ -3411,19 +3452,27 @@ ${HL_CSS}
         edAutoPlan();
         edSay("내 것을 유지합니다. 다음 저장이 파일의 설정 블록을 덮어씁니다.");
       });
-      /* 파일에 연결 안 됨 (#68) — 고치려는 순간 여기서 붙잡는다. 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다 */
-      edLinkBar = h("div", { class: "ss-draft ss-link ss-ui" },
-        '고친 내용을 파일에 남기려면 이 파일을 한 번 골라 주세요 ' +
-        '<button type="button" data-lc="again" hidden>이어서 저장</button>' +
-        '<button type="button" data-lc="pick">파일 고르기</button>');
+      /* 파일 연결 관문 (#78) — 패널 안쪽 레이어. 무엇을 고르라는 건지 이름과 폴더를 미리 박아 준다 */
+      edLinkBar = h("div", { class: "ss-lay ss-ui" },
+        '<div class="ss-lay-card">' +
+        '<h3>이 문서를 파일에 연결하세요</h3>' +
+        '<p>고친 내용을 파일에 남기려면 이 HTML 파일을 한 번 골라야 합니다. 한 번만 하면 다음부터는 저절로 이어집니다.</p>' +
+        '<div class="ss-lay-where">고를 파일<b class="ss-lay-name"></b><span class="ss-lay-dir"></span></div>' +
+        '<button type="button" class="ss-lay-go" data-lc="pick"></button>' +
+        '<button type="button" class="ss-lay-later" data-lc="later">나중에 하기 (읽기만)</button>' +
+        '<div class="ss-lay-msg"></div>' +
+        '</div>');
       edLinkBar.addEventListener("click", async (e) => {
         const b3 = e.target.closest("[data-lc]");
-        if (!b3) return;
-        if (b3.dataset.lc === "again" && edKnown) {
+        if (!b3) { if (!e.target.closest(".ss-lay-card")) edLinkShow(false); return; } /* 바깥을 누르면 나중에 하기 */
+        if (b3.dataset.lc === "later") { edLinkShow(false); return; }
+        if (edKnown) { /* 기억해 둔 파일이 있으면 «이어서» 가 먼저다 — 고르기 창을 또 열 이유가 없다 */
           let perm = "denied";
           try { perm = await edKnown.requestPermission({ mode: "readwrite" }); } catch (err) { perm = "denied"; }
           if (perm === "granted") { edAdopt(edKnown); return; }
-          edSay("파일에 쓸 권한을 받지 못했습니다. 「파일 고르기」로 다시 골라 주세요.");
+          edLinkSay("권한을 받지 못했습니다. 아래에서 파일을 다시 골라 주세요.");
+          edKnown = null;
+          edLinkShow(true);
           return;
         }
         edSaveFile();
@@ -3437,7 +3486,7 @@ ${HL_CSS}
         '<span class="ss-edwhen"></span><span class="ss-edmsg"></span>');
       /* 초안 띠가 먼저다 — 둘 다 .ss-draft 모양을 쓰므로 순서가 바뀌면 «첫 .ss-draft» 가 달라진다 */
       head.parentNode.insertBefore(edDraftBar, head.nextSibling);
-      head.parentNode.insertBefore(edLinkBar, edDraftBar.nextSibling);
+      head.parentNode.appendChild(edLinkBar); /* 레이어는 패널 전체를 덮는다 (#78) */
       head.parentNode.insertBefore(edBar2, edDraftBar.nextSibling);
       head.parentNode.insertBefore(edBar, edDraftBar.nextSibling);
       edWhen = edBar.querySelector(".ss-edwhen");

@@ -707,8 +707,23 @@ function check(name, ok, detail) {
     await page.waitForTimeout(200);
     check("로컬 파일: 연결 전에는 글자가 안 고쳐진다",
       (await cell.getAttribute("contenteditable")) !== "true");
-    check("로컬 파일: 「파일을 골라 주세요」 띠가 뜬다",
-      await page.locator(".ss-link.ss-show").count() === 1);
+    check("로컬 파일: 파일 연결 레이어가 뜬다 (#78)",
+      await page.locator(".ss-lay.ss-show").count() === 1);
+    check("레이어가 «무슨 파일을 고르라는지» 를 말해 준다 (#78)",
+      (await page.locator(".ss-lay-name").innerText()) === "demo.html" &&
+      (await page.locator(".ss-lay-go").innerText()).includes("demo.html"),
+      (await page.locator(".ss-lay-name").innerText()) + " / " + (await page.locator(".ss-lay-go").innerText()));
+    check("레이어는 패널 안쪽에만 깔린다 (프로토타입을 안 가린다) (#78)",
+      await page.evaluate(() => {
+        const l = document.querySelector(".ss-lay");
+        return !!(l && l.closest(".ss-defs"));
+      }));
+    await page.locator(".ss-lay-later").click();
+    await page.waitForTimeout(200);
+    check("「나중에 하기」 를 누르면 내려간다 (#78)", await page.locator(".ss-lay.ss-show").count() === 0);
+    await cell.click();
+    await page.waitForTimeout(250);
+    check("그래도 고치려 하면 다시 뜬다 (#78)", await page.locator(".ss-lay.ss-show").count() === 1);
     /* 주소로 받아 온 문서는 쓸 파일이 애초에 없다 — 막지 않는다 (「설명 복사」가 유일한 길) */
     await page.goto("about:blank");
     await page.setContent('<h1 data-spec="1">A</h1><script>window.SCREENSPEC={screen:{id:"S-G",name:"g"},' +
