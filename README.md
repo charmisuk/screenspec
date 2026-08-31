@@ -174,12 +174,13 @@ Next.js(App Router) 적용법은 [SKILL.md](SKILL.md)에 스니펫이 있다.
 
 필드의 타입·기본값·필수 여부는 **[설정 레퍼런스](docs/config.md)** 한 장에 있다. 화면 목록 트리·액센트 컬러·CSS 훅·JS API·콘솔 경고도 거기 있다.
 
-### 표현 타입 5종 (`anno`)
+### 표현 타입 6종 (`anno`)
 
 타입은 **결과가 달라질 때만** 나뉜다. 같은 결과면 하나다.
 
 | 타입 | 언제 쓰나 |
 |---|---|
+| `overview` | **화면 전체**를 설명하는 개요. 마커도 번호도 없고 목록 맨 위에 온다 (`target` 불필요) |
 | `box` | 기본값. 영역 설명 (입력 정책·애니메이션 정의도 여기에 그냥 쓴다) |
 | `arrow` | 아이콘·버튼처럼 작아서 박스가 안 보일 때 |
 | `state` | 조건부 표시·상태 분기 (로그인 여부, 빈 상태) — 대상이 화면에 없어도 누락 경고를 안 낸다 |
@@ -269,7 +270,7 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 둔다 */ ] }
 
 ## 예제
 
-- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — 대표 데모. 이커머스 2화면, anno 5종 전부, PC 반응형
+- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — 대표 데모. 이커머스 2화면, 화면 위 표현 5종 전부, PC 반응형
 - [tree.html](https://charmisuk.github.io/screenspec/examples/tree.html) — 화면 목록 트리 (10화면·4뎁스·미정의 혼합)
 - [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — 단일 화면 (콘텐츠형)
 - [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — 다중 화면 + flow·action

@@ -62,7 +62,7 @@
 <!-- ══ QA-03 · 표현 5종과 재생 ══ -->
 <section class="scr" id="qa03">
   <span class="tag">QA-03</span>
-  <h1 data-spec="31">표현 5종</h1>
+  <h1 data-spec="31">표현 6종</h1>
   <p class="sub">anno 는 결과가 달라질 때만 나뉜다. 다섯 가지가 각각 어떻게 보이는지 본다.</p>
   <div class="card" data-spec="32"><b>영역 설명</b><span>box · 기본값</span></div>
   <div class="row">
@@ -151,7 +151,17 @@ window.SCREENSPEC = {
         { t: "확인 : 「이어서 저장」 한 번이면 이어진다 (또는 저절로 이어진다)" }
       ]}
     ]},
-    { id: "QA-03-ANNO", name: "표현 5종", path: ["QA", "표현 5종"], specs: [
+    { id: "QA-03-ANNO", name: "표현 6종", path: ["QA", "표현 6종"], specs: [
+      { n: 0, anno: "overview", title: "화면 개요 (overview)", defs: [
+        { t: "특정 영역이 아니라 이 화면 전체를 설명하는 자리다" },
+        { t: "확인 : 번호가 아니라 「개요」 가 붙고 목록 맨 위에 있다" },
+        { t: "확인 : 화면에 마커가 없다 (요소를 가리키지 않는다)" },
+        { t: "확인 : 「현재 미표시」 뱃지가 없고 누락 경고도 안 난다" },
+        { t: "확인 : 이 화면에는 이미 개요가 있으므로 위 「＋ 화면 개요」 단추가 안 보인다" },
+        { t: "다른 화면(QA-01)으로 가면 그 단추가 보이고, 눌러서 손으로 만들 수 있다", c: [
+          { t: "사람이 만들 길이 없으면 AI 만 쓰는 기능이 된다", kind: "why" }
+        ]}
+      ]},
       { n: 1, target: "31", anno: "box", title: "영역 (box)", defs: [{ t: "기본값. 네모로 감싼다" }] },
       { n: 2, target: "33", anno: "arrow", title: "화살표 (arrow)", defs: [
         { t: "작은 요소는 옆에서 가리킨다" }

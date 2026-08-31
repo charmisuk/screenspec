@@ -106,6 +106,12 @@
   /* anno 타입 레지스트리 — 결과(액션)가 달라질 때만 분기한다 (#63, PM 2026-08-31).
      box=하이라이트 · arrow=지시선 · state=조건부(누락 경고 제외) · action=▶재생 · flow=화면 이동 */
   const ANNO = {
+    /* 개요 (#82) — 특정 영역이 아니라 «화면 전체» 를 설명하는 자리.
+       마커가 없으므로 target 도 필요 없고, 목록 맨 위에 온다.
+       암묵 규칙(«target 이 없으면 개요»)으로 하지 않은 이유: 에이전트가 target 을 빠뜨린 «실수» 와
+       구분이 안 되고, 그러면 「마커를 못 찾았다」 경고가 조용히 사라진다. 사람과 에이전트가
+       번갈아 고치는 문서에서는 그 모호함이 비싸다 (PM 2026-08-31) */
+    overview: { label: "개요",   mech: "none" },
     box:    { label: "영역",   mech: "box" },
     arrow:  { label: "화살표", mech: "arrow" },
     state:  { label: "상태",   mech: "box" },
@@ -657,6 +663,10 @@
   .ss-nowtag[role="button"]{cursor:pointer;color:var(--ss-accent);border-color:color-mix(in srgb,var(--ss-accent) 45%,#fff);transition:background .12s,color .12s}
   .ss-nowtag[role="button"]:hover,.ss-nowtag[role="button"]:focus-visible{background:var(--ss-accent-soft);color:var(--ss-accent);border-style:solid}
   .ss-row.ss-now-hidden .ss-no{opacity:.4}
+  /* 개요 (#82) — 번호가 아니라 이름표다. 동그라미를 쓰면 «몇 번» 을 화면에서 찾게 된다 */
+  .ss-row.ss-brief .ss-no{width:auto;height:auto;padding:2px 7px;border-radius:6px;background:var(--ss-line);
+    color:var(--ss-ink2);font-size:10.5px;font-weight:800;letter-spacing:.2px}
+  .ss-row.ss-brief{border-bottom:1px solid var(--ss-line)}
   .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
   .ss-row:hover{background:#F4F4F2}
   .ss-row.ss-active{background:var(--ss-accent-soft)}
@@ -924,8 +934,11 @@ ${HL_CSS}
      하위 요소(parts)로 «1a» 를 매기던 규칙을 없앴다 — 1a 로 쓸 것은 새 번호로 전부 되고,
      깊이가 필요하면 그 번호 안의 불릿이 한다. 옛 문서에 parts 가 있어도 조용히 무시한다(안 깨진다).
      key = "1" · "2" … 마커·활성화·배치·화살표·재생이 전부 이 key 로 돈다. */
+  const isBrief = (s) => !!s && s.anno === "overview";
+  /* 개요가 먼저, 나머지는 적은 순서 그대로 — 기획서는 하이레벨 정책을 맨 위에 둔다 (#82) */
+  const inOrder = (specs) => (specs || []).slice().sort((a, b) => (isBrief(a) ? 0 : 1) - (isBrief(b) ? 0 : 1));
   function flatItems(specs) {
-    return (specs || []).map((s) => ({ key: String(s.n), label: String(s.n), spec: s }));
+    return inOrder(specs).map((s) => ({ key: String(s.n), label: String(s.n), spec: s }));
   }
   /* 편집 모드는 «켜야 보이는» 것이다 (#37) — 꺼져 있으면 아래 함수들이 빈 문자열을 내므로
      정의서 DOM 은 편집 기능이 없던 때와 한 글자도 다르지 않다. 회귀 위험을 0 으로 두려는 배치다 */
@@ -1122,12 +1135,13 @@ ${HL_CSS}
   /* 기능정의 행 HTML (wrap·overlay 공용) — 행은 상위 하나. parts 는 그 안에 한 단 들여쓴 블록으로 (#25) */
   function defsRowsHTML(specs) {
     let out = "";
-    (specs || []).forEach((s) => {
+    inOrder(specs).forEach((s) => {
       const type = annoOf(s);
-      out += `<div class="ss-row ss-blk" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
-        ${edGut("item")}<div class="ss-no">${s.n}</div>
+      const brief = isBrief(s);
+      out += `<div class="ss-row ss-blk${brief ? " ss-brief" : ""}" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
+        ${edGut("item")}<div class="ss-no">${brief ? "개요" : s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span><span class="ss-nowtag">현재 미표시</span>${edRowDel()}</div>
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span>${brief ? "" : '<span class="ss-nowtag">현재 미표시</span>'}${edRowDel()}</div>
           <div class="ss-kids">${blocksHTML(s.defs, "plan", String(s.n))}</div>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}
         </div></div>`;
     });
@@ -1297,6 +1311,7 @@ ${HL_CSS}
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
       items().forEach((it) => {
+        if (isBrief(it.spec)) return; /* 개요는 화면 위 요소가 아니다 — 마커를 만들지 않는다 (#82) */
         const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + it.label + ": " + (it.spec.title || "") });
         if (it.label.length > 1) el.classList.add("ss-marker-sub");
         el.textContent = it.label;
@@ -1307,6 +1322,7 @@ ${HL_CSS}
         markerEls[it.key] = el;
       });
       watchMissing(current);
+      edBriefSync();
       ctx.afterRender();
     }
     /* 누락 경고 — 시간이 아니라 "앱이 다 그려졌는가" 로 판정 (#23)
@@ -1340,6 +1356,7 @@ ${HL_CSS}
         const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
         items().forEach((it) => { /* 하위 요소도 target 이 있으면 센다 — 보고는 #1a (#25) */
           const sp = it.spec;
+          if (isBrief(sp)) return; /* 개요는 가리키는 요소가 없다 — 누락이 아니다 (#82) */
           if (!targetOf(sp)) (sp.anno === "state" || sp.optional ? cond : missing).push(it); /* optional:true — anno 와 무관하게 조건부 (#23) */
         });
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
@@ -1465,6 +1482,7 @@ ${HL_CSS}
       let moved = false;
       wireMoves();
       items().forEach((it) => {
+        if (isBrief(it.spec)) return; /* 개요는 자리를 잡을 것이 없다 (#82) */
         const t = targetOf(it.spec), m = markerEls[it.key];
         const hidden = !t || t.getClientRects().length === 0;
         const blk = blockOf(it);
@@ -2224,10 +2242,28 @@ ${HL_CSS}
     let edWas = "";         /* 고치기 전 값 — Esc 로 돌아갈 자리 */
     let edDirty = false;    /* 저장 안 된 변경이 있는가 */
     let edHandle = null;    /* 파일에 직접 저장할 때의 파일 손잡이 (세션 동안 기억) */
-    let edBar = null, edBtn2 = null, edWhen = null, edMsg = null, edDraftBar = null;
+    let edBar = null, edBtn2 = null, edWhen = null, edMsg = null, edDraftBar = null, edBriefBtn = null;
 
     function edStore(fn) { try { return fn(); } catch (e) { return null; } } /* 사생활 보호 모드 등 localStorage 차단 대비 */
     function edSay(msg) { if (edMsg) edMsg.textContent = msg || ""; }
+    /* 개요는 화면당 하나다 — 이미 있으면 만들 단추를 감춘다 (#82) */
+    function edBriefSync() {
+      if (!edBriefBtn) return;
+      edBriefBtn.hidden = specs().some(isBrief);
+    }
+    function edAddBrief() {
+      if (!edGate()) return;
+      if (specs().some(isBrief)) return;
+      edSnap();
+      specs().unshift({ n: 0, anno: "overview", title: "화면 개요", defs: [{ t: "" }] });
+      edRenumber();
+      edTouched();
+      render();
+      edBriefSync();
+      /* 만들자마자 그 자리에서 쓰게 한다 — 만들고 나서 어디를 눌러야 하는지 찾게 두지 않는다 */
+      const row = ctx.listEl.querySelector('[data-defrow="0"] .ss-kids [data-ed]');
+      if (row) edBegin(row);
+    }
     /* 전부 삭제 — 되돌릴 길(Ctrl+Z)이 있어야 물어보는 것이 형식적이지 않다 */
     function edWipeAll() {
       if (!edGate()) return;
@@ -3232,7 +3268,8 @@ ${HL_CSS}
     }
 
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
-    function edRenumber() { specs().forEach((s, i) => (s.n = i + 1)); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
+    /* 개요는 번호를 안 가진다 (#82) — 화면에 0번 마커가 없는데 번호만 보이면 읽는 사람이 찾게 된다 */
+    function edRenumber() { let k = 0; inOrder(specs()).forEach((s) => { s.n = isBrief(s) ? 0 : ++k; }); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
     function edCmd(btn) {
       if (!edGate()) return;
       const key = edKeyOf(btn), c = btn.dataset.ec, di = Number(btn.dataset.di), si = Number(btn.dataset.si);
@@ -3488,7 +3525,14 @@ ${HL_CSS}
       edBtn2 = h("button", { class: "ss-headbtn ss-wipeall ss-ui", type: "button",
         title: "이 화면의 기능 설명을 전부 지웁니다" }, "전부 삭제");
       edBtn2.onclick = edWipeAll;
+      /* 개요를 «사람이» 만들 길 (#82). 이것이 없으면 AI 만 쓸 수 있는 기능이 된다 —
+         번호 찍기는 늘 target 을 만들므로 개요는 손으로 만들 방법이 없었다 */
+      edBriefBtn = h("button", { class: "ss-headbtn ss-ui", type: "button",
+        title: "특정 영역이 아니라 이 화면 전체를 설명하는 자리를 맨 위에 만듭니다" }, "＋ 화면 개요");
+      edBriefBtn.onclick = edAddBrief;
+      (headTools() || head).appendChild(edBriefBtn);
       (headTools() || head).appendChild(edBtn2);
+      edBriefSync();
 
       /* 밖에서 바뀐 파일 알림 — 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다.
          「프로토타입의 동작을 방해하지 않는다」가 이 제품의 전제라 새 고정 요소를 만들지 않는다 */

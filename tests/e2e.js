@@ -706,6 +706,60 @@ function check(name, ok, detail) {
       JSON.stringify(c).slice(0, 160));
   }
 
+  /* ============ 화면 개요 (#82) ============
+     특정 영역이 아니라 «화면 전체» 를 설명하는 자리. 마커도 번호도 없이 목록 맨 위에 온다.
+     사람과 에이전트가 번갈아 고치므로 «명시»(anno:"overview")로 둔다 — target 을 빠뜨린
+     실수와 구분되지 않으면 「마커를 못 찾았다」 경고가 조용히 사라진다 */
+  if (sec("[개요] 화면 전체를 설명하는 자리 (#82)")) {
+    await page.goto("about:blank");
+    await page.setContent('<h1 data-spec="1">제목</h1><p data-spec="2">본문</p>' +
+      '<script>window.SCREENSPEC={screen:{id:"S-OV",name:"o"},specs:[' +
+      '{n:1,target:"1",title:"제목 영역",defs:[{t:"가"}]},' +
+      '{n:2,target:"2",title:"본문 영역",defs:[{t:"나"}]},' +
+      '{n:0,anno:"overview",title:"화면 개요",defs:[{t:"이 화면이 무엇인가"}]}]}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    const rows = () => page.evaluate(() => [...document.querySelectorAll(".ss-defs-list [data-defrow]")]
+      .map((e) => (e.querySelector(".ss-no") || {}).textContent + "|" + (e.querySelector(".ss-t") || {}).textContent));
+    check("개요는 적은 순서와 무관하게 맨 위에 온다 (#82)",
+      (await rows())[0] === "개요|화면 개요", JSON.stringify(await rows()));
+    check("개요에는 번호가 아니라 «개요» 가 붙는다 (#82)", (await rows())[1] === "1|제목 영역", JSON.stringify(await rows()));
+    check("개요는 마커를 만들지 않는다 (#82)", (await page.locator(".ss-marker").count()) === 2,
+      await page.locator(".ss-marker").count());
+    check("개요에는 「현재 미표시」 뱃지가 안 붙는다 (#82)",
+      (await page.locator('[data-defrow="0"] .ss-nowtag').count()) === 0);
+    /* 가리키는 요소가 없다고 «못 찾았다» 고 하면 안 된다 */
+    const warns = [];
+    const onW = (m) => { if (m.type() === "warning") warns.push(m.text()); };
+    page.on("console", onW);
+    await page.waitForTimeout(2600);
+    page.off("console", onW);
+    check("개요는 누락 경고를 부르지 않는다 (#82)",
+      !warns.some((t) => t.indexOf("못 찾은 정의") >= 0), JSON.stringify(warns.slice(0, 2)));
+    /* 사람이 손으로 만들 수 있어야 한다 — 없으면 AI 만 쓰는 기능이 된다 */
+    await page.goto("about:blank");
+    await page.setContent('<h1 data-spec="1">제목</h1>' +
+      '<script>window.SCREENSPEC={screen:{id:"S-OV2",name:"o"},specs:[' +
+      '{n:1,target:"1",title:"제목 영역",defs:[{t:"가"}]}]}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("개요가 없으면 «＋ 화면 개요» 단추가 보인다 (#82)",
+      await page.locator("button:has-text('＋ 화면 개요')").isVisible());
+    await page.locator("button:has-text('＋ 화면 개요')").click();
+    await page.waitForTimeout(400);
+    check("눌러서 만들면 맨 위에 개요가 생긴다 (#82)",
+      (await rows())[0] === "개요|화면 개요", JSON.stringify(await rows()));
+    check("만들고 나면 단추가 사라진다 (화면당 하나) (#82)",
+      (await page.locator("button:has-text('＋ 화면 개요')").isVisible()) === false);
+    check("만들자마자 그 자리에서 쓸 수 있다 (#82)",
+      (await page.locator('[data-defrow="0"] .ss-kids [data-ed]').first().getAttribute("contenteditable")) === "true");
+    check("기존 항목 번호는 그대로 1부터다 (#82)", (await rows())[1] === "1|제목 영역", JSON.stringify(await rows()));
+  }
+
   /* ============ 파일에 연결 안 되면 못 고친다 (#68) ============
      자동저장을 안 켠 채로 고치면 그 수정은 브라우저 메모리에만 남는다 — 파일을 읽는
      사람도 AI 도 못 본다. 그래서 «고치기 전에» 붙잡는다. 단 로컬 파일로 열었을 때만이다 */
