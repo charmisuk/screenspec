@@ -3348,6 +3348,9 @@ ${HL_CSS}
         edSync();
         setEdit(true);
         render();
+        /* 되살리기만 하면 여전히 파일에는 없다 (#72) — 로컬 파일이면 그 자리에서 잇게 한다 */
+        if (!edGate()) return;
+        edAutoPlan();
         edSay("저장 안 된 초안을 되살렸습니다. 저장을 눌러 파일에 반영하세요.");
       };
       edDraftBar.querySelector('[data-dc="drop"]').onclick = () => {
@@ -3441,6 +3444,7 @@ ${HL_CSS}
         const add = e.target.closest("[data-add]");
         if (!add) return;
         e.preventDefault(); e.stopPropagation();
+        if (!edGate()) return; /* 파일에 연결되기 전에는 줄도 안 는다 (#72) */
         edSlashClose();
         const blk = add.closest(".ss-b"), row = add.closest(".ss-row");
         const target = blk ? blk.querySelector("[data-ed]")
