@@ -51,6 +51,15 @@ const MUTS = [
   { id: "layer-name-off", only: "[편집] 파일에 연결", why: "레이어가 무슨 파일인지 안 알려 준다 (#78)",
     find: "        edLinkBar.querySelector(\".ss-lay-name\").textContent = edKnown ? edKnown.name : at.name;",
     to:   "        edLinkBar.querySelector(\".ss-lay-name\").textContent = \"\";" },
+  { id: "quiet-off", only: "[auto]", why: "잃을 게 없어도 매번 묻는다 (#83)",
+    find: "      if (text !== null && edBase !== null && !cfgChanged && idle) {",
+    to:   "      if (false) {" },
+  { id: "what-off", only: "[auto]", why: "무엇이 바뀌었는지 안 가린다 (#83)",
+    find: "      const cfgChanged = text !== null && edBase !== null && now.cfg !== was.cfg;",
+    to:   "      const cfgChanged = true;" },
+  { id: "race-off", only: "[auto]", why: "자동저장이 감시보다 빨라 밖의 변경을 덮는다 (#83)",
+    find: "      await edPeekFile();\n      if (edOutside) return;",
+    to:   "" },
 ];
 
 const argv = process.argv.slice(2);

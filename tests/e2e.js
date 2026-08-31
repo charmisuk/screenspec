@@ -2710,26 +2710,78 @@ function check(name, ok, detail) {
     /* ---- 밖에서 바뀐 파일 ----
        PM 이 에이전트에게 프로토타입을 고치라고 하면 파일은 바뀌는데 브라우저는 모른다.
        모르는 채로 자동저장이 돌면 그 변경을 덮어쓴다 — 그래서 알아채고 «멈춰야» 한다 */
-    await page.evaluate(() => { window.__file = window.__file.replace("홈", "홈 화면"); window.__mt += 99999; });
     check("파일감시: 바뀌기 전에는 띠가 없다",
       (await page.locator(".ss-outside").evaluate((e) => getComputedStyle(e).display)) === "none");
+    /* ① 정의서도 밖에서 바뀌었다 = 진짜 충돌. 이때만 «어느 쪽을 버릴지» 를 묻는다 (#83) */
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]'); /* 미저장을 만든다 */
+    await page.keyboard.type("X");
+    await page.evaluate(() => {
+      window.__file = window.__file.replace("홈", "홈 화면").replace("첫 줄", "밖에서 고친 줄");
+      window.__mt += 99999;
+    });
     await page.waitForTimeout(3600);
-    check("파일감시: 밖에서 바뀌면 띠가 뜬다", await page.evaluate(() =>
-      getComputedStyle(document.querySelector(".ss-outside")).display === "flex" &&
-      document.querySelector(".ss-outside").textContent.indexOf("밖에서 바뀌었습니다") >= 0));
+    check("파일감시: 정의서도 바뀌면 띠가 뜬다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-outside")).display === "flex"));
+    check("파일감시: 무엇이 바뀌었는지 말한다 (기능 설명도) (#83)",
+      (await page.locator(".ss-out-what").textContent()) === "기능 설명도 밖에서 바뀌었습니다",
+      await page.locator(".ss-out-what").textContent());
+    check("파일감시: 단추가 «무엇을 버리는지» 를 말한다 (#83)",
+      (await page.locator('.ss-outside [data-oc="reload"]').textContent()).indexOf("내 미저장 버림") >= 0 &&
+      (await page.locator('.ss-outside [data-oc="keep"]').isVisible()) === true);
     check("파일감시: 그동안 상태는 «저장 멈춤»", (await page.locator(".ss-savest").textContent()) === "저장 멈춤",
       await page.locator(".ss-savest").textContent());
     const w0 = await writes();
-    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
-    await page.keyboard.type("X");
+    await page.keyboard.type("Y");
     await page.waitForTimeout(1800);
     check("파일감시: 멈춘 동안에는 파일에 쓰지 않는다 (남의 변경을 안 덮는다)", (await writes()) === w0, [w0, await writes()]);
+    check("파일감시: 멈춘 동안 고치면 그 사실을 말한다 (#83)",
+      (await page.locator(".ss-out-stuck").textContent()).indexOf("파일에 안 갑니다") >= 0,
+      await page.locator(".ss-out-stuck").textContent());
     await page.click('.ss-outside [data-oc="keep"]');
     await page.waitForTimeout(1600);
-    check("파일감시: 「내 것 유지」 를 고르면 띠가 닫히고 저장이 다시 돈다",
+    check("파일감시: 「내 것으로」 를 고르면 띠가 닫히고 저장이 다시 돈다",
       (await page.locator(".ss-outside").evaluate((e) => getComputedStyle(e).display)) === "none" &&
       (await writes()) > w0, [await writes(), w0]);
-    check("파일감시: 새로고침 선택지가 함께 있다", (await page.locator('.ss-outside [data-oc="reload"]').count()) === 1);
+    /* ② 프로토타입만 바뀌었고 내가 편집 중이면 — 묻되 «버릴 것이 없으니» 단추는 하나다 */
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.type("Z");
+    await page.evaluate(() => { window.__file = window.__file.replace("구매하기", "지금 구매"); window.__mt += 99999; });
+    await page.waitForTimeout(3600);
+    check("파일감시: 프로토타입만 바뀌면 그렇게 말한다 (#83)",
+      (await page.locator(".ss-out-what").textContent()) === "프로토타입이 밖에서 바뀌었습니다" &&
+      (await page.locator(".ss-out-why").textContent()).indexOf("내 정의는 그대로") >= 0,
+      await page.locator(".ss-out-what").textContent());
+    check("파일감시: 버릴 것이 없으면 «내 것으로» 단추를 안 준다 (#83)",
+      (await page.locator('.ss-outside [data-oc="keep"]').isVisible()) === false);
+
+    /* ③ 잃을 것이 없으면 안 묻는다 — 조용히 새로 읽는다 (#83).
+       페이지를 다시 읽으므로 이 판이 끝난다. 그래서 이 섹션의 «맨 끝» 에 둔다 */
+    await page.click('.ss-outside [data-oc="reload"]').catch(() => {});
+    await page.waitForTimeout(300);
+    await page.goto("about:blank");
+    await page.setContent(PROTO);
+    await page.evaluate((src) => {
+      window.__file = "<html><body>" + src + "</body></html>";
+      window.__writes = 0; window.__mt = 1000;
+      window.showOpenFilePicker = async () => [{
+        name: "proto.html", queryPermission: async () => "granted", requestPermission: async () => "granted",
+        getFile: async () => ({ text: async () => window.__file, lastModified: window.__mt }),
+        createWritable: async () => ({ write: async (t) => { window.__file = t; window.__mt += 10; window.__writes++; }, close: async () => {} }),
+      }];
+    }, PROTO);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.click(".ss-svbtn");
+    await page.waitForTimeout(600);
+    check("조용히 반영: 전제 — 연결됐고 미저장이 없다 (#83)",
+      (await page.locator(".ss-savest").textContent()).indexOf("저장됨") === 0,
+      await page.locator(".ss-savest").textContent());
+    await page.evaluate(() => { window.__file = window.__file.replace("구매하기", "밖에서 바꾼 글"); window.__mt += 99999; });
+    await page.waitForTimeout(3800);
+    check("조용히 반영: 프로토타입만 바뀌고 잃을 게 없으면 안 묻고 새로 읽는다 (#83)",
+      await page.evaluate(() => !window.ScreenSpec));
 
     check("자동저장: 도중에 JS 에러 0건", errs.length === 0, errs);
     page.off("pageerror", onErr);

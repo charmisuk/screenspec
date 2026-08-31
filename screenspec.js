@@ -496,6 +496,9 @@
   /* 밖에서 바뀐 파일 띠 — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
   .ss-outside{background:#EAF1FF;border-bottom-color:#C7D8F5;color:#1B4A9C}
   .ss-outside button{border-color:#B9CDF0;color:#1B4A9C}
+  .ss-outside .ss-out-what{font-weight:800}
+  .ss-outside .ss-out-why,.ss-outside .ss-out-stuck{opacity:.8}
+  .ss-outside .ss-out-stuck{flex-basis:100%;font-weight:700}
   /* 파일 연결 관문 (#78) — 띠가 아니라 레이어다. 띠는 «알림» 처럼 생겨서 무시하고 지나갔는데,
      이건 무시하면 아무것도 못 하는 관문이다. 단 «패널 안쪽» 에만 깐다 —
      프로토타입 위에 팝업을 띄우지 않는다는 것이 이 제품의 전제다 (고치려 누른 순간이라 시선도 여기 있다) */
@@ -1361,6 +1364,13 @@ ${HL_CSS}
     const navToast = h("div", { class: "ss-ui ss-nav-toast" });
     document.body.appendChild(navToast);
     let navTimer = null;
+    /* 짧게 지나가는 한 줄 — 화면 전환 알림과 같은 자리를 쓴다 (#83) */
+    function sayToast(t) {
+      navToast.textContent = t;
+      navToast.classList.add("ss-show");
+      clearTimeout(navTimer);
+      navTimer = setTimeout(() => navToast.classList.remove("ss-show"), 2600);
+    }
     function showNav(sc) {
       navToast.textContent = "→ " + sc.id + " · " + sc.name + (unwired(sc) ? "  (설명만 · 프로토타입은 그대로)" : "");
       navToast.classList.add("ss-show");
@@ -2209,6 +2219,7 @@ ${HL_CSS}
        저장은 그 객체를 텍스트로 되돌려 파일의 설정 블록만 갈아끼운다.
        ============================================================ */
     const DRAFT_KEY = "screenspec:draft:" + (location.pathname || "/");
+    const OUT_KEY = "screenspec:outside:" + (location.pathname || "/"); /* 조용히 반영한 뒤 «그랬다» 고 말하려고 (#83) */
     let edEl = null;        /* 지금 고치는 중인 요소 */
     let edWas = "";         /* 고치기 전 값 — Esc 로 돌아갈 자리 */
     let edDirty = false;    /* 저장 안 된 변경이 있는가 */
@@ -2232,6 +2243,8 @@ ${HL_CSS}
     let edSavedAt = "", edStat = null, edSvBtn = null, edSaving = false, edAutoT = null, edSnapped = false;
     let edMtime = 0, edOutside = false, edWatchT = null, edBar2 = null;
     let edLinkBar = null, edKnown = null; /* edKnown = 기억해 둔 손잡이 (아직 권한을 못 받았을 수 있다) */
+    /* 밖에서 바뀐 것이 «무엇인가» 를 가리려면 기준이 있어야 한다 (#83) — 우리가 마지막으로 읽거나 쓴 파일 내용 */
+    let edBase = null, edOutCfg = false;
     const AUTO_MS = 1200;   /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
     const WATCH_MS = 3000;  /* 파일이 밖에서 바뀌었는지 보는 주기. 아래 edWatch 주석 참고 */
     function edCanFile() { return typeof window.showOpenFilePicker === "function"; }
@@ -2279,6 +2292,7 @@ ${HL_CSS}
     async function edAdopt(hd) {
       const wrong = await edMatches(hd); /* 기억해 둔 파일이 그 사이 다른 것으로 바뀌었을 수 있다 (#70) */
       if (wrong) { edKnown = null; edLinkShow(true); edSay(wrong); return; }
+      try { edBase = await (await hd.getFile()).text(); } catch (e) { edBase = null; }
       edHandle = hd;
       edKnown = hd;
       edMtime = 0;
@@ -2344,6 +2358,10 @@ ${HL_CSS}
     }
     function edTouched() {
       edDirty = true;
+      if (edOutside && edBar2) { /* 멈춰 있는데 계속 쓰고 있다 — 그 글은 파일에 안 간다 (#83) */
+        const st = edBar2.querySelector(".ss-out-stuck");
+        if (st) st.textContent = " · 지금 고치는 것은 파일에 안 갑니다";
+      }
       edStore(() => localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), cfg: RAW })));
       edSync();
       edAutoPlan();
@@ -2377,12 +2395,37 @@ ${HL_CSS}
       try { f = await edHandle.getFile(); } catch (e) { return; } /* 지워졌거나 권한이 끊겼다 */
       if (!edMtime) { edMtime = f.lastModified; return; }
       if (f.lastModified <= edMtime + 1) return;
+      /* 무엇이 바뀌었는지 가린다 (#83). 정의서가 그대로면 충돌이 아니다 —
+         저장은 설정 블록만 갈아끼우므로 프로토타입 변경과 내 정의는 «둘 다» 살 수 있다 */
+      let text = null;
+      try { text = await f.text(); } catch (e) { text = null; }
+      const now = edSplit(text), was = edSplit(edBase);
+      const cfgChanged = text !== null && edBase !== null && now.cfg !== was.cfg;
+      const idle = !edDirty && !edEl; /* 편집 중도 아니고 미저장도 없다 = 잃을 것이 없다 */
+      if (text !== null && edBase !== null && !cfgChanged && idle) {
+        /* 잃을 것이 없다 — 묻지 않는다. 사람은 그동안 에이전트 쪽을 보고 있다 (#83, PM 2026-08-31) */
+        try { sessionStorage.setItem(OUT_KEY, String(f.lastModified)); } catch (e) { /* 못 남겨도 반영은 한다 */ }
+        location.reload();
+        return;
+      }
       /* 밖에서 바뀌었다 — 우리 저장을 멈춘다. 안 멈추면 다음 자동저장이 그 변경을 덮는다 */
       edOutside = true;
+      edOutCfg = cfgChanged;
       clearTimeout(edAutoT);
       if (edBar2) {
         const when = new Date(f.lastModified).toLocaleTimeString();
         edBar2.querySelector(".ss-out-when").textContent = when;
+        edBar2.querySelector(".ss-out-what").textContent = cfgChanged
+          ? "기능 설명도 밖에서 바뀌었습니다"
+          : "프로토타입이 밖에서 바뀌었습니다";
+        edBar2.querySelector(".ss-out-why").textContent = cfgChanged
+          ? " · 어느 쪽을 남길지 골라야 합니다"
+          : " · 내 정의는 그대로입니다";
+        const keep = edBar2.querySelector("[data-oc=keep]");
+        keep.hidden = !cfgChanged; /* 정의서가 안 바뀌었으면 버릴 것이 없다 — 단추를 안 준다 */
+        keep.textContent = "내 것으로 (밖의 설명 변경 버림)";
+        edBar2.querySelector("[data-oc=reload]").textContent = cfgChanged
+          ? "밖의 것으로 (내 미저장 버림)" : "새로 읽기";
         edBar2.classList.add("ss-show");
       }
       edSync();
@@ -2394,6 +2437,10 @@ ${HL_CSS}
     }
     async function edAutoSave() {
       if (!edHandle || edSaving || edOutside) return;
+      /* 쓰기 직전에 한 번 더 본다 (#83). 자동저장은 1.2초, 감시는 3초 주기라 그 사이에 들어온
+         밖의 변경은 «알아채기 전에» 덮여 버렸다. 쓰기 직전 확인이 그 틈을 없앤다 */
+      await edPeekFile();
+      if (edOutside) return;
       edPickUp(); /* 치는 중이어도 지금까지 친 글은 담는다 */
       if (!edDirty) return;
       edSaving = true; edSync();
@@ -3296,6 +3343,13 @@ ${HL_CSS}
        그대로 쓰면 남의 정의서가 통째로 갈리고 되돌릴 길이 없다. 화면 ID 가 하나라도 겹쳐야 우리 파일로 본다.
        견줄 ID 가 아예 없는 설정이면 통과시킨다 — 근거 없이 막으면 멀쩡한 저장을 막는다.
        문제가 있으면 «사람에게 할 말» 을 돌려준다 (없으면 null) */
+    /* 설정 블록과 나머지를 가른다 — 사람은 설정 블록을, 에이전트는 주로 나머지를 고친다.
+       영역이 다르면 «합치는» 것이 기본이지 양자택일이 기본일 이유가 없다 (#83) */
+    function edSplit(text) {
+      const at = findConfigBlock(text || "");
+      if (!at) return { cfg: null, rest: text || "" };
+      return { cfg: text.slice(at.start, at.end), rest: text.slice(0, at.start) + "\u0000" + text.slice(at.end) };
+    }
     async function edMatches(hd) {
       let text = "";
       try { text = await (await hd.getFile()).text(); }
@@ -3320,6 +3374,7 @@ ${HL_CSS}
         const w = await edHandle.createWritable();
         await w.write(out);
         await w.close();
+        edBase = out; /* 방금 쓴 것이 다음 판정의 기준이다 (#83) */
         /* 우리가 쓴 것을 «밖에서 바뀐 것» 으로 오해하지 않게 기준 시각을 갱신한다 */
         try { edMtime = (await edHandle.getFile()).lastModified; } catch (e) { edMtime = Date.now(); }
         return null;
@@ -3438,8 +3493,11 @@ ${HL_CSS}
       /* 밖에서 바뀐 파일 알림 — 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다.
          「프로토타입의 동작을 방해하지 않는다」가 이 제품의 전제라 새 고정 요소를 만들지 않는다 */
       edBar2 = h("div", { class: "ss-draft ss-outside ss-ui" },
-        '프로토타입 파일이 밖에서 바뀌었습니다 (<span class="ss-out-when"></span>) ' +
-        '<button type="button" data-oc="reload">새로고침</button><button type="button" data-oc="keep">내 것 유지</button>');
+        '<b class="ss-out-what">프로토타입이 밖에서 바뀌었습니다</b><span class="ss-out-why"></span> ' +
+        '(<span class="ss-out-when"></span>) ' +
+        '<button type="button" data-oc="reload">새로 읽기</button>' +
+        '<button type="button" data-oc="keep" hidden>내 것으로</button>' +
+        '<span class="ss-out-stuck"></span>');
       edBar2.addEventListener("click", (e) => {
         const b2 = e.target.closest("[data-oc]");
         if (!b2) return;
@@ -3492,6 +3550,13 @@ ${HL_CSS}
       edWhen = edBar.querySelector(".ss-edwhen");
       edMsg = edBar.querySelector(".ss-edmsg");
       edRelink(); /* 전에 고른 파일이 있으면 되잇는다 (#68) */
+      /* 조용히 반영하고 새로 읽은 판이면 «그랬다» 고 한 줄 남긴다 — 말없이 바뀌면 사람이 놀란다 (#83) */
+      try {
+        if (sessionStorage.getItem(OUT_KEY)) {
+          sessionStorage.removeItem(OUT_KEY);
+          setTimeout(() => sayToast("밖의 변경을 반영했습니다"), 400);
+        }
+      } catch (e) { /* 저장소가 막힌 브라우저 */ }
       edBar.addEventListener("mousedown", (e) => {
         const f = e.target.closest("[data-fm]");
         if (!f) return;
