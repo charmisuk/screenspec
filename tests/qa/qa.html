@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>ScreenSpec QA 하네스</title>
+<style>
+  :root{--line:#E5E3DF;--line2:#D8D5D0;--ink:#1A1A19;--ink2:#5E5B55;--ink3:#8B8780;--accent:#2952E3;--soft:#F4F3F1}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.6 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:#fff}
+  .scr{padding:26px 22px 34px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.4px;color:var(--accent);
+    background:#EEF2FE;border-radius:99px;padding:3px 9px;margin-bottom:10px}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--ink2);font-size:12.5px;margin:0 0 18px}
+  .card{border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin:0 0 10px}
+  .card b{display:block;margin-bottom:3px}
+  .card span{color:var(--ink2);font-size:12.5px}
+  .num{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .num em{display:block;font-size:11.5px;font-weight:600;color:var(--ink3);font-style:normal;margin-top:2px}
+  .grid{display:flex;gap:10px}
+  .grid .card{flex:1;text-align:center}
+  button{font:inherit;font-weight:700;border:1px solid var(--line2);background:#fff;color:var(--ink);
+    padding:9px 15px;border-radius:8px;cursor:pointer}
+  button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .bar{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;
+    border:1px solid var(--line);border-radius:10px;margin-bottom:10px}
+  .bar .ico{width:26px;height:26px;border-radius:7px;background:var(--soft);display:grid;place-items:center;font-size:13px}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+    border-radius:14px 14px 0 0;padding:18px 20px 24px;transform:translateY(102%);transition:transform .22s;z-index:50}
+  .sheet.open{transform:translateY(0)}
+  .dim{position:fixed;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .22s;z-index:40}
+  .dim.open{opacity:1;pointer-events:auto}
+  .empty{color:var(--ink3);text-align:center;padding:34px 0;border:1px dashed var(--line2);border-radius:10px}
+</style>
+</head>
+<body>
+
+<!-- ══ QA-01 · 화면 전환 (root 를 안 적었다) ══ -->
+<section class="scr" id="qa01">
+  <span class="tag">QA-01</span>
+  <h1 data-spec="11">화면 전환</h1>
+  <p class="sub">이 파일의 화면에는 <code>root</code> 를 하나도 안 적었다. 목차로 옮겨 다니는 것이 이 화면의 시험 대상이다.</p>
+  <div class="card" data-spec="12"><b>이번 주 요약</b><span>방문 128 · 예약 34 · 신규 이용자 9</span></div>
+  <div class="grid">
+    <div class="card"><span class="num">128<em>방문</em></span></div>
+    <div class="card"><span class="num">34<em>예약</em></span></div>
+  </div>
+  <div class="row"><button class="pri" data-spec="13">목록 보기</button></div>
+</section>
+
+<!-- ══ QA-02 · 편집과 파일 연결 ══ -->
+<section class="scr" id="qa02">
+  <span class="tag">QA-02</span>
+  <h1 data-spec="21">편집과 파일 연결</h1>
+  <p class="sub">오른쪽 패널의 글자를 눌러 보는 것이 이 화면의 시험이다. 프로토타입 쪽은 배경일 뿐이다.</p>
+  <div class="bar"><span><b>자동저장</b></span><span class="ico">💾</span></div>
+  <div class="card" data-spec="22"><b>연결 상태</b><span>파일에 연결되면 툴바 오른쪽이 「저장됨」으로 바뀐다</span></div>
+  <div class="row"><button data-spec="23">아무 동작</button></div>
+</section>
+
+<!-- ══ QA-03 · 표현 5종과 재생 ══ -->
+<section class="scr" id="qa03">
+  <span class="tag">QA-03</span>
+  <h1 data-spec="31">표현 5종</h1>
+  <p class="sub">anno 는 결과가 달라질 때만 나뉜다. 다섯 가지가 각각 어떻게 보이는지 본다.</p>
+  <div class="card" data-spec="32"><b>영역 설명</b><span>box · 기본값</span></div>
+  <div class="row">
+    <button data-spec="33">↺</button>
+    <button class="pri" data-spec="34">바텀시트 열기</button>
+    <button data-spec="35">목록으로</button>
+  </div>
+  <div class="empty" data-spec="36">아직 등록된 항목이 없습니다</div>
+  <div class="dim" id="qaDim"></div>
+  <div class="sheet" id="qaSheet">
+    <b>바텀시트</b>
+    <p class="sub">action 이 실제로 이걸 연다</p>
+    <button id="qaSheetClose">닫기</button>
+  </div>
+</section>
+
+<!-- ══ QA-04 · 연결 안 된 화면 (일부러 실패시킨다) ══ -->
+<section class="scr" id="qa04">
+  <span class="tag">QA-04</span>
+  <h1 data-spec="90">연결 안 된 화면</h1>
+  <p class="sub">이 화면의 두 요소는 <b>같은 이름표</b>를 달고 있다. 어느 것인지 알 수 없으니 우리는 화면을 세우지 않는다.</p>
+  <div class="card" data-spec="90"><b>같은 이름표를 단 둘째 요소</b><span>추론이 실패해야 정상이다</span></div>
+</section>
+
+<script>
+  /* 프로토타입 자신의 동작 — 정의서 모드에서도 이게 그대로 돌아야 한다 */
+  (function () {
+    var sheet = document.getElementById("qaSheet"), dim = document.getElementById("qaDim");
+    function open(v) { sheet.classList.toggle("open", v); dim.classList.toggle("open", v); }
+    document.querySelector('[data-spec="34"]').addEventListener("click", function () { open(true); });
+    document.getElementById("qaSheetClose").addEventListener("click", function () { open(false); });
+    dim.addEventListener("click", function () { open(false); });
+  })();
+</script>
+
+<script>
+window.SCREENSPEC = {
+  mode: "wrap",
+  screens: [
+    { id: "QA-01-SWITCH", name: "화면 전환", path: ["QA", "화면 전환"], specs: [
+      { n: 1, target: "11", anno: "box", title: "화면 제목", defs: [
+        { t: "목차(왼쪽 위 화면 ID)를 열고 다른 화면을 고른다" },
+        { t: "확인 : 프로토타입도 같이 바뀐다", c: [
+          { t: "root 를 안 적어도 정의가 가리키는 요소에서 화면을 되찾는다", kind: "why" }
+        ]},
+        { t: "확인 : 정의서 모드에서는 «이 화면 하나» 만 보인다" },
+        { t: "확인 : 프로토타입 모드로 돌아가면 네 화면이 다시 다 보인다" }
+      ]},
+      { n: 2, target: "12", anno: "box", title: "요약 카드", defs: [
+        { t: "확인 : 제목 옆에 「상단 · 좌측」류 위치 힌트가 없다" }
+      ]},
+      { n: 3, target: "13", anno: "flow", title: "목록 보기", flowTo: "QA-02-SAVE", defs: [
+        { t: "▶ 를 누르면 QA-02 로 이동하고 문서도 같이 넘어간다" }
+      ]}
+    ]},
+    { id: "QA-02-SAVE", name: "편집과 파일 연결", path: ["QA", "편집과 파일 연결"], specs: [
+      { n: 1, target: "21", anno: "box", title: "연결 전에는 못 고친다", defs: [
+        { t: "이 줄의 아무 글자나 눌러 본다" },
+        { t: "확인 : 안 고쳐지고 「이 파일을 한 번 골라 주세요」 띠가 뜬다", c: [
+          { t: "남지 않을 수정을 하게 두지 않는다", kind: "why" }
+        ]},
+        { t: "확인 : 로컬 파일(file://)로 열었을 때만 막힌다. 주소로 연 문서는 안 막는다" }
+      ]},
+      { n: 2, target: "22", anno: "box", title: "잘못된 파일은 안 쓴다", defs: [
+        { t: "「파일 고르기」 → 일부러 다른 프로토타입(examples/shop.html)을 고른다" },
+        { t: "확인 : 「이 화면정의서의 파일이 아닙니다」로 멈추고 그 파일은 그대로다" },
+        { t: "다시 「파일 고르기」 → 이번엔 이 파일(_qa/qa.html)을 고른다" },
+        { t: "확인 : 그때부터 고쳐지고 손이 멈추면 저장된다" }
+      ]},
+      { n: 3, target: "23", anno: "action", title: "기억하는지 본다",
+        play: { selector: '[data-spec="23"]', label: "동작 재생" }, defs: [
+        { t: "연결한 뒤 브라우저를 새로고침한다" },
+        { t: "확인 : 「이어서 저장」 한 번이면 이어진다 (또는 저절로 이어진다)" }
+      ]}
+    ]},
+    { id: "QA-03-ANNO", name: "표현 5종", path: ["QA", "표현 5종"], specs: [
+      { n: 1, target: "31", anno: "box", title: "영역 (box)", defs: [{ t: "기본값. 네모로 감싼다" }] },
+      { n: 2, target: "33", anno: "arrow", title: "화살표 (arrow)", defs: [
+        { t: "작은 요소는 옆에서 가리킨다" }
+      ]},
+      { n: 3, target: "34", anno: "action", title: "동작 (action)",
+        play: { selector: '[data-spec="34"]', label: "동작 재생: 바텀시트" }, defs: [
+        { t: "▶ 를 누르면 실제로 바텀시트가 열린다" },
+        { t: "확인 : 정의서 모드에서도 프로토타입이 살아 있다" }
+      ]},
+      { n: 4, target: "35", anno: "flow", title: "이동 (flow)", flowTo: "QA-01-SWITCH", defs: [
+        { t: "▶ 를 누르면 QA-01 로 넘어간다" }
+      ]},
+      { n: 5, target: "36", anno: "state", title: "상태 (state)", defs: [
+        { t: "조건부 표시라 화면에 없어도 경고하지 않는다" }
+      ]}
+    ]},
+    { id: "QA-04-UNWIRED", name: "연결 안 된 화면", path: ["QA", "연결 안 된 화면"], specs: [
+      { n: 1, target: "90", anno: "box", title: "일부러 실패시킨 화면", defs: [
+        { t: "같은 이름표(data-spec=\"90\")를 단 요소가 둘이라 어느 것인지 알 수 없다" },
+        { t: "확인 : 이 화면을 고르면 전환 알림에 「설명만 · 프로토타입은 그대로」가 붙는다" },
+        { t: "확인 : 콘솔에 「연결되지 않은 화면」 경고가 한 번 뜬다", c: [
+          { t: "조용히 실패하지 않는 것이 이 화면의 시험이다", kind: "why" }
+        ]}
+      ]}
+    ]}
+  ]
+};
+</script>
+<script src="../../screenspec.js"></script>
+</body>
+</html>
