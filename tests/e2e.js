@@ -648,6 +648,51 @@ function check(name, ok, detail) {
     check("옛 popup → ▶ 버튼이 선다 (action 과 동일)", await page.locator(".ss-play").count() >= 1);
   }
 
+  /* ============ 잘못된 파일을 고르면 안 쓴다 (#70) ============
+     PM: 「이상한 거 하면 어떻게 돼? 그 파일 덮어쓰나?」 설정이 없는 파일은 원래 쓸 자리를 못 찾아
+     안전했지만, «설정이 있는 다른 프로토타입» 은 그대로 덮어쓰고 있었다. 화면 ID 로 가린다. */
+  console.log("[편집] 잘못된 파일은 안 쓴다 (#70)");
+  {
+    /* 가짜 파일 손잡이 — 진짜 파일 고르기 창은 자동화로 못 연다. 쓴 내용은 written 에 담긴다 */
+    const fakePicker = (name, text) => `window.__written = null;
+      window.showOpenFilePicker = async () => [{
+        name: ${JSON.stringify(name)},
+        getFile: async () => ({ text: async () => ${JSON.stringify(text)}, lastModified: 1 }),
+        createWritable: async () => ({ write: async (v) => { window.__written = v; }, close: async () => {} }),
+        queryPermission: async () => "granted",
+        requestPermission: async () => "granted"
+      }];`;
+    const mine = '<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-MINE",name:"m"},' +
+      'specs:[{n:1,target:"1",title:"제목",defs:[{t:"정의"}]}]}<\/script>';
+    const other = '<div data-spec="1">B</div><script>window.SCREENSPEC={screen:{id:"S-OTHER",name:"o"},' +
+      'specs:[{n:1,target:"1",title:"남의 것",defs:[{t:"남의 정의"}]}]}<\/script>';
+    const run = async (fileName, fileText) => {
+      await page.goto("about:blank");
+      await page.setContent(mine);
+      await page.addInitScript({ content: "" });
+      await page.evaluate(fakePicker(fileName, fileText));
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+      await page.click(".ss-svbtn");
+      await page.waitForTimeout(500);
+      return page.evaluate(() => ({
+        written: window.__written,
+        msg: (document.querySelector(".ss-edmsg") || {}).textContent || "",
+      }));
+    };
+    const a = await run("남의것.html", other);
+    check("설정이 있는 «다른 프로토타입» 은 덮어쓰지 않는다", a.written === null, JSON.stringify(a).slice(0, 160));
+    check("무엇이 다른지 말해 준다 (그 파일의 화면 · 지금 문서)",
+      a.msg.includes("이 화면정의서의 파일이 아닙니다") && a.msg.includes("S-OTHER") && a.msg.includes("S-MINE"), a.msg);
+    const b = await run("아무것.html", "<html><body>설정이 없다</body></html>");
+    check("설정이 없는 파일도 안 쓴다", b.written === null && b.msg.includes("설정이 없습니다"), b.msg);
+    const c = await run("내것.html", mine);
+    check("같은 화면 ID 를 가진 «이 문서» 는 정상으로 쓴다", typeof c.written === "string" && c.written.includes("S-MINE"),
+      JSON.stringify(c).slice(0, 160));
+  }
+
   /* ============ 파일에 연결 안 되면 못 고친다 (#68) ============
      자동저장을 안 켠 채로 고치면 그 수정은 브라우저 메모리에만 남는다 — 파일을 읽는
      사람도 AI 도 못 본다. 그래서 «고치기 전에» 붙잡는다. 단 로컬 파일로 열었을 때만이다 */

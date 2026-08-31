@@ -2238,7 +2238,9 @@ ${HL_CSS}
       if (perm === "granted") { edAdopt(hd); return; }
       edLinkShow(true);
     }
-    function edAdopt(hd) {
+    async function edAdopt(hd) {
+      const wrong = await edMatches(hd); /* 기억해 둔 파일이 그 사이 다른 것으로 바뀌었을 수 있다 (#70) */
+      if (wrong) { edKnown = null; edLinkShow(true); edSay(wrong); return; }
       edHandle = hd;
       edKnown = hd;
       edMtime = 0;
@@ -3236,6 +3238,26 @@ ${HL_CSS}
       if (!src) return null;
       return replaceConfigBlock(src, edBlockText());
     }
+    /* 고른 파일이 «이 문서» 가 맞는가 (#70, PM 2026-08-31: 「이상한 거 하면 어떻게 돼? 그 파일 덮어쓰나?」)
+       설정이 없는 파일은 원래 안 쓴다(쓸 자리를 못 찾으므로). 위험한 것은 «설정이 있는 다른 프로토타입» 이다 —
+       그대로 쓰면 남의 정의서가 통째로 갈리고 되돌릴 길이 없다. 화면 ID 가 하나라도 겹쳐야 우리 파일로 본다.
+       견줄 ID 가 아예 없는 설정이면 통과시킨다 — 근거 없이 막으면 멀쩡한 저장을 막는다.
+       문제가 있으면 «사람에게 할 말» 을 돌려준다 (없으면 null) */
+    async function edMatches(hd) {
+      let text = "";
+      try { text = await (await hd.getFile()).text(); }
+      catch (e) { return "그 파일을 읽지 못했습니다: " + ((e && e.message) || e); }
+      const at = findConfigBlock(text);
+      if (!at) return "그 파일에는 window.SCREENSPEC 설정이 없습니다. 지금 보고 있는 프로토타입 HTML 을 골라 주세요.";
+      const ids = (text.slice(at.start, at.end).match(/id\s*:\s*["'][^"']+["']/g) || [])
+        .map((x) => x.replace(/^[^"']*["']([^"']+)["']$/, "$1"));
+      const mine = SCREENS.map((sc) => sc.id).filter(Boolean);
+      if (!ids.length || !mine.length) return null;
+      if (ids.some((x) => mine.indexOf(x) >= 0)) return null;
+      const few = (a) => a.slice(0, 3).join(" · ") + (a.length > 3 ? " 외 " + (a.length - 3) : "");
+      return "그 파일은 이 화면정의서의 파일이 아닙니다. 덮어쓰지 않았습니다 · 그 파일의 화면: " +
+        few(ids) + " · 지금 문서: " + few(mine);
+    }
     /* 실제로 쓰는 곳 — 문제가 있으면 «사람에게 할 말» 을 돌려준다 (없으면 null) */
     async function edWriteFile() {
       try {
@@ -3264,6 +3286,8 @@ ${HL_CSS}
         let perm = await edHandle.queryPermission({ mode: "readwrite" });
         if (perm !== "granted") perm = await edHandle.requestPermission({ mode: "readwrite" });
         if (perm !== "granted") { edHandle = null; edSync(); edSay("파일에 쓸 권한을 받지 못했습니다. 「내려받기」로 저장하세요."); return; }
+        const wrong = await edMatches(edHandle); /* 남의 프로토타입을 덮어쓰기 전에 막는다 (#70) */
+        if (wrong) { edHandle = null; edSync(); edSay(wrong); return; }
       } catch (e) {
         if (e && e.name === "AbortError") return; /* 사용자가 취소 — 알릴 것 없다 */
         edSay("파일을 고르지 못했습니다: " + ((e && e.message) || e));
