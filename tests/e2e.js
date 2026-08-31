@@ -15,6 +15,7 @@ const FLAT = "(function(l){var w=function(x,d){return (x||[]).reduce(function(o,
   "return o.concat([d+b.t], w(b.c,d+1));},[]);};return w(l,0).join(',');})";
 const LIB = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
 const { chromium } = require(require.resolve("playwright", { paths: [process.cwd(), __dirname] }));
+const MOD = process.platform === "darwin" ? "Meta" : "Control"; /* 전체선택·undo 같은 네이티브 단축키는 macOS 크로미엄에서 Cmd 만 듣는다 */
 
 let pass = 0, fail = 0;
 function check(name, ok, detail) {
@@ -1123,7 +1124,7 @@ function check(name, ok, detail) {
 
     /* --- 글자 고치기 --- */
     await page.click('[data-defrow="1"] .ss-t');
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("고친 머리");
     await page.keyboard.press("Shift+Enter"); /* 0-6: 제목에서 Enter 를 치면 아래에 새 설명 줄이 생긴다 */
     await page.waitForTimeout(200);
@@ -1136,7 +1137,7 @@ function check(name, ok, detail) {
       (document.querySelector(".ss-wipeall") || {}).textContent === "전부 삭제"));
 
     await page.click('[data-defrow="1"] [data-ed="b"][data-di="0"]');
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("고친 첫 줄");
     await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 가 «여기서 그만» */
     await page.waitForTimeout(200);
@@ -1146,14 +1147,14 @@ function check(name, ok, detail) {
        치는 즉시 반영되는 이상 Esc 로 없던 일을 만들 수 없다. 되돌리기는 Ctrl+Z 가 한다.
        그리고 «한 칸을 고친 것» 은 글자 수와 상관없이 한 걸음이어야 한다 */
     await page.click('[data-defrow="2"] .ss-t');
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("바꾼 값");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(250);
     check("편집: Esc 는 쓴 것을 지우지 않는다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "바꾼 값"),
       await page.evaluate(() => window.SCREENSPEC.specs[1].title));
     check("편집: Esc 는 그 칸에서 빠져나온다", await page.evaluate(() => !document.querySelector(".ss-ed-on")));
-    await page.keyboard.press("Control+z");
+    await page.keyboard.press(MOD + "+z");
     await page.waitForTimeout(250);
     check("편집: Ctrl+Z 한 번이 그 칸 전체를 되돌린다 (글자 하나씩 X)",
       await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"),
@@ -1245,7 +1246,7 @@ function check(name, ok, detail) {
 
     /* 스크립트를 깨뜨리려는 글자를 넣어도 블록이 안 깨져야 한다 */
     await page.click('[data-defrow="1"] [data-ed="b"][data-di="0"]');
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("종료 시도 <" + "/script><" + "script>alert(1)");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(200);
@@ -1289,7 +1290,7 @@ function check(name, ok, detail) {
     /* --- 저장 안 된 초안 --- */
     await open();
     await page.click('[data-defrow="1"] .ss-t');
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("초안만 고침");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(250);
@@ -1500,7 +1501,7 @@ function check(name, ok, detail) {
     /* 편집 — 걸러도 원래 인덱스에 쓴다 */
     await page.waitForTimeout(200);
     await page.click('[data-defrow="1"] .ss-dev [data-ed="b"]');
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("POST /api/items");
     await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 는 여기서 그만 */
     await page.waitForTimeout(200);
@@ -1619,20 +1620,20 @@ function check(name, ok, detail) {
     c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
     check("에디터: Shift+Tab 으로 한 단 나온다", c === "0첫 줄,1둘째 줄셋째,1넷째", c);
 
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.press("Delete");
     await page.keyboard.press("Backspace");
     await page.waitForTimeout(200);
     c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
     check("에디터: 빈 줄에서 Backspace 면 그 줄이 사라진다", c === "0첫 줄,1둘째 줄셋째", c);
 
-    await page.keyboard.press("Control+z");
+    await page.keyboard.press(MOD + "+z");
     await page.waitForTimeout(150);
-    await page.keyboard.press("Control+z");
+    await page.keyboard.press(MOD + "+z");
     await page.waitForTimeout(150);
     const undone = await defs();
     check("에디터: Ctrl+Z 는 여러 걸음 돌아간다", JSON.stringify(undone) !== JSON.stringify(c), undone);
-    await page.keyboard.press("Control+Shift+z");
+    await page.keyboard.press(MOD + "+Shift+z");
     await page.waitForTimeout(150);
     check("에디터: Ctrl+Shift+Z 로 다시 앞으로", JSON.stringify(await defs()) !== JSON.stringify(undone), await defs());
 
@@ -1957,8 +1958,8 @@ function check(name, ok, detail) {
 
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.waitForTimeout(150);
-    await page.keyboard.press("Control+a");
-    await page.keyboard.press("Control+b");
+    await page.keyboard.press(MOD + "+a");
+    await page.keyboard.press(MOD + "+b");
     await page.waitForTimeout(150);
     await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(250);
@@ -2008,7 +2009,7 @@ function check(name, ok, detail) {
     const QT = '마감(00:00:00) 시 타이머를 "오늘 딜 종료"로 교체';
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"]');
     await page.waitForTimeout(150);
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press(MOD + "+a");
     await page.keyboard.type(QT);
     await page.keyboard.press("Shift+Enter");
     await page.waitForTimeout(250);
@@ -2438,7 +2439,7 @@ function check(name, ok, detail) {
             }
             /* 상태가 바뀌었으면 되돌려서 다음 케이스가 같은 판에서 시작하게 한다 */
             if (after !== same) {
-              await page.keyboard.press("Control+z");
+              await page.keyboard.press(MOD + "+z");
               await page.waitForTimeout(60);
               const back = await page.evaluate(() =>
                 (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[0].defs, 0).join(","));
