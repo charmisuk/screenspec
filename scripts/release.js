@@ -138,14 +138,14 @@ for (const f of ["README.md", "SKILL.md"]) {
       pinned ? ok(`${tag} 200 · 헤더 v${pinned.ver}`) : no(`${tag} 가 아직 안 뜬다`);
 
       if (VERIFY) {
+        /* «실물 파일» 로 잰다 (2026-08-31). 전에는 메타 API(data.jsdelivr.com/…/resolved)를 봤는데,
+           그쪽은 파일 캐시와 따로 놀아 파일이 이미 새 판을 내보내는데도 며칠 옛 번호를 답한다.
+           사람에게 나가는 것은 파일이지 메타가 아니다 — 그걸로 릴리스를 실패로 잡으면 늑대 소년이 된다 */
         const alias = await until("@0 재해석", async () => {
-          try {
-            const r = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${GH_REPO}/resolved?specifier=0`);
-            const j = await r.json();
-            return j.version === version ? j.version : null;
-          } catch { return null; }
+          const r = await fetchLib(CDN("0"));
+          return r.status === 200 && r.ver === major ? r.ver : null;
         });
-        alias ? ok(`@0 → ${alias}`) : no(`@0 가 아직 ${version} 로 안 간다 — 퍼지 후 지연일 수 있다`);
+        alias ? ok(`@0 → v${alias} (실물 파일 헤더)`) : no(`@0 가 아직 v${major} 로 안 간다 — 퍼지 후 지연일 수 있다`);
         for (const t of docTags) {
           const r = await fetchLib(CDN("v" + t));
           r.status === 200 ? ok(`문서의 @v${t} 열림`) : no(`문서가 가리키는 @v${t} → HTTP ${r.status}`);
