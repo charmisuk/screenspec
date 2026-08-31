@@ -7,3 +7,4 @@ _*.png
 **/_*.png
 _private
 _qa/
+.claude/settings.local.json
