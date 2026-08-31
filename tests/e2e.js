@@ -780,6 +780,17 @@ function check(name, ok, detail) {
     page.off("console", onMsg);
     check("모호하면 조용히 넘어가지 않는다 (연결 안 된 화면을 콘솔로 알린다)",
       warns.some((t) => t.includes("연결되지 않은 화면")));
+    /* 연결 안 된 화면을 골라도 «설명은» 바뀌어야 한다 (#77) — 화면 감지가 뒤집으면
+       프로토타입도 설명도 그대로라 아무 일도 안 일어난 것이 된다 */
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.locator(".ss-toc-btn").first().click({ force: true });
+    await page.waitForTimeout(300);
+    await page.locator("[data-toc='S-02']").first().click({ force: true });
+    await page.waitForTimeout(700);
+    check("연결 안 된 화면도 고른 대로 남는다 (감지가 뒤집지 않는다) (#77)",
+      (await page.evaluate(() => window.ScreenSpec.current())) === "S-02",
+      await page.evaluate(() => window.ScreenSpec.current()));
   }
 
   /* ============ 목차 검색 (#9): 화면 8개 이상 ============ */

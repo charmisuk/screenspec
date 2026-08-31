@@ -1141,6 +1141,7 @@ ${HL_CSS}
      여러 개가 동시에 보이면 문서 순서상 마지막 = 가장 나중에 얹힌 표면을 택한다.
      win·doc = 앱이 사는 창·문서 (overlay 는 이 창, frame 은 액자 안). 앱 DOM 은 건드리지 않는다 — setCurrent만. */
   function detectScreenIn(core, win, doc) {
+    if (core.unwiredNow()) return; /* 사람이 고른 «연결 안 된» 화면은 뒤집지 않는다 (#77) */
     /* 구체 경로 우선: 동적 세그먼트([id])가 적은 라우트를 먼저 본다 (동률이면 긴 경로).
        선언 순서에 의존하면 /members/[id] 가 뒤에 적은 /members/invite 를 삼킨다 (#15) */
     const dyn = (r) => (r.match(/\[[^\]]+\]/g) || []).length;
@@ -3572,7 +3573,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, ensureRoots, soloRoots, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
+    return { setCurrent, setScreen, ensureRoots, soloRoots, unwiredNow: () => !!current && unwired(current), current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -3929,6 +3930,9 @@ ${HL_CSS}
     /* ---- 다중 화면 자동 감지 (root 표시/숨김 추적) ---- */
     function detectScreen() {
       if (SCREENS.length < 2) return;
+      /* 사람이 고른 화면이 «연결 안 된» 화면이면 뒤집지 않는다 (#77) — 감지는 그 화면에 대해
+         아는 것이 없다. 뒤집으면 설명 패널까지 이전 화면으로 되돌아가 «아무 일도 안 일어난» 것이 된다 */
+      if (core.unwiredNow()) return;
       for (const sc of SCREENS) {
         if (!sc.root && !sc._rootEl) continue;
         const el = sc._rootEl || document.querySelector(sc.root);
