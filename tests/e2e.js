@@ -757,10 +757,11 @@ function check(name, ok, detail) {
     const scr = (id, a, b) => '{id:"' + id + '",name:"' + id + '",path:["' + id + '"],specs:[' +
       '{n:1,target:"' + a + '",title:"제목",defs:[{t:"정의"}]},{n:2,target:"' + b + '",title:"본문",defs:[{t:"정의"}]}]}';
     /* ① target 이 화면마다 다르다 → 공통 조상을 찾아 세운다 */
-    await page.goto("about:blank");
-    await page.setContent('<div id="A"><h1 data-spec="1">A</h1><p data-spec="2">a</p></div>' +
+    const two = '<div id="A"><h1 data-spec="1">A</h1><p data-spec="2">a</p></div>' +
       '<div id="B"><h1 data-spec="3">B</h1><p data-spec="4">b</p></div>' +
-      '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "3", "4") + ']}<\/script>');
+      '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "3", "4") + ']}<\/script>';
+    await page.goto("about:blank");
+    await page.setContent(two);
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     const shows = () => page.evaluate(() => ["A", "B"].map((i) => document.getElementById(i).getClientRects().length > 0));
@@ -771,9 +772,15 @@ function check(name, ok, detail) {
     await page.evaluate(() => window.ScreenSpec.setScreen("S-01"));
     await page.waitForTimeout(300);
     check("되돌아온다", JSON.stringify(await shows()) === "[true,false]");
-    /* 정의서 모드는 «지금 설명하는 화면» 만 보인다 (#75) — 다 쌓여 보이면 위치가 어긋난 것처럼 읽힌다.
-       나갈 때는 «들어오기 직전 모습» 으로 되돌린다: 우리가 숨긴 것만 우리가 되살린다 */
+    /* 정의서 모드는 «지금 설명하는 화면» 만 보인다 (#75). 새로 띄워 «둘 다 보이는» 데서 시작해야
+       좁혔는지를 잴 수 있다 — 앞의 setScreen 이 이미 하나를 숨겨 둔 상태에서 재면 늘 통과한다
+       (돌연변이 검사가 이 가짜를 잡아냈다, 2026-08-31) */
+    await page.goto("about:blank");
+    await page.setContent(two);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
     const before75 = JSON.stringify(await shows());
+    check("정의서 모드로 들어가기 전에는 둘 다 보인다 (#75 시험의 전제)", before75 === "[true,true]", before75);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(400);
     check("정의서 모드: 설명하는 화면만 보인다 (#75)", JSON.stringify(await shows()) === "[true,false]",
@@ -806,14 +813,21 @@ function check(name, ok, detail) {
     page.off("console", onMsg);
     check("모호하면 조용히 넘어가지 않는다 (연결 안 된 화면을 콘솔로 알린다)",
       warns.some((t) => t.includes("연결되지 않은 화면")));
-    /* 연결 안 된 화면을 골라도 «설명은» 바뀌어야 한다 (#77) — 화면 감지가 뒤집으면
-       프로토타입도 설명도 그대로라 아무 일도 안 일어난 것이 된다 */
+    /* 연결 안 된 화면을 골라도 «설명은» 바뀌어야 한다 (#77).
+       한쪽은 세워지고 한쪽은 못 세워지는 판이어야 진짜 시험이다 — 둘 다 연결 안 되면
+       감지가 고를 후보 자체가 없어 가드가 있든 없든 통과한다 (돌연변이 검사가 잡은 가짜, 2026-08-31) */
+    await page.goto("about:blank");
+    await page.setContent('<div id="A"><h1 data-spec="1">A</h1><p data-spec="2">a</p></div>' +
+      '<div id="B"><h1 data-spec="9">B</h1><p data-spec="9">b</p></div>' +
+      '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "9", "9") + ']}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
     await page.locator(".ss-toc-btn").first().click({ force: true });
     await page.waitForTimeout(300);
     await page.locator("[data-toc='S-02']").first().click({ force: true });
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(900);
     check("연결 안 된 화면도 고른 대로 남는다 (감지가 뒤집지 않는다) (#77)",
       (await page.evaluate(() => window.ScreenSpec.current())) === "S-02",
       await page.evaluate(() => window.ScreenSpec.current()));
@@ -2749,9 +2763,9 @@ function check(name, ok, detail) {
   check("JS 에러 0건", errors.length === 0, errors.slice(0, 3));
 
   await browser.close();
-  if (LIST) { console.log("섹션 " + SECS.length + "개:"); SECS.forEach((n) => console.log("  " + n)); await browser.close(); return; }
+  if (LIST) { console.log("섹션 " + SECS.length + "개:"); SECS.forEach((n) => console.log("  " + n)); return; }
   console.log("\n결과: PASS " + pass + " / FAIL " + fail +
     (ONLY ? "  ← 부분 실행 (--only " + ONLY + " · 섹션 " + SECS.filter((n) => n.indexOf(ONLY) >= 0).length +
-      "/" + SECS.length + "). 커밋 게이트는 전체 실행이다" : ""));
+      "/" + SECS.length + "). 전체는 CI 가 돈다" : ""));
   process.exit(fail ? 1 : 0);
 })();

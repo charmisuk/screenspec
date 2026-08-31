@@ -297,6 +297,15 @@ node tests/e2e.js --only 자동저장  # 그 섹션만 (수 초 ~ 20초)
 
 **전체는 CI 가 돈다.** push 마다 GitHub Actions 가 lint·e2e 전체·smoke 를 3분 31초에 돌린다 — 로컬에서 또 돌 이유가 없다. 로컬 커밋 게이트는 `lint` + 관련 `--only` 섹션이고, push 뒤 CI 가 빨간 채로 다음 일을 시작하지 않는 것이 규칙이다.
 
+검사가 진짜인지 재는 것 — 새 기능을 넣었을 때:
+
+```bash
+node scripts/mutate.js         # 알려진 결함을 심고 그 e2e 섹션이 잡는지 (개당 20초)
+node scripts/mutate.js --list  # 돌연변이 목록
+```
+
+FAIL 이 나야 그 검사가 진짜다. PASS 가 나오면 그 검사가 가짜라는 뜻이다.
+
 필요할 때만 켜는 것 — 블록 위계 규칙을 손댔을 때:
 
 ```bash
