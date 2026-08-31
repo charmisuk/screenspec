@@ -1437,7 +1437,10 @@ ${HL_CSS}
       if (!open().length) return;
       const d = appDoc(), guess = new Map();
       open().forEach((sc) => {
-        const sps = sc.specs || [];
+        /* 개요는 화면 위 요소를 안 가리킨다 — 추론의 근거에서 뺀다 (#82).
+           안 빼면 개요가 있는 화면은 «어느 것인지 모르겠다» 로 판정돼 통째로 연결이 끊긴다
+           (QA 하네스가 잡았다, 2026-08-31) */
+        const sps = (sc.specs || []).filter((sp) => !isBrief(sp));
         if (!sps.length) return;
         const els = sps.map(loneEl).filter(Boolean);
         if (els.length !== sps.length) return;      /* 하나라도 «어느 것인지 모르겠다» 면 손대지 않는다 */

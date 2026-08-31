@@ -69,6 +69,9 @@ const MUTS = [
   { id: "nofile-off", only: "[편집] 파일에 연결", why: "주소로 연 문서에서 아무 말도 안 한다 (#84)",
     find: "      if (!edCanFile() || location.protocol !== \"file:\") { edNoFileTell(); return true; }",
     to:   "      if (!edCanFile() || location.protocol !== \"file:\") { return true; }" },
+  { id: "brief-breaks-root", only: "[개요]", why: "개요가 있으면 화면 연결이 끊긴다 (#82)",
+    find: "        const sps = (sc.specs || []).filter((sp) => !isBrief(sp));",
+    to:   "        const sps = (sc.specs || []);" },
 ];
 
 const argv = process.argv.slice(2);

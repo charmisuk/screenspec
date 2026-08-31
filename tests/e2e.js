@@ -711,12 +711,19 @@ function check(name, ok, detail) {
      사람과 에이전트가 번갈아 고치므로 «명시»(anno:"overview")로 둔다 — target 을 빠뜨린
      실수와 구분되지 않으면 「마커를 못 찾았다」 경고가 조용히 사라진다 */
   if (sec("[개요] 화면 전체를 설명하는 자리 (#82)")) {
+    /* 화면을 둘 둔다 — 하나뿐이면 root 추론이 애초에 안 돌아 «개요가 추론을 깨는가» 를 못 잰다 */
+    const warns0 = [];
+    const onW0 = (m) => { if (m.type() === "warning") warns0.push(m.text()); };
+    page.on("console", onW0);
     await page.goto("about:blank");
-    await page.setContent('<h1 data-spec="1">제목</h1><p data-spec="2">본문</p>' +
-      '<script>window.SCREENSPEC={screen:{id:"S-OV",name:"o"},specs:[' +
+    await page.setContent('<div id="A"><h1 data-spec="1">제목</h1><p data-spec="2">본문</p></div>' +
+      '<div id="B"><h1 data-spec="3">둘째</h1></div>' +
+      '<script>window.SCREENSPEC={mode:"wrap",screens:[' +
+      '{id:"S-OV",name:"o",path:["o"],specs:[' +
       '{n:1,target:"1",title:"제목 영역",defs:[{t:"가"}]},' +
       '{n:2,target:"2",title:"본문 영역",defs:[{t:"나"}]},' +
-      '{n:0,anno:"overview",title:"화면 개요",defs:[{t:"이 화면이 무엇인가"}]}]}<\/script>');
+      '{n:0,anno:"overview",title:"화면 개요",defs:[{t:"이 화면이 무엇인가"}]}]},' +
+      '{id:"S-OV2",name:"p",path:["p"],specs:[{n:1,target:"3",title:"둘째 영역",defs:[{t:"다"}]}]}]}<\/script>');
     await page.addScriptTag({ content: LIB });
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
@@ -730,14 +737,13 @@ function check(name, ok, detail) {
       await page.locator(".ss-marker").count());
     check("개요에는 「현재 미표시」 뱃지가 안 붙는다 (#82)",
       (await page.locator('[data-defrow="0"] .ss-nowtag').count()) === 0);
-    /* 가리키는 요소가 없다고 «못 찾았다» 고 하면 안 된다 */
-    const warns = [];
-    const onW = (m) => { if (m.type() === "warning") warns.push(m.text()); };
-    page.on("console", onW);
+    /* 가리키는 요소가 없다고 «못 찾았다» 고도, «연결 안 됐다» 고도 하면 안 된다 */
     await page.waitForTimeout(2600);
-    page.off("console", onW);
+    page.off("console", onW0);
+    check("개요가 있어도 화면 연결(root 추론)이 살아 있다 (#82)",
+      !warns0.some((t) => t.indexOf("연결되지 않은 화면") >= 0), JSON.stringify(warns0.slice(0, 2)));
     check("개요는 누락 경고를 부르지 않는다 (#82)",
-      !warns.some((t) => t.indexOf("못 찾은 정의") >= 0), JSON.stringify(warns.slice(0, 2)));
+      !warns0.some((t) => t.indexOf("못 찾은 정의") >= 0), JSON.stringify(warns0.slice(0, 2)));
     /* 사람이 손으로 만들 수 있어야 한다 — 없으면 AI 만 쓰는 기능이 된다 */
     await page.goto("about:blank");
     await page.setContent('<h1 data-spec="1">제목</h1>' +
