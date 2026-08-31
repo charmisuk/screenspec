@@ -222,7 +222,10 @@ async function msChecklist(pageId, g) {
         parent: { database_id: DB_ID },
         properties: {
           "이름": { title: rt(i.title.replace(/^\[[^\]]+\]\s*/, "")) },
-          "상태": { select: { name: "백로그" } },
+          /* 곧 닫힐 이슈(«fix #N» 이 실린 푸시)의 카드는 만들 때부터 검수다. 백로그로 만들어 두면
+             「검수로 보낼 것」 판정은 이미 지나간 뒤라 이 판에서는 못 옮기고, 이어지는 재검증이
+             그걸 드리프트로 잡아 푸시 훅이 매번 실패했다 (2026-08-31 실측) */
+          "상태": { select: { name: isDone(i) ? "검수" : "백로그" } },
           "유형": { select: { name: /버그|bug/i.test(i.title + label(i)) ? "버그" : "기능" } },
           "근거": { select: { name: "내부 발견" } },
           "우선순위": { select: { name: "P2" } }, /* 들어온 직후는 P2. 전체 재비교에서 올린다 */
