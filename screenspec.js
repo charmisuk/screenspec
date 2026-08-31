@@ -1406,6 +1406,24 @@ ${HL_CSS}
       }
     }
     const unwired = (sc) => SCREENS.length > 1 && !sc.route && !sc.root && !sc._rootEl;
+    /* 정의서 모드에서는 «지금 설명하는 화면» 만 보인다 (#75).
+       우리가 세운 화면(_rootEl)에만 적용한다 — root 를 적은 화면은 프로토타입이 스스로 관리하는 것이다.
+       프로토타입 모드로 돌아가면 원래 모습 그대로 되돌린다: 우리가 숨긴 것을 우리가 되살린다 */
+    let soloOn = false;
+    function soloRoots(on) {
+      if (ctx.toggleRoot !== true) return;
+      const made = SCREENS.filter((sc) => sc._rootEl);
+      if (made.length < 2) return;
+      if (on) {
+        made.forEach((sc) => { if (sc._rootWas === undefined) sc._rootWas = sc._rootEl.style.display; });
+        soloOn = true;
+        showRoot(current && current._rootEl ? current : made[0]);
+        return;
+      }
+      if (!soloOn) return;
+      soloOn = false;
+      made.forEach((sc) => { sc._rootEl.style.display = sc._rootWas || ""; });
+    }
     function setScreen(id) {
       const next = SCREENS.find((s) => s.id === id);
       if (!next) return;
@@ -3554,7 +3572,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, ensureRoots, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
+    return { setCurrent, setScreen, ensureRoots, soloRoots, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -3779,6 +3797,7 @@ ${HL_CSS}
       if (m === "doc") docHolder.appendChild(frame);
       else { protoHolder.appendChild(frame); frame.style.transform = ""; }
       if (back) appFrame.src = back;
+      core.soloRoots(m === "doc"); /* 정의서 모드에서는 설명하는 화면만 (#75) */
       requestAnimationFrame(layout);
     }
     mProto.onclick = () => setMode("proto");

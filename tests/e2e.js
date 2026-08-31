@@ -745,6 +745,17 @@ function check(name, ok, detail) {
     await page.evaluate(() => window.ScreenSpec.setScreen("S-01"));
     await page.waitForTimeout(300);
     check("되돌아온다", JSON.stringify(await shows()) === "[true,false]");
+    /* 정의서 모드는 «지금 설명하는 화면» 만 보인다 (#75) — 다 쌓여 보이면 위치가 어긋난 것처럼 읽힌다.
+       나갈 때는 «들어오기 직전 모습» 으로 되돌린다: 우리가 숨긴 것만 우리가 되살린다 */
+    const before75 = JSON.stringify(await shows());
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("정의서 모드: 설명하는 화면만 보인다 (#75)", JSON.stringify(await shows()) === "[true,false]",
+      JSON.stringify(await shows()));
+    await page.click("#ss-mProto");
+    await page.waitForTimeout(400);
+    check("프로토타입 모드로 돌아가면 들어오기 직전 모습 그대로 (#75)", JSON.stringify(await shows()) === before75,
+      before75 + " → " + JSON.stringify(await shows()));
     /* 사람이 실제로 누르는 길로 잰다 (#74) — setScreen 만 재면 목차의 제 경로가 안 잡힌다 */
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
