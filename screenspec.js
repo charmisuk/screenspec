@@ -670,7 +670,20 @@
   /* 개요 (#82) — 번호가 아니라 이름표다. 동그라미를 쓰면 «몇 번» 을 화면에서 찾게 된다 */
   .ss-row.ss-brief .ss-no{width:auto;height:auto;padding:2px 7px;border-radius:6px;background:var(--ss-line);
     color:var(--ss-ink2);font-size:10.5px;font-weight:800;letter-spacing:.2px}
+  /* 고른 상태에서는 번호와 같은 규칙을 따른다 — 아래 .ss-active 규칙이 배경만 바꾸는 바람에
+     회색 글자가 파란 배경 위에 남아 안 보였다 (PM 2026-08-31 지적) */
+  .ss-row.ss-brief.ss-active .ss-no{background:var(--ss-accent);color:#fff}
   .ss-row.ss-brief{border-bottom:1px solid var(--ss-line)}
+  /* 개요 자리 (#82) — 없을 때 목록 «맨 위» 에 흐리게 둔다. 노션이 빈 블록에 안내문을 두는 방식이다.
+     항목을 만드는 일은 툴바(번호 찍기)와 같은 층이지만, 만들 수 있다는 것을 «그 자리에서» 알게 한다 */
+  .ss-briefadd{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;
+    border:0;border-bottom:1px dashed var(--ss-line2);padding:9px 8px 9px 0;cursor:pointer;
+    font-family:inherit;font-size:12.5px;color:var(--ss-ink3);opacity:.75;transition:opacity .12s}
+  .ss-briefadd:hover{opacity:1;color:var(--ss-ink2)}
+  .ss-briefadd .ss-no{width:auto;height:auto;padding:2px 7px;border-radius:6px;white-space:nowrap;
+    background:transparent;border:1px dashed var(--ss-line2);color:var(--ss-ink3);
+    font-size:10.5px;font-weight:800;letter-spacing:.2px}
+  .ss-briefadd b{font-weight:700}
   .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
   .ss-row:hover{background:#F4F4F2}
   .ss-row.ss-active{background:var(--ss-accent-soft)}
@@ -1137,6 +1150,12 @@ ${HL_CSS}
     btn.textContent = on ? PV_OFF_LABEL : (btn.dataset.pvlabel || btn.textContent);
   }
   /* 기능정의 행 HTML (wrap·overlay 공용) — 행은 상위 하나. parts 는 그 안에 한 단 들여쓴 블록으로 (#25) */
+  /* 개요가 없을 때만 뜨는 «만들 자리» (#82) */
+  function briefAddHTML(specs) {
+    if (!EDIT || (specs || []).some(isBrief)) return "";
+    return '<button type="button" class="ss-briefadd ss-ui" data-briefadd>' +
+      '<span class="ss-no">개요</span><span>＋ <b>화면 개요</b> · 이 화면 전체를 설명합니다</span></button>';
+  }
   function defsRowsHTML(specs) {
     let out = "";
     inOrder(specs).forEach((s) => {
@@ -1310,7 +1329,7 @@ ${HL_CSS}
         return;
       }
       /* 개발 정의는 «언제나 기획 다음» 이다 — 항목 안에서도, 화면 층에서도 (#41) */
-      ctx.listEl.innerHTML = defsRowsHTML(specs()) + devCommonHTML(current) + covBlockHTML(current);
+      ctx.listEl.innerHTML = briefAddHTML(specs()) + defsRowsHTML(specs()) + devCommonHTML(current) + covBlockHTML(current);
       if (previewKey != null) pvSetBtn(pvBtn(previewKey), true); /* 재렌더돼도 켜진 스위치는 켜진 채로 — 라벨(원래대로)까지 (#27·#29) */
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
@@ -1326,7 +1345,6 @@ ${HL_CSS}
         markerEls[it.key] = el;
       });
       watchMissing(current);
-      edBriefSync();
       ctx.afterRender();
     }
     /* 누락 경고 — 시간이 아니라 "앱이 다 그려졌는가" 로 판정 (#23)
@@ -2249,15 +2267,10 @@ ${HL_CSS}
     let edWas = "";         /* 고치기 전 값 — Esc 로 돌아갈 자리 */
     let edDirty = false;    /* 저장 안 된 변경이 있는가 */
     let edHandle = null;    /* 파일에 직접 저장할 때의 파일 손잡이 (세션 동안 기억) */
-    let edBar = null, edBtn2 = null, edWhen = null, edMsg = null, edDraftBar = null, edBriefBtn = null;
+    let edBar = null, edBtn2 = null, edWhen = null, edMsg = null, edDraftBar = null;
 
     function edStore(fn) { try { return fn(); } catch (e) { return null; } } /* 사생활 보호 모드 등 localStorage 차단 대비 */
     function edSay(msg) { if (edMsg) edMsg.textContent = msg || ""; }
-    /* 개요는 화면당 하나다 — 이미 있으면 만들 단추를 감춘다 (#82) */
-    function edBriefSync() {
-      if (!edBriefBtn) return;
-      edBriefBtn.hidden = specs().some(isBrief);
-    }
     function edAddBrief() {
       if (!edGate()) return;
       if (specs().some(isBrief)) return;
@@ -2266,7 +2279,6 @@ ${HL_CSS}
       edRenumber();
       edTouched();
       render();
-      edBriefSync();
       /* 만들자마자 그 자리에서 쓰게 한다 — 만들고 나서 어디를 눌러야 하는지 찾게 두지 않는다 */
       const row = ctx.listEl.querySelector('[data-defrow="0"] .ss-kids [data-ed]');
       if (row) edBegin(row);
@@ -3542,14 +3554,7 @@ ${HL_CSS}
       edBtn2 = h("button", { class: "ss-headbtn ss-wipeall ss-ui", type: "button",
         title: "이 화면의 기능 설명을 전부 지웁니다" }, "전부 삭제");
       edBtn2.onclick = edWipeAll;
-      /* 개요를 «사람이» 만들 길 (#82). 이것이 없으면 AI 만 쓸 수 있는 기능이 된다 —
-         번호 찍기는 늘 target 을 만들므로 개요는 손으로 만들 방법이 없었다 */
-      edBriefBtn = h("button", { class: "ss-headbtn ss-ui", type: "button",
-        title: "특정 영역이 아니라 이 화면 전체를 설명하는 자리를 맨 위에 만듭니다" }, "＋ 화면 개요");
-      edBriefBtn.onclick = edAddBrief;
-      (headTools() || head).appendChild(edBriefBtn);
       (headTools() || head).appendChild(edBtn2);
-      edBriefSync();
 
       /* 밖에서 바뀐 파일 알림 — 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다.
          「프로토타입의 동작을 방해하지 않는다」가 이 제품의 전제라 새 고정 요소를 만들지 않는다 */
@@ -3671,6 +3676,7 @@ ${HL_CSS}
         if (!EDIT) return;
         if (e.target.closest("[data-add]")) return; /* ＋ 는 mousedown 에서 처리한다 (아래) */
         edSlashClose();
+        if (e.target.closest("[data-briefadd]")) { e.stopPropagation(); edAddBrief(); return; }
         if (e.target.closest('[data-ftue="pick"]')) { e.stopPropagation(); pickStart(); return; }
         const cmd = e.target.closest("[data-ec]");
         if (cmd && cmd.tagName !== "SELECT") { e.preventDefault(); e.stopPropagation(); edCmd(cmd); return; }

@@ -753,17 +753,40 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(400);
-    check("개요가 없으면 «＋ 화면 개요» 단추가 보인다 (#82)",
-      await page.locator("button:has-text('＋ 화면 개요')").isVisible());
-    await page.locator("button:has-text('＋ 화면 개요')").click();
+    /* 만드는 자리는 «목록 맨 위» 다 — 툴바에 두면 만들 수 있다는 걸 그 자리에서 모른다 (PM 2026-08-31) */
+    check("개요가 없으면 목록 맨 위에 «개요 자리» 가 흐리게 있다 (#82)",
+      (await page.locator("[data-briefadd]").isVisible()) === true &&
+      (await page.evaluate(() => {
+        const a = document.querySelector("[data-briefadd]");
+        return !!(a && a.parentElement.classList.contains("ss-defs-list") && a === a.parentElement.firstElementChild);
+      })) === true);
+    check("«개요» 딱지가 한 줄로 들어간다 (#82)", await page.evaluate(() => {
+      const n = document.querySelector("[data-briefadd] .ss-no");
+      return !!n && n.getBoundingClientRect().height < 26;
+    }), await page.evaluate(() => { const n = document.querySelector("[data-briefadd] .ss-no"); return n ? Math.round(n.getBoundingClientRect().height) : -1; }));
+    await page.locator("[data-briefadd]").click();
     await page.waitForTimeout(400);
     check("눌러서 만들면 맨 위에 개요가 생긴다 (#82)",
       (await rows())[0] === "개요|화면 개요", JSON.stringify(await rows()));
-    check("만들고 나면 단추가 사라진다 (화면당 하나) (#82)",
-      (await page.locator("button:has-text('＋ 화면 개요')").isVisible()) === false);
+    check("만들고 나면 그 자리가 사라진다 (화면당 하나) (#82)",
+      (await page.locator("[data-briefadd]").count()) === 0);
     check("만들자마자 그 자리에서 쓸 수 있다 (#82)",
       (await page.locator('[data-defrow="0"] .ss-kids [data-ed]').first().getAttribute("contenteditable")) === "true");
     check("기존 항목 번호는 그대로 1부터다 (#82)", (await rows())[1] === "1|제목 영역", JSON.stringify(await rows()));
+    /* 고른 상태에서 딱지가 «파란 배경 + 회색 글자» 로 남으면 안 읽힌다 (PM 2026-08-31 지적) */
+    await page.locator('[data-defrow="0"] .ss-t').click();
+    await page.waitForTimeout(300);
+    check("개요를 고르면 딱지가 번호와 같은 대비를 갖는다 (#82)",
+      await page.evaluate(() => {
+        const no = document.querySelector('[data-defrow="0"] .ss-no');
+        if (!no) return false;
+        const c = getComputedStyle(no);
+        return c.color === "rgb(255, 255, 255)" && c.backgroundColor !== "rgba(0, 0, 0, 0)";
+      }), await page.evaluate(() => {
+        const no = document.querySelector('[data-defrow="0"] .ss-no');
+        return no ? getComputedStyle(no).color + " / " + getComputedStyle(no).backgroundColor : "(없음)";
+      }));
+
   }
 
   /* ============ 파일에 연결 안 되면 못 고친다 (#68) ============
