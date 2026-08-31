@@ -407,7 +407,7 @@
   :root{--ss-canvas:#F1F1F0;--ss-ink:#191919;--ss-ink2:#50524E;--ss-ink3:#9B9A97;
     --ss-line:#E9E9E7;--ss-line2:#D3D1CB;--ss-accent:${ACCENT};--ss-accent-soft:color-mix(in srgb,${ACCENT} 9%,#fff);
     --ss-mono:ui-monospace,"Cascadia Code",Consolas,monospace;
-    /* 블록 규격 (#60, PM 2026-08-29) — 노션 실측을 좁은 패널에 맞춰 조인 한 벌.
+    /* 블록 규격 (PM 2026-08-29) — 노션 실측을 좁은 패널에 맞춰 조인 한 벌.
        노션: 글머리칸 24 · 들여쓰기 24 · 블록 위아래 8(=사이 16) · 줄높이 24.
        우리: 그 구조를 그대로 두고 4분의 3으로. 글머리칸 = 들여쓰기 한 단 이라 자릿수가 어긋나지 않는다 */
     --ss-blk-fs:12.5px;--ss-blk-lh:20px;--ss-blk-py:3px;--ss-blk-mark:16px;--ss-gut-w:28px;
@@ -493,7 +493,7 @@
   .ss-savest.ss-st-warn{color:#E0522F}
   .ss-headbtn:disabled{opacity:.45;cursor:default;border-color:var(--ss-line)}
   .ss-headbtn:disabled:hover{border-color:var(--ss-line);color:var(--ss-ink2)}
-  /* 밖에서 바뀐 파일 띠 (#63) — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
+  /* 밖에서 바뀐 파일 띠 — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
   .ss-outside{background:#EAF1FF;border-bottom-color:#C7D8F5;color:#1B4A9C}
   .ss-outside button{border-color:#B9CDF0;color:#1B4A9C}
   /* 파일에 연결 안 됨 띠 (#68) — 같은 자리·같은 모양. 고치기 전에 붙잡는 자리라 노란색이다 */
@@ -529,7 +529,7 @@
   /* 번호 블록 = 하나의 덩어리 (노션 콜아웃처럼). PM 확인: 「콜아웃 느낌 난 좋아」
      편집 중이라고 왼쪽 여백을 없애지 않는다 — 손잡이는 콜아웃 «밖» 거터에 있어서 자리를 다투지 않는다.
      (PM 2026-08-29: 「번호 쪽 디자인이 너무 왼쪽 마진이 없어」— 원인이 이 규칙이었다) */
-  /* 드롭선 — 왼쪽 끝이 «몇 단에 들어가는지» 를 말한다 (#61). 동그라미가 그 지점을 짚는다 */
+  /* 드롭선 — 왼쪽 끝이 «몇 단에 들어가는지» 를 말한다. 동그라미가 그 지점을 짚는다 */
   .ss-drop-line{position:absolute;z-index:3;height:2px;background:var(--ss-accent);border-radius:2px;
     pointer-events:none}
   .ss-drop-line::before{content:"";position:absolute;left:-3px;top:-2px;width:6px;height:6px;
@@ -586,7 +586,7 @@
   .ss-pr-table tr.ss-pr-part .ss-pr-no{padding-left:16px;color:var(--ss-ink3)}
   .ss-pr-table ul{margin:0;padding-left:14px}
   .ss-pr-table li{margin:1px 0}
-  /* 그림 속 블록도 화면과 같은 규칙으로 — 들여쓰기 한 단 = 글머리 칸 (#55·#61) */
+  /* 그림 속 블록도 화면과 같은 규칙으로 — 들여쓰기 한 단 = 글머리 칸 (#55) */
   .ss-pr-table li.ss-pr-b{color:#37352F}
   .ss-pr-table li.ss-pr-in1{margin-left:16px}
   .ss-pr-table li.ss-pr-in2{margin-left:32px}
@@ -956,7 +956,7 @@ ${HL_CSS}
      한 가지 표현만 남으면 편집·드래그·저장이 전부 같은 규칙으로 돈다. */
   const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why";
   function blkKind(d) { return d && d.kind ? d.kind : B_BULLET; } /* 생략 = 불릿 (옛 문서 호환) */
-  /* ---- 정의는 «트리» 다 (#65, PM 2026-08-30) ----
+  /* ---- 정의는 «트리» 다 (PM 2026-08-30) ----
      R0: 내가 옮긴 것 말고는 아무것도 안 바뀐다 — 남의 깊이도, 남의 소속도.
 
      평평한 목록 + 절대 깊이 숫자로는 이 약속을 못 지킨다. 부모가 저장되지 않고
@@ -1209,7 +1209,7 @@ ${HL_CSS}
       if (!current) return d;
       return current._rootEl || (current.root ? d.querySelector(current.root) || d : d);
     }
-    /* 요소를 찾는 길이 둘이다 (#64, 2026-08-30).
+    /* 요소를 찾는 길이 둘이다 (2026-08-30).
          ① 이름표 data-spec — 원래의 길
          ② 선택자 sel — 번호를 «찍어서» 만들 때 같이 적어 둔다
 
@@ -2310,7 +2310,7 @@ ${HL_CSS}
       clearTimeout(edAutoT);
       edAutoT = setTimeout(edAutoSave, AUTO_MS);
     }
-    /* ---- 밖에서 바뀐 파일 알아채기 (#63, PM 2026-08-30) ----
+    /* ---- 밖에서 바뀐 파일 알아채기 (PM 2026-08-30) ----
        PM 이 에이전트에게 프로토타입을 고치라고 하면 파일은 바뀌는데 브라우저는 모른다.
        자동저장을 켜 두면 그 파일의 손잡이를 쥐고 있으므로 «언제 바뀌었는지» 를 물어볼 수 있다.
 
@@ -2521,7 +2521,7 @@ ${HL_CSS}
       list.splice(at, 0, nb);
       edGoPath(p.key, nb);
     }
-    /* Tab / Shift+Tab — 잡아 끄는 것과 «같은 위계 규칙» 이어야 한다 (#61, PM 2026-08-30).
+    /* Tab / Shift+Tab — 잡아 끄는 것과 «같은 위계 규칙» 이어야 한다 (PM 2026-08-30).
        예전에는 Tab 이 그 줄의 숫자만 1 올렸다. 그래서 맨 앞 줄이 부모 없이 하위가 되고,
        두 번 누르면 0단 밑에 2단이 생기고, 하위 달린 줄을 들이면 자식이 제자리에 남아 관계가 끊겼다.
        규칙은 하나다: 바로 앞 블록보다 한 단까지 · 딸린 하위는 통째로 따라온다. */
@@ -2763,7 +2763,7 @@ ${HL_CSS}
       }
       /* 이름은 비워 둔다 — 「새 영역」 이 진짜 글자로 박혀 있으면 타이핑이 그 뒤에 붙는다 (PM 2026-08-29) */
       const sp = { n: list.length + 1, target: tag, title: "", defs: [{ t: "" }] };
-      /* 이름표는 화면에만 붙고 파일에는 안 남는다 — 다시 찾아올 길을 설정에 같이 적는다 (#64) */
+      /* 이름표는 화면에만 붙고 파일에는 안 남는다 — 다시 찾아올 길을 설정에 같이 적는다 */
       const sel = selOf(el);
       if (sel) sp.sel = sel;
       list.push(sp);
@@ -2803,7 +2803,7 @@ ${HL_CSS}
     }
 
     /* ============================================================
-       잡아서 옮기기 (#55·#61·#62) — 계산 · 그리기 · 실행을 가른다
+       잡아서 옮기기 (#55) — 계산 · 그리기 · 실행을 가른다
 
        철학 (PM 과 합의, 2026-08-30):
          1) 표시는 «자리를 차지하지 않는다». 무엇을 그려도 글은 한 픽셀도 안 움직인다.
@@ -3371,7 +3371,7 @@ ${HL_CSS}
       edBtn2.onclick = edWipeAll;
       (headTools() || head).appendChild(edBtn2);
 
-      /* 밖에서 바뀐 파일 알림 (#63) — 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다.
+      /* 밖에서 바뀐 파일 알림 — 프로토타입 위에 뜨는 팝업이 아니라 패널 안쪽 띠다.
          「프로토타입의 동작을 방해하지 않는다」가 이 제품의 전제라 새 고정 요소를 만들지 않는다 */
       edBar2 = h("div", { class: "ss-draft ss-outside ss-ui" },
         '프로토타입 파일이 밖에서 바뀌었습니다 (<span class="ss-out-when"></span>) ' +

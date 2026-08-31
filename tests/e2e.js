@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 
 const REPO = path.resolve(__dirname, "..");
-/* 정의는 트리다 (#65). 시험은 «0A,1B» 표기로 읽는다 — 눈으로 읽기 쉽고, 깊이·순서가 한눈에 보인다 */
+/* 정의는 트리다. 시험은 «0A,1B» 표기로 읽는다 — 눈으로 읽기 쉽고, 깊이·순서가 한눈에 보인다 */
 const FLAT = "(function(l){var w=function(x,d){return (x||[]).reduce(function(o,b){" +
   "return o.concat([d+b.t], w(b.c,d+1));},[]);};return w(l,0).join(',');})";
 const LIB = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
@@ -1307,7 +1307,7 @@ function check(name, ok, detail) {
     await page.keyboard.press("Backspace");
     await page.waitForTimeout(250);
     /* 옛 문서(why·subs)는 부팅 때 «평평한 블록» 으로 펴진다 (#55): 첫 줄 · 근거(↳) · 둘째 줄 · 하위 */
-    /* 옛 문서(why·subs)는 부팅 때 트리로 선다 (#65): 첫 줄 > 근거(↳) · 둘째 줄 > 하위.
+    /* 옛 문서(why·subs)는 부팅 때 트리로 선다: 첫 줄 > 근거(↳) · 둘째 줄 > 하위.
        첫 줄을 지우면 그 하위(근거)는 «있던 자리» 로 올라온다 — 딸린 것이 사라지면 안 된다 */
     check("편집: 줄 삭제 — 지운 줄의 하위는 그 자리에 남는다",
       (await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)")) === "0근거,0둘째 줄,1하위",
@@ -1887,7 +1887,7 @@ function check(name, ok, detail) {
       "<script>window.SCREENSPEC={screen:{id:'S-D',name:'드래그'},specs:[" +
       "{n:1,target:'1',title:'첫 항목',defs:[{t:'A'},{t:'B'},{t:'C'}]}," +
       "{n:2,target:'2',title:'둘째 항목',defs:[{t:'X'}]}]};<" + "/script>";
-    /* dx = 잡은 곳에서 오른쪽으로 민 픽셀 = 몇 단 더 들어가느냐 (#61·#62). 글머리칸 16px 이 한 단.
+    /* dx = 잡은 곳에서 오른쪽으로 민 픽셀 = 몇 단 더 들어가느냐. 글머리칸 16px 이 한 단.
        깊이는 커서의 «절대 위치» 가 아니라 «잡은 곳에서의 이동» 으로 정해진다 — 손잡이가 글 왼쪽
        거터에 있어서, 절대 위치로 재면 그냥 아래로만 끌어도 0단으로 떨어진다 (PM 2026-08-30) */
     const dragTo = (fromSel, toSel, after, dx) => page.evaluate(([f, t, af, x]) => {
@@ -1947,7 +1947,7 @@ function check(name, ok, detail) {
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join(""))) === "BCA",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t)));
 
-    /* ---- 위계 규칙 (#61, PM 2026-08-29) ---- */
+    /* ---- 위계 규칙 (PM 2026-08-29) ---- */
     /* 1) 가로로 밀면 «바로 앞 블록의 하위» 가 된다 */
     await setDefs("0A,0B,0C", "0X");
     await dragTo('[data-defrow="1"] .ss-b[data-di="2"] .ss-g-grip', '[data-defrow="1"] .ss-b[data-di="0"]', true, 30);
@@ -1970,7 +1970,7 @@ function check(name, ok, detail) {
       (await defsOf(0)) === "0B" && (await defsOf(1)) === "0X,0A,1a1,1a2",
       [await defsOf(0), await defsOf(1)]);
 
-    /* 6) 「놓으면 무엇이 바뀌나」가 선을 그릴지 정한다 (#62, 노션 영상 분석 2026-08-30)
+    /* 6) 「놓으면 무엇이 바뀌나」가 선을 그릴지 정한다 (노션 영상 분석 2026-08-30)
        PM: 「지금은 그냥 모든 곳에서 다 뜨는 것 같고 그래서 버그가 발생하는 것으로 보여.」
        노션은 자기 자리 근처에서 선을 아예 안 띄운다. 뜨면 반드시 무언가 바뀐다. */
     await setDefs("0A,1B,0C,1D", "0X");
@@ -2358,7 +2358,7 @@ function check(name, ok, detail) {
     check("FTUE: 프로토타입을 눌러도 쓴 글이 남는다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join("|"))) === "누르면 결제 화면으로|불릿 줄",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
-    /* ---- 찍은 번호가 «저장하고 다시 열어도» 살아 있는가 (#64) ----
+    /* ---- 찍은 번호가 «저장하고 다시 열어도» 살아 있는가 ----
        저장은 설정 블록만 갈아끼우므로, 찍을 때 화면에 붙인 data-spec 속성은 파일에 남지 않는다.
        그래서 선택자(sel)를 같이 적어 두고, 다시 열 때 그것으로 찾아 속성을 되붙인다.
        이게 깨지면 FTUE 의 약속(코드 안 열고 번호 붙이기)이 새로고침 한 번에 무너진다 */
@@ -2653,7 +2653,7 @@ function check(name, ok, detail) {
       (await page.locator(".ss-svbtn").isDisabled()) === true &&
       (await page.locator(".ss-svbtn").textContent()) === "저장");
 
-    /* ---- 밖에서 바뀐 파일 (#63) ----
+    /* ---- 밖에서 바뀐 파일 ----
        PM 이 에이전트에게 프로토타입을 고치라고 하면 파일은 바뀌는데 브라우저는 모른다.
        모르는 채로 자동저장이 돌면 그 변경을 덮어쓴다 — 그래서 알아채고 «멈춰야» 한다 */
     await page.evaluate(() => { window.__file = window.__file.replace("홈", "홈 화면"); window.__mt += 99999; });
