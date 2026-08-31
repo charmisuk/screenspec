@@ -632,6 +632,23 @@ function check(name, ok, detail) {
     }));
   }
 
+  /* ============ anno 하위호환 (#63): 옛 타입이 통합된 타입으로 열린다 ============ */
+  console.log("[docs] anno 하위호환 (옛 input·motion·popup)");
+  {
+    await page.goto("about:blank");
+    await page.setContent('<div data-spec="1">A</div><div data-spec="2">B</div><button data-spec="3">C</button><script>window.SCREENSPEC={screen:{id:"S-L",name:"l"},specs:[' +
+      '{n:1,target:"1",title:"입력",anno:"input"},{n:2,target:"2",title:"모션",anno:"motion"},' +
+      '{n:3,target:"3",title:"팝업",anno:"popup",play:{selector:"button",label:"팝업 열기"}}]}</script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("옛 input·motion·popup → 마커 3개 전부 선다", await page.locator(".ss-marker").count() === 3);
+    await page.locator(".ss-marker").nth(2).click();
+    await page.waitForTimeout(300);
+    check("옛 popup → ▶ 버튼이 선다 (action 과 동일)", await page.locator(".ss-play").count() >= 1);
+  }
+
   /* ============ 목차 검색 (#9): 화면 8개 이상 ============ */
   console.log("[docs] 목차 검색");
   {

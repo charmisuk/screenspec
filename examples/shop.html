@@ -448,11 +448,11 @@ window.SCREENSPEC = {
           play:{ selector:'[data-spec="1b"]', label:"동작 재생 : 알림함 이동" }, defs:[
           { t:"탭 시 알림함으로 이동" },
           { t:"읽지 않은 알림이 있으면 점 표시" }]},
-        { n:4, target:"2", anno:"input", title:"검색창", defs:[
+        { n:4, target:"2", anno:"box", title:"검색창", defs:[
           { t:"플레이스홀더 \"어떤 상품을 찾으세요?\" 고정" },
           { t:"입력 최대 30자 · 자동완성은 2자부터 표시", subs:[
             "빈 검색어 엔터 시 무반응 — 빈 결과 페이지 진입 방지"]}]},
-        { n:5, target:"3", anno:"motion", title:"히어로 배너", defs:[
+        { n:5, target:"3", anno:"box", title:"히어로 배너", defs:[
           { t:"3장 캐러셀 · 3.5초 자동 슬라이드, 0.45초 이징 전환" },
           { t:"인디케이터 좌하단, 현재 장은 길게 확장" }]},
         { n:6, target:"4", anno:"box", title:"카테고리", defs:[
@@ -462,7 +462,7 @@ window.SCREENSPEC = {
           { t:"상품 4개 가로 스크롤 · 할인율 뱃지 좌상단", subs:[
             "마감(00:00:00) 시 타이머를 \"오늘 딜 종료\"로 교체",
             "재고 소진 상품은 카드 흐림 + \"품절\" 오버레이"]}]},
-        { n:8, target:"6", anno:"popup", title:"쿠폰 배너",
+        { n:8, target:"6", anno:"action", title:"쿠폰 배너",
           play:{ selector:"#couponGet", label:"팝업 열기 — 쿠폰 바텀시트" }, defs:[
           { t:"첫 구매 15% 쿠폰 · [받기] 클릭 시 바텀시트 표시" },
           { t:"시트 바깥 탭으로 닫힘", subs:[
@@ -492,7 +492,7 @@ window.SCREENSPEC = {
         { n:3, target:"3", anno:"box", title:"상품 정보", defs:[
           { t:"브랜드 라벨 + 상품명 + 할인율·판매가·정가(취소선)" },
           { t:"가격은 목록에서 탭한 상품 데이터로 채움" }]},
-        { n:4, target:"4", anno:"input", title:"옵션 선택", defs:[
+        { n:4, target:"4", anno:"box", title:"옵션 선택", defs:[
           { t:"사이즈 S·M·L 단일 선택 (필수)", subs:[
             "미선택 상태로 구매 시도 시 옵션 영역으로 스크롤 + 강조"]}]},
         { n:5, target:"5", anno:"action", title:"구매 바",

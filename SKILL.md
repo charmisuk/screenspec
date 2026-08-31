@@ -346,7 +346,7 @@ addEventListener("screenspec:preview", (e) => {
 
 ```js
 { n:2, target:"2", title:"목록 영역", defs:[{ t:"등록순 정렬" }] },
-{ n:3, target:"3", title:"더보기 버튼", anno:"popup",
+{ n:3, target:"3", title:"더보기 버튼", anno:"action",
   play:{ selector:'[data-spec="3"]', label:"팝업 열기" }, defs:[{ t:"클릭 : 팝업을 버튼 아래에 표시" }] }
 ```
 
@@ -365,21 +365,21 @@ addEventListener("screenspec:preview", (e) => {
 
 굵은 것은 **화면에 안 보이는 상태**라 가장 먼저 빠진다 — `preview`(§3-F)를 함께 주면 눌러서 확인할 수 있다.
 
-### 5. anno 타입 선택 룰 (8종)
+### 5. anno 타입 선택 룰 (5종)
+
+타입은 **결과가 달라질 때만** 나뉜다 (#63). 같은 결과면 하나다 — 입력 정책·애니메이션 정의는 별도 타입이 아니라 `box` 에 그냥 쓴다.
 
 | 타입 | 라벨 | 언제 | 추가 필드 |
 |---|---|---|---|
-| `box` | 영역 | 기본값. 영역 설명 | — |
+| `box` | 영역 | 기본값. 영역 설명 (입력 정책·애니메이션 정의 포함) | — |
 | `arrow` | 화살표 | 작은 요소(아이콘·버튼)라 박스가 안 보일 때. 위치 지정 없음 — 바깥에서 요소를 가리키는 지시선이 자동으로 그려짐 | 관계선이 필요하면 `arrowTo:"#selector"` (요소→다른 요소, "여기 누르면 저기") |
-| `input` | 입력 | 입력 필드 정책 (글자수·형식·검증·placeholder) | — |
-| `state` | 상태 | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무, 빈 상태) | — |
-| `motion` | 모션 | 등장·전환 애니메이션 정의 | — |
-| `action` | 동작 | 클릭하면 화면 안에서 동작이 일어남 (토스트·복사 등) | **필수** `play:{selector:"#btn", label:"동작 재생 — 결과"}` |
-| `popup` | 팝업 | 클릭하면 모달·레이어·바텀시트 열림 | **필수** `play:{selector:"#btn", label:"팝업 열기"}` |
+| `state` | 상태 | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무, 빈 상태). 대상이 화면에 없어도 누락 경고 제외 | — |
+| `action` | 동작 | 클릭하면 화면 안에서 동작이 일어남 (토스트·복사·모달·바텀시트) | **필수** `play:{selector:"#btn", label:"동작 재생 — 결과"}` (팝업이면 label 을 "팝업 열기" 처럼) |
 | `flow` | 이동 | 클릭하면 다른 화면으로 전환 | `flowTo:"SCR-XXX-002"` (+실제 내비 버튼 있으면 `play.selector`도) |
 
-- 판단 순서: 화면 이동? → flow / 레이어 열림? → popup / 그 외 동작? → action / 입력 필드? → input / 조건 분기? → state / 모션 정의? → motion / 요소→요소 관계 표현? → arrow + arrowTo / 작아서 안 보임? → arrow / 나머지 → box
-- 새 타입이 필요하면 screenspec.js의 `ANNO` 레지스트리에 한 줄 추가 (label + mech: box·arrow·play·flow 중 택1).
+- 판단 순서: 화면 이동? → flow / 클릭하면 뭔가 일어남? → action / 조건 분기? → state / 요소→요소 관계 표현? → arrow + arrowTo / 작아서 안 보임? → arrow / 나머지 → box
+- 옛 문서의 `input`·`motion` 은 `box` 로, `popup` 은 `action` 으로 그대로 열린다.
+- 새 타입은 **결과가 달라질 때만** screenspec.js 의 `ANNO` 레지스트리에 추가한다 (label + mech: box·arrow·play·flow 중 택1).
 
 ### 6. 반응형 훅
 

@@ -104,18 +104,21 @@
     if (RAW.widths.mobile) DEVICES.mobile.w = RAW.widths.mobile;
     if (RAW.widths.pc) DEVICES.pc.w = RAW.widths.pc;
   }
-  /* anno 타입 레지스트리 — label(의미 구분) + mech(시각 동작). 새 타입은 여기 한 줄 추가 */
+  /* anno 타입 레지스트리 — 결과(액션)가 달라질 때만 분기한다 (#63, PM 2026-08-31).
+     box=하이라이트 · arrow=지시선 · state=조건부(누락 경고 제외) · action=▶재생 · flow=화면 이동 */
   const ANNO = {
     box:    { label: "영역",   mech: "box" },
     arrow:  { label: "화살표", mech: "arrow" },
-    input:  { label: "입력",   mech: "box" },
     state:  { label: "상태",   mech: "box" },
-    motion: { label: "모션",   mech: "box" },
     action: { label: "동작",   mech: "play" },
-    popup:  { label: "팝업",   mech: "play" },
     flow:   { label: "이동",   mech: "flow" }
   };
-  function annoOf(s) { return ANNO[s.anno] || { label: s.anno || "영역", mech: "box" }; }
+  /* 옛 타입은 결과가 같던 쪽으로 읽는다 — 옛 문서는 그대로 열린다 */
+  const ANNO_LEGACY = { input: "box", motion: "box", popup: "action" };
+  function annoOf(s) {
+    const k = ANNO_LEGACY[s.anno] || s.anno;
+    return ANNO[k] || { label: s.anno || "영역", mech: "box" };
+  }
   /* 아카이브 (#46, 2026-08-30 PM) — 유형 고르기 드롭다운은 «만드는 길» 을 없앴다.
      골라도 화면이 거의 안 바뀌었기 때문이다: 실제 동작은 4가지고 그중 넷(영역·입력·상태·모션)은 라벨만 다르다.
      값이 확실해지면(외부 요청 2건+) 되살린다. anno 는 렌더·마커·▶ 에서 그대로 쓰인다 — 읽기는 하위호환 */
@@ -1071,7 +1074,7 @@ ${HL_CSS}
   function playBtnHTML(sp, key) {
     const type = annoOf(sp);
     if (type.mech === "play" && sp.play)
-      return '<button class="ss-play" data-play="' + key + '">▶ ' + esc(sp.play.label || (sp.anno === "popup" ? "팝업 열기" : "동작 재생")) + "</button>";
+      return '<button class="ss-play" data-play="' + key + '">▶ ' + esc(sp.play.label || "동작 재생") + "</button>";
     if (type.mech === "flow" && (sp.flowTo || sp.play)) {
       const dest = SCREENS.find((x) => x.id === sp.flowTo);
       return '<button class="ss-play" data-play="' + key + '">▶ ' + esc((sp.play && sp.play.label) || "이동: " + (dest ? dest.name : sp.flowTo)) + "</button>";

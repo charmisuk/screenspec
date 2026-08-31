@@ -172,7 +172,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("Screen·Spec 필드 " + objFields.length + "개 전부 docs/config.md에 문서화", undocObj.length === 0, "누락: " + JSON.stringify(undocObj));
 
   const annos = [...new Set([...lib.matchAll(/^ {4}(\w+): +\{ label:/gm)].map((m) => m[1]))];
-  check("anno 레지스트리 8종 추출", annos.length === 8, JSON.stringify(annos));
+  check("anno 레지스트리 5종 추출", annos.length === 5, JSON.stringify(annos));
   [["README.md", readme], ["docs/config.md", ref]].forEach(([name, doc]) => {
     const miss = annos.filter((a) => !doc.includes("`" + a + "`"));
     check(name + " anno 표 정합", miss.length === 0, "누락: " + JSON.stringify(miss));
