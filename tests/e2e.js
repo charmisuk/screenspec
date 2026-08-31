@@ -648,6 +648,43 @@ function check(name, ok, detail) {
     check("옛 popup → ▶ 버튼이 선다 (action 과 동일)", await page.locator(".ss-play").count() >= 1);
   }
 
+  /* ============ root 없는 화면도 전환된다 (#67) ============
+     목차에서 골라도 «설명만» 바뀌고 프로토타입은 그대로였다. 정의가 가리키는 요소의
+     공통 조상을 찾아 세운다. 어느 요소인지 모호하면 세우지 않고 «말로» 알린다. */
+  console.log("[화면] root 없이도 전환 (#67)");
+  {
+    const scr = (id, a, b) => '{id:"' + id + '",name:"' + id + '",path:["' + id + '"],specs:[' +
+      '{n:1,target:"' + a + '",title:"제목",defs:[{t:"정의"}]},{n:2,target:"' + b + '",title:"본문",defs:[{t:"정의"}]}]}';
+    /* ① target 이 화면마다 다르다 → 공통 조상을 찾아 세운다 */
+    await page.goto("about:blank");
+    await page.setContent('<div id="A"><h1 data-spec="1">A</h1><p data-spec="2">a</p></div>' +
+      '<div id="B"><h1 data-spec="3">B</h1><p data-spec="4">b</p></div>' +
+      '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "3", "4") + ']}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    const shows = () => page.evaluate(() => ["A", "B"].map((i) => document.getElementById(i).getClientRects().length > 0));
+    check("처음 모습은 프로토타입의 것 (아무것도 숨기지 않는다)", JSON.stringify(await shows()) === "[true,true]");
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-02"));
+    await page.waitForTimeout(300);
+    check("root 를 안 적어도 두 번째 화면으로 전환된다", JSON.stringify(await shows()) === "[false,true]");
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-01"));
+    await page.waitForTimeout(300);
+    check("되돌아온다", JSON.stringify(await shows()) === "[true,false]");
+    /* ② 화면마다 target 이 같아 «어느 것인지» 모른다 → 세우지 않고 경고한다 */
+    const warns = [];
+    const onMsg = (m) => { if (m.type() === "warning") warns.push(m.text()); };
+    page.on("console", onMsg);
+    await page.goto("about:blank");
+    await page.setContent('<div id="A"><h1 data-spec="1">A</h1><p data-spec="2">a</p></div>' +
+      '<div id="B"><h1 data-spec="1">B</h1><p data-spec="2">b</p></div>' +
+      '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "1", "2") + ']}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    page.off("console", onMsg);
+    check("모호하면 조용히 넘어가지 않는다 (연결 안 된 화면을 콘솔로 알린다)",
+      warns.some((t) => t.includes("연결되지 않은 화면")));
+  }
+
   /* ============ 목차 검색 (#9): 화면 8개 이상 ============ */
   console.log("[docs] 목차 검색");
   {

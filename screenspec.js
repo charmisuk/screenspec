@@ -1165,8 +1165,8 @@ ${HL_CSS}
     /* 라우트 없는 root 화면 중 실제로 보이는 것 — 여럿이면 문서 순서상 마지막 */
     let top = null, topEl = null;
     SCREENS.forEach((sc) => {
-      if (!sc.root || sc.route) return;
-      const el = doc.querySelector(sc.root);
+      if ((!sc.root && !sc._rootEl) || sc.route) return;
+      const el = sc._rootEl || doc.querySelector(sc.root);
       if (!el || el.getClientRects().length === 0) return;
       if (!top || (topEl.compareDocumentPosition(el) & 4 /* DOCUMENT_POSITION_FOLLOWING */)) { top = sc; topEl = el; }
     });
@@ -1203,7 +1203,8 @@ ${HL_CSS}
 
     function rootEl() {
       const d = appDoc();
-      return current && current.root ? d.querySelector(current.root) || d : d;
+      if (!current) return d;
+      return current._rootEl || (current.root ? d.querySelector(current.root) || d : d);
     }
     /* 요소를 찾는 길이 둘이다 (#64, 2026-08-30).
          ① 이름표 data-spec — 원래의 길
@@ -1339,7 +1340,7 @@ ${HL_CSS}
     document.body.appendChild(navToast);
     let navTimer = null;
     function showNav(sc) {
-      navToast.textContent = "→ " + sc.id + " · " + sc.name;
+      navToast.textContent = "→ " + sc.id + " · " + sc.name + (unwired(sc) ? "  (설명만 · 프로토타입은 그대로)" : "");
       navToast.classList.add("ss-show");
       clearTimeout(navTimer);
       navTimer = setTimeout(() => navToast.classList.remove("ss-show"), 1600);
@@ -1357,16 +1358,56 @@ ${HL_CSS}
        앱 DOM을 건드리므로 wrap 전용(ctx.toggleRoot)이며, overlay는 앱 DOM을 소유하지 않는다. */
     function showRoot(sc) {
       SCREENS.forEach((o) => {
-        if (!o.root) return;
-        const el = appDoc().querySelector(o.root);
+        if (!o.root && !o._rootEl) return;
+        const el = o._rootEl || appDoc().querySelector(o.root);
         if (el) el.style.display = o === sc ? "" : "none";
       });
     }
+    /* 프로토타입에 «연결» 되지 않은 화면 — root 도 route 도 없으면 목차에서 골라도
+       설명만 바뀌고 화면은 그대로다. 사람은 도구가 고장 난 줄 안다 (#67, PM 2026-08-31).
+       정의가 가리키는 요소들의 공통 조상을 찾아 세워 두면 대부분 저절로 전환된다.
+       추론한 것은 sc._rootEl 에만 담는다 — 설정(sc.root)에는 쓰지 않는다. 우리가 «추측한 것»을
+       남의 파일에 저장하지 않는다는 뜻이다. 모호하면 세우지 않고 말로 알린다. */
+    function loneEl(sp) {
+      const d = appDoc(), one = (q) => { let h; try { h = d.querySelectorAll(q); } catch (e) { return null; } return h.length === 1 ? h[0] : null; };
+      return (sp.sel && one(sp.sel)) || one('[data-spec="' + String(sp.target).replace(/["\\]/g, "\\$&") + '"]');
+    }
+    function commonUp(els) {
+      let a = els[0];
+      for (let i = 1; i < els.length && a; i++) while (a && !a.contains(els[i])) a = a.parentElement;
+      return a;
+    }
+    let rootsTold = false;
+    function ensureRoots() {
+      if (SCREENS.length < 2) return;
+      const open = () => SCREENS.filter((sc) => !sc.root && !sc._rootEl && !sc.route);
+      if (!open().length) return;
+      const d = appDoc(), guess = new Map();
+      open().forEach((sc) => {
+        const sps = sc.specs || [];
+        if (!sps.length) return;
+        const els = sps.map(loneEl).filter(Boolean);
+        if (els.length !== sps.length) return;      /* 하나라도 «어느 것인지 모르겠다» 면 손대지 않는다 */
+        const a = commonUp(els);
+        if (a && a !== d.body && a !== d.documentElement) guess.set(sc, a);
+      });
+      const els = [...guess.values()];
+      /* 한 화면의 조상이 다른 화면을 품으면 숨김이 서로를 잡아먹는다 — 그럴 땐 전부 포기한다 */
+      if (els.some((a, i) => els.some((b, j) => i !== j && a.contains(b)))) guess.clear();
+      guess.forEach((el, sc) => { sc._rootEl = el; });
+      const left = open();
+      if (left.length && !rootsTold) {
+        rootsTold = true;
+        console.warn("[ScreenSpec] 프로토타입에 연결되지 않은 화면 " + left.length + "개: " + left.map((s) => s.id).join(", ") +
+          " · 목차에서 골라도 설명만 바뀌고 화면은 그대로다. 각 화면을 감싸는 요소를 root 로 적어라 (예: root: '#screen-home')");
+      }
+    }
+    const unwired = (sc) => SCREENS.length > 1 && !sc.route && !sc.root && !sc._rootEl;
     function setScreen(id) {
       const next = SCREENS.find((s) => s.id === id);
       if (!next) return;
       /* 라우트 없는 root 화면은 앱 화면도 같이 전환해야 화면 감지가 되돌리지 않는다 (wrap 한정) */
-      if (next.root && !next.route && ctx.toggleRoot === true) showRoot(next);
+      if ((next.root || next._rootEl) && !next.route && ctx.toggleRoot === true) showRoot(next);
       setCurrent(next);
     }
 
@@ -3386,7 +3427,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
+    return { setCurrent, setScreen, ensureRoots, current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -3735,13 +3776,16 @@ ${HL_CSS}
       };
     }
     const core = createCore(coreCtx);
+    /* root 를 안 적은 화면을 정의가 가리키는 요소에서 되찾는다 (#67). 여기서 화면을 숨기지는 않는다 —
+       처음 보이는 모습은 프로토타입의 것이고, 우리는 «사람이 화면을 고를 때» 만 전환한다 */
+    if (!FRAME) core.ensureRoots();
 
     /* ---- 다중 화면 자동 감지 (root 표시/숨김 추적) ---- */
     function detectScreen() {
       if (SCREENS.length < 2) return;
       for (const sc of SCREENS) {
-        if (!sc.root) continue;
-        const el = document.querySelector(sc.root);
+        if (!sc.root && !sc._rootEl) continue;
+        const el = sc._rootEl || document.querySelector(sc.root);
         if (el && el.getClientRects().length > 0) {
           core.setCurrent(sc); /* 감지는 관찰 결과 반영일 뿐 — 여기서 다시 표시/숨김을 쓰면 관찰 루프가 된다 */
           return;
