@@ -745,6 +745,17 @@ function check(name, ok, detail) {
     await page.evaluate(() => window.ScreenSpec.setScreen("S-01"));
     await page.waitForTimeout(300);
     check("되돌아온다", JSON.stringify(await shows()) === "[true,false]");
+    /* 사람이 실제로 누르는 길로 잰다 (#74) — setScreen 만 재면 목차의 제 경로가 안 잡힌다 */
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    await page.locator(".ss-toc-btn").first().click({ force: true });
+    await page.waitForTimeout(300);
+    await page.locator("[data-toc='S-02']").first().click({ force: true });
+    await page.waitForTimeout(500);
+    check("목차에서 골라도 프로토타입이 바뀐다 (#74)", JSON.stringify(await shows()) === "[false,true]",
+      JSON.stringify(await shows()));
+    check("고른 화면이 유지된다 (화면 감지가 되돌리지 않는다)",
+      (await page.evaluate(() => window.ScreenSpec.current())) === "S-02");
     /* ② 화면마다 target 이 같아 «어느 것인지» 모른다 → 세우지 않고 경고한다 */
     const warns = [];
     const onMsg = (m) => { if (m.type() === "warning") warns.push(m.text()); };

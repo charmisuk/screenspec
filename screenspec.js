@@ -1778,9 +1778,10 @@ ${HL_CSS}
           aw.history.pushState({}, "", sc.route);
           aw.dispatchEvent(new aw.PopStateEvent("popstate")); /* 이벤트도 그 창의 realm 것으로 */
         } catch (err) { /* file:// 등 pushState 불가 환경 방어 */ }
-      } else if (!sc.route && sc.root) {
+      } else if (!sc.route && (sc.root || sc._rootEl)) {
         /* root 기반 화면: 앱 화면도 같은 방식(표시/숨김)으로 전환 — 정의서·앱 동기 유지.
-           안 하면 화면 감지가 "앱은 그대로"라며 이전 화면으로 되돌린다. */
+           안 하면 화면 감지가 "앱은 그대로"라며 이전 화면으로 되돌린다.
+           추론해서 세운 화면(_rootEl)도 같다 (#74) — 여기서 sc.root 만 보면 목차 클릭만 안 먹는다 */
         showRoot(sc);
       }
     });
