@@ -281,10 +281,19 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 둔다 */ ] }
 ## 개발
 
 ```bash
-node tests/lint.js  # 문법·버전 정합·문서 드리프트 (의존성 없음)
-node tests/e2e.js   # 브라우저 회귀 (playwright 필요)
-node tests/smoke.js # 예제 전수 클릭 (playwright 필요)
+node tests/lint.js  # 문법·버전 정합·문서 드리프트 (의존성 없음 · 0초)
+node tests/e2e.js   # 브라우저 회귀 (playwright 필요 · 2분 40초)
+node tests/smoke.js # 예제 전수 클릭 (playwright 필요 · 22초)
 ```
+
+고치는 동안에는 관련 섹션만 돌린다 — 한 건 고칠 때마다 2분 40초를 두 번 기다릴 이유가 없다.
+
+```bash
+node tests/e2e.js --list          # 섹션 34개 목록
+node tests/e2e.js --only 자동저장  # 그 섹션만 (수 초 ~ 20초)
+```
+
+**커밋 게이트는 전체 실행이다.** 부분 실행은 결과 줄에 그렇게 찍힌다.
 
 필요할 때만 켜는 것 — 블록 위계 규칙을 손댔을 때:
 
