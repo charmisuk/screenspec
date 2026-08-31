@@ -267,10 +267,10 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 둔다 */ ] }
 
 ## 예제
 
-- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — 대표 데모. 이커머스 2화면, anno 8타입 전부, PC 반응형
-- [tree.html](https://charmisuk.github.io/screenspec/examples/tree.html) — 화면 목록 트리 (11화면·4뎁스·미정의 혼합)
+- [shop.html](https://charmisuk.github.io/screenspec/examples/shop.html) — 대표 데모. 이커머스 2화면, anno 5종 전부, PC 반응형
+- [tree.html](https://charmisuk.github.io/screenspec/examples/tree.html) — 화면 목록 트리 (10화면·4뎁스·미정의 혼합)
 - [demo.html](https://charmisuk.github.io/screenspec/examples/demo.html) — 단일 화면 (콘텐츠형)
-- [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — 다중 화면 + flow·popup
+- [multi-screen.html](https://charmisuk.github.io/screenspec/examples/multi-screen.html) — 다중 화면 + flow·action
 - [overlay-spa.html](https://charmisuk.github.io/screenspec/examples/overlay-spa.html) — 오버레이 모드 (React·Next와 같은 구조)
 - [floating.html](https://charmisuk.github.io/screenspec/examples/floating.html) — 고정·플로팅 요소 (앱바·FAB·탭바·전면 시트)
 

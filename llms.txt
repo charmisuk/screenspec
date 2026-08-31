@@ -13,7 +13,7 @@
 ## 코드·예제
 
 - [screenspec.js](https://github.com/charmisuk/screenspec/blob/main/screenspec.js): 라이브러리 전체 (단일 파일)
-- [examples/shop.html](https://github.com/charmisuk/screenspec/blob/main/examples/shop.html): 대표 예제. 이커머스 2화면, anno 8타입 전부
+- [examples/shop.html](https://github.com/charmisuk/screenspec/blob/main/examples/shop.html): 대표 예제. 이커머스 2화면, anno 5종 전부
 - [examples/overlay-spa.html](https://github.com/charmisuk/screenspec/blob/main/examples/overlay-spa.html): overlay 모드 적용 예
 
 ## 설치

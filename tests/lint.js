@@ -19,7 +19,7 @@
  * 17) (폐기 2026-08-30) Part/하위 요소 개념 자체를 없앴다 — #51
  *  6) 문서 드리프트 — 폐기된 설계 용어·클래스명이 README/SKILL/라이브러리에 남아 있으면 FAIL (CHANGELOG 제외)
  *  7) README 예제 목록 ↔ examples/*.html 파일 정합, README가 참조하는 이미지 파일 존재
- * 19) 용량 상한(gzip 60KB) — 단일 파일·의존성 0 약속을 기계로 지킨다 (2026-08-28)
+ * 19) 용량 상한(gzip) — 단일 파일·의존성 0 약속을 기계로 지킨다. 실제 값은 LIMIT_KB 한 곳에 있다 (2026-08-28)
  * 18) 라이브러리 소스의 스크립트 종료 태그·HTML 주석 여는 표시 — 인라인 산출물이 통째로 깨진다 (2026-08-27 2회)
  * 20) 내부 계획 문서(로드맵·백로그·사이클 기록)가 git 에 추적되면 FAIL — public repository 는 지금 판만 설명한다 (2026-08-28)
  * 21) 사용자 문구에 em dash 금지 — 구분은 콜론(:), 나열은 가운뎃점(·) (PM 룰 2026-08-30)
@@ -106,13 +106,13 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
       설정 예시(parts:·why:·subs:)는 «문서에서» 만 잡는다. 라이브러리 안의 why 는 내보내기 결과 필드다. */
 {
   /* 어디에 있든 틀린 것 */
-  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"|상위 \d+ · 하위|패널 ⇄|SpecLayer|1a·1b|↳ 이유|편집 모드로 들어|편집.{0,3}\s?버튼|자동 번호를 매긴/;
+  const STALE = /커맨드 팔레트|브레드크럼|섹션 라벨|centerOf|ss-toc-(sec|crumb|main)|private이므로|panel:\s*"left"|상위 \d+ · 하위|패널 ⇄|SpecLayer|1a·1b|↳ 이유|편집 모드로 들어|편집.{0,3}\s?버튼|자동 번호를 매긴|anno[^\n]{0,6}8\s*(종|타입)|8\s*(종|타입)\s*전부/;
   /* 설정 예시 — 문서에서만 (코드에는 같은 이름의 다른 필드가 산다) */
-  const STALE_DOC = /(^|[^\w.`])(parts|subs)\s*:|\bwhy\s*:\s*"|`(parts|subs)`|`why`/;
+  const STALE_DOC = /(^|[^\w.`])(parts|subs)\s*:|\bwhy\s*:\s*"|`(parts|subs)`|`why`|\bpopup\b/;
   /* `why` 는 지금도 쓰는 값이다 (kind:"why"). 그 값을 설명하는 줄은 드리프트가 아니다 */
   const OKWHY = /kind/;
   /* 이 말이 줄에 있으면 «폐기를 설명하는 줄» 이다 */
-  const KEEP = /폐기|없앴|없어졌|deprecated|legacy|별칭|alias|호환|더 이상|옛 /;
+  const KEEP = /폐기|없앴|없어졌|deprecated|legacy|별칭|alias|호환|더 이상|옛 |\d+\s*(종|타입)\s*→/;
   for (const f of ["README.md", "SKILL.md", "AGENTS.md", "llms.txt", "docs/config.md", "screenspec.js"]) {
     const isDoc = /\.md$|\.txt$/.test(f);
     const hits = [];
@@ -126,6 +126,9 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   /* 음성 테스트 — 검사가 실제로 잡는지, 그리고 «폐기라고 적은 줄» 은 봐주는지 */
   check("(자체검사) 폐기 용어 검사가 잡는다", STALE.test("하위 항목 1a·1b 자동 번호"));
   check("(자체검사) 폐기를 설명하는 줄은 봐준다", KEEP.test("예전의 1a·1b 는 없앴다"));
+  /* #63 으로 anno 는 5종이 됐는데 README·llms.txt·라이브러리 헤더가 8종을 설명하고 있었다 (2026-08-31) */
+  check("(자체검사) anno 8종 서술을 잡는다", STALE.test("anno 8타입 전부") && STALE.test("anno 타입 8종"));
+  check("(자체검사) 폐기 타입 popup 을 문서에서 잡는다", STALE_DOC.test("다중 화면 + flow·popup"));
 }
 
 /* 8) README 예제 목록 ↔ examples/ 파일, 참조 이미지 존재 */

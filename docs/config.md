@@ -47,7 +47,7 @@ type Spec = {
   title?:   string,     // 영역명 (위치 힌트는 자동)
   optional?: boolean,   // 조건부 요소 — 누락 경고 제외
   defs?:    Def[],      // 기능 설명 줄
-  play?:    { selector: string, label: string },  // anno action·popup·flow: 재생 버튼
+  play?:    { selector: string, label: string },  // anno action·flow: 재생 버튼
   preview?: { label?: string },  // 상태 재현 버튼. 누르면 앱에 screenspec:preview 이벤트를 쏜다
   flowTo?:  string,     // anno flow: 이동할 화면 id
   arrowTo?: string,     // anno arrow: 관계선을 그을 상대 요소 CSS 셀렉터

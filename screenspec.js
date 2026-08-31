@@ -24,16 +24,15 @@
  *   - 수동 전환도 가능: window.ScreenSpec.setScreen("SCR-XXX-002")
  *   - data-spec 번호는 화면(root) 안에서만 찾으므로 화면마다 1부터 다시 시작 가능.
  *
- * anno 타입 8종 (SKILL.md §5) — 의미(라벨)와 시각 동작(mech)을 분리한 레지스트리:
- *   box    영역   | mech box  | 기본값. 영역 하이라이트
+ * anno 타입 5종 (SKILL.md §5) — 의미(라벨)와 시각 동작(mech)을 분리한 레지스트리.
+ * 타입은 «결과가 달라질 때만» 나뉜다 — 같은 결과면 하나다:
+ *   box    영역   | mech box  | 기본값. 영역 하이라이트 (입력 정책·애니메이션도 여기에 그냥 쓴다)
  *   arrow  화살표 | mech arrow| 작은 요소 지시 — 요소 밖 56px(화면 중심 쪽)에서 가장자리를 가리키는 콜아웃 자동.
  *                              arrowTo:"#sel" 지정 시 요소→요소 관계선(가장자리↔가장자리)
- *   input  입력   | mech box  | 입력 필드 정책 (글자수·형식·검증·placeholder)
  *   state  상태   | mech box  | 조건부 표시·상태 분기 (로그인 여부, 데이터 유무 등)
- *   motion 모션   | mech box  | 등장·전환 애니메이션 정의
- *   action 동작   | mech play | 클릭 시 실제 동작 재생. play:{selector,label}
- *   popup  팝업   | mech play | 클릭 시 모달·레이어 열림. play:{selector,label}
+ *   action 동작   | mech play | 클릭 시 화면 안에서 동작 재생 (모달·바텀시트 포함). play:{selector,label}
  *   flow   이동   | mech flow | 다른 화면으로 전환. flowTo:"SCR-ID" (+선택 play.selector)
+ *   옛 input·motion 은 box 로, popup 은 action 으로 읽는다 (ANNO_LEGACY) — 옛 문서는 그대로 열린다
  *
  * 모드 3종 (wrap·overlay 는 자동 판별, mode로 명시 가능 · frame 은 명시해야만 켜짐):
  *   wrap    단일 HTML 프로토타입 — 기기 뷰포트 포함 전 기능
