@@ -1947,8 +1947,9 @@ function check(name, ok, detail) {
     await page.waitForTimeout(150);
     await page.keyboard.press("/");
     await page.waitForTimeout(200);
-    check("에디터: 빈 줄에서 / 를 치면 셋을 고른다 (번호·불릿·화살표)",
-      (await page.locator(".ss-slash [data-sl]").count()) === 3,
+    /* «넣기» 묶음은 셋이다 (번호·불릿·화살표). 개요가 없는 화면에서는 «화면» 묶음이 하나 더 붙는다 (#82) */
+    check("에디터: 빈 줄에서 / 를 치면 «넣기» 셋을 고른다 (번호·불릿·화살표)",
+      (await page.locator('.ss-slash [data-sl="num"], .ss-slash [data-sl="bul"], .ss-slash [data-sl="why"]').count()) === 3,
       await page.locator(".ss-slash [data-sl]").allTextContents());
     check("에디터: 오른쪽에 마크다운 단축키가 보인다",
       (await page.locator(".ss-sl-key").allTextContents()).join(",").includes("-"));
@@ -2009,7 +2010,8 @@ function check(name, ok, detail) {
     await page.evaluate(() => document.querySelector(".ss-b .ss-gut [data-add]")
       .dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })));
     await page.waitForTimeout(400);
-    check("블록: ＋ 가 슬래시와 같은 메뉴를 연다", (await page.locator(".ss-slash [data-sl]").count()) === 3,
+    check("블록: ＋ 가 슬래시와 같은 메뉴를 연다",
+      (await page.locator('.ss-slash [data-sl="num"], .ss-slash [data-sl="bul"], .ss-slash [data-sl="why"]').count()) === 3,
       await page.locator(".ss-slash [data-sl]").allTextContents());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(150);
