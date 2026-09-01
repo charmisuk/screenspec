@@ -2875,8 +2875,8 @@ function check(name, ok, detail) {
   /* 매 빌드마다 돌릴 필요는 없다 (PM 2026-08-30) — 200번 넘게 페이지를 다시 띄우므로 느리다.
      규칙을 손댈 때만 켠다:  node tests/e2e.js --grid   (또는 SS_GRID=1) */
   const GRID = process.argv.includes("--grid") || process.env.SS_GRID === "1";
-  if (GRID) {
-  if (sec("[grid] 위계 전수 검증")) {
+  /* 이름은 언제나 등록한다 — --list 가 «있는 섹션» 을 다 보여야 문서의 숫자와 맞는다 (2026-09-01) */
+  if (sec("[grid] 위계 전수 검증") && GRID) {
     const ind = (l, i) => (l[i] ? (l[i].d | 0) : 0);
     const sub = (l, i) => { let n = 1; while (i + n < l.length && ind(l, i + n) > ind(l, i)) n++; return n; };
     /* 참조 구현 — «맞다» 고 정한 규칙을 그대로 적은 것 */
@@ -2972,8 +2972,7 @@ function check(name, ok, detail) {
       }
     }
     check("위계 전수: " + cases + "가지 자리에서 규칙과 실제가 같다", bad.length === 0, bad.slice(0, 6));
-  }
-  } else console.log("[grid] 위계 전수 검증 — 건너뜀 (규칙을 손댔으면 --grid 로 돌린다)");
+  } else if (!ONLY && !LIST) console.log("[grid] 위계 전수 검증 — 건너뜀 (규칙을 손댔으면 --grid 로 돌린다)");
 
   /* ============ 자동저장 ============
      PM 2026-08-29: 「번호 넣고 입력하면 구글 시트 자동저장되듯이 로컬에 계속 저장되면서 가면

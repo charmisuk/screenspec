@@ -23,6 +23,7 @@
  * 18) 라이브러리 소스의 스크립트 종료 태그·HTML 주석 여는 표시 — 인라인 산출물이 통째로 깨진다 (2026-08-27 2회)
  * 20) 내부 계획 문서(로드맵·백로그·사이클 기록)가 git 에 추적되면 FAIL — public repository 는 지금 판만 설명한다 (2026-08-28)
  * 21) 사용자 문구에 em dash 금지 — 구분은 콜론(:), 나열은 가운뎃점(·) (PM 룰 2026-08-30)
+ * 23) 문서가 말하는 «e2e 섹션 N개» = 실제 섹션 수 — 판마다 늘어서 사람이 세면 어긋난다 (2026-09-01)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
@@ -398,6 +399,28 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
     for (const ch of "a{b:c;") { if (ch === "{") dd++; else if (ch === "}") dd--; }
     check("(자체검사) 중괄호 검사가 안 닫힌 규칙을 잡는다", dd === 1);
   }
+}
+
+/* 23) 문서가 말하는 «e2e 섹션 N개» = 실제 섹션 수.
+       섹션은 판마다 는다. 34 → 36 이 된 것을 사람이 두 문서에서 놓쳤다 (2026-09-01 PM 지적).
+       세는 일은 기계가 한다 — e2e 를 돌리지 않고 sec("…") 호출을 세면 된다 */
+{
+  const e2e = fs.readFileSync(path.join(REPO, "tests", "e2e.js"), "utf8");
+  const real = (e2e.match(/\bsec\(\s*["'`]/g) || []).length;
+  check("e2e 섹션 추출기 동작 (≥20개)", real >= 20, String(real)); /* 14) 빈손 통과 방지 */
+  const said = [];
+  for (const f of ["README.md", "AGENTS.md", "SKILL.md", "docs/config.md", "llms.txt"]) {
+    const d = fs.readFileSync(path.join(REPO, f), "utf8");
+    [...d.matchAll(/섹션\s*(\d+)\s*개/g)].forEach((m) => said.push({ f: f, n: Number(m[1]) }));
+    [...d.matchAll(/--list\s*\((\d+)개\)/g)].forEach((m) => said.push({ f: f, n: Number(m[1]) }));
+  }
+  const wrong = said.filter((x) => x.n !== real);
+  check("문서의 «e2e 섹션 N개» = 실제 " + real + "개 (" + said.length + "곳)",
+    said.length > 0 && wrong.length === 0,
+    wrong.length ? JSON.stringify(wrong) : "문서 어디에도 안 적혀 있다 — 적어 두고 이 검사로 지킨다");
+  /* 음성 테스트 — 추출기가 진짜로 세는지 */
+  check("(자체검사) 섹션 추출기가 sec( 를 센다",
+    ('if (sec("[a] x")) {} if (sec("[b] y")) {}'.match(/\bsec\(\s*["'`]/g) || []).length === 2);
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));

@@ -53,7 +53,7 @@ description: 이슈 사이클 — GitHub 이슈를 중요순으로 1건씩 plan�
 - **log.md**: 작업 중 "프로토콜이 빠뜨린 것 / 불필요했던 것 / 통찰" 이 생기면 그 즉시 `_private/sprint/{cycle}/log.md` 에 1줄 적는다. 회고 원료.
 
 ## Phase 2 — 사이클 종료
-1. 전체 QA: **로컬에서 e2e 전체를 돌리지 않는다** — CI 가 push 마다 lint + e2e 전체 + smoke 를 3분 31초에 돈다(AGENTS.md 「게이트는 층으로 나눈다」, 2026-08-31). 마지막 커밋의 CI 가 초록인지 확인하는 것이 이 단계다. `gh run watch --exit-status`.
+1. 전체 QA: **사이클 중에는 로컬에서 e2e 전체를 돌리지 않는다** — CI 가 push 마다 lint + e2e 전체 + smoke 를 3분 31초에 돈다(AGENTS.md 「게이트는 층으로 나눈다」, 2026-08-31). 마지막 커밋의 CI 가 초록인지 확인하는 것이 이 단계다. `gh run watch --exit-status`. **다만 판을 내보내기 직전에는 로컬 전체 e2e 를 한 번 돌린다** — CI 가 타이밍으로 놓친 결함을 로컬 전체가 잡은 적이 있다 (2026-09-01).
 1-1. 손으로 눌러 보는 QA 는 `node scripts/qa.js --open` — 시나리오 하나 = 화면 하나, 절차는 그 화면의 정의서에 적혀 있다. 이번 판에서 고친 것이 있으면 그 화면에 확인 항목을 **더한다**.
 1-2. 새로 넣은 기능·수정마다 `scripts/mutate.js` 에 돌연변이를 한 줄 등록했는지 본다. 등록했으면 `node scripts/mutate.js` 가 전부 «잡음» 인지 확인한다 — 초록불이 «고쳐졌다» 를 뜻하려면 빨간불을 본 적이 있어야 한다.
 2. 버전 bump — **일곱 곳이다**: `screenspec.js` 헤더 1 · 워터마크 배지 2 · `console.info` 2 · `README.md` 1 · `SKILL.md` 1 (lint 가 정합 검사) + CHANGELOG 작성 → 커밋 1개. 한 번에 올리는 `--bump` 는 #86.
