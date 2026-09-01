@@ -2812,7 +2812,7 @@ ${HL_CSS}
        노션은 글자 뒤에 쳐도 그 자리에서 열리고, 고르면 «/» 와 그 뒤에 친 글자가 사라진다.
        그래서 «/» 를 먹지 않고 «글자로» 넣은 다음, 그 자리를 기억해 뒀다가 고를 때 걷어낸다.
        기억해 두는 것은 «/» 앞 자리다 — 이어 친 글자는 메뉴를 거르는 말이 된다. */
-    let edSlashAt = null;
+    let edSlashAt = null, edSlashArm = false;
     /* 기억해 둔 자리가 아직 이 칸 안에 살아 있는가 */
     function edSlashLive() {
       if (!edSlashAt || !edEl) return false;
@@ -3821,6 +3821,7 @@ ${HL_CSS}
         /* 메뉴가 떠 있는 동안 이어 친 글자는 «거르는 말» 이다 (#85).
            keydown 이 아니라 input 에서 본다 — 한글·IME·붙여넣기는 keydown 을 안 거치기도 한다 */
         if (edMenu) { const q = edSlashQuery(); if (q === null) edSlashClose(); else edSlash(q); }
+        else if (edSlashArm) { edSlashArm = false; const q = edSlashQuery(); if (q !== null) edSlash(q); }
         edPickUp();
         edSync();
         edAutoPlan();
@@ -3852,16 +3853,14 @@ ${HL_CSS}
         else if (k === "Escape") { eat(); edSlashClose(); edFinish(true); }
         else if (k === "Tab") { eat(); edIndent(!e.shiftKey); }
         else if (k === "Backspace" && empty) { eat(); edKillLine(); }
-        /* «/» 는 먹지 않는다 — 글자로 들어간 뒤에 그 자리에서 연다 (#85) */
+        /* «/» 는 먹지 않는다 — 글자로 들어간 뒤에 그 자리에서 연다 (#85).
+           여는 것은 «타이머» 가 아니라 바로 다음 input 이다. 타이머로 열었더니
+           «POST /api/items» 처럼 슬래시가 낀 글을 빨리 칠 때 그 사이에 친 글자를 못 보고
+           뒤늦게 빈 메뉴가 떠서 다음 키(Shift+Enter)를 삼켰다 (2026-09-01 전체 e2e 가 잡았다) */
         else if (k === "/" && !e.ctrlKey && !e.metaKey) {
           const sel = getSelection();
-          if (sel && sel.rangeCount && sel.isCollapsed && edEl.contains(sel.focusNode)) {
-            edSlashAt = { node: sel.focusNode, off: sel.focusOffset };
-            /* «/» 가 글자로 들어간 뒤에 연다. 그 사이에 더 쳤을 수 있으므로 빈 말이 아니라
-               «지금 무엇이 쳐져 있나» 로 연다 — 안 그러면 «POST /api/items» 처럼 슬래시가 낀 글을
-               빠르게 칠 때 메뉴가 뒤늦게 떠서 다음 키를 삼킨다 (2026-09-01 전체 e2e 가 잡았다) */
-            setTimeout(() => { const q = edSlashQuery(); if (q !== null) edSlash(q); }, 0);
-          }
+          edSlashArm = !!(sel && sel.rangeCount && sel.isCollapsed && edEl.contains(sel.focusNode));
+          if (edSlashArm) edSlashAt = { node: sel.focusNode, off: sel.focusOffset };
         }
         /* 노션과 같은 마크다운 단축키 — 빈 줄에서 «-» + 스페이스면 불릿, «>» 면 화살표 (#56) */
         else if (k === " " && edEl.textContent === "-") { eat(); edEl.textContent = ""; edPickUp(); edSetKind(B_BULLET); }

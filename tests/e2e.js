@@ -1017,6 +1017,18 @@ function check(name, ok, detail) {
       (await page.locator(line).textContent()) === "첫 줄 POST /api/items",
       await page.locator(line).textContent());
     check("그 뒤에 메뉴가 남아 있지 않다 (#85)", (await open()) === 0);
+
+    /* 메뉴가 떠 있어도 Shift+Enter 는 «여기서 그만» 이다 — 어디서나 같은 뜻이어야 한다 */
+    await fresh();
+    await page.keyboard.press("/");
+    await page.waitForTimeout(250);
+    check("메뉴가 떠 있는 것을 확인하고", (await open()) === 1);
+    await page.keyboard.press("Shift+Enter");
+    await page.waitForTimeout(300);
+    check("Shift+Enter 를 메뉴가 가로채지 않는다 (#85)",
+      (await page.locator(line).textContent()) === "첫 줄/" &&
+      (await page.locator(".ss-pickbar, .ss-picking").count()) === 0,
+      await page.locator(line).textContent());
   }
 
   /* ============ root 없는 화면도 전환된다 (#67) ============
