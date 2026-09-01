@@ -76,6 +76,7 @@ type Device = { w: number, h: number }
 | `style` | `Style` | — | 이 프로젝트의 문구·ID 체계를 적어 두는 자리. **AI 가 읽는 계약이며 라이브러리 동작은 바뀌지 않는다** — 정의서 렌더·마커·경고 어디에도 영향이 없다. [SKILL §0 적용 전 인터뷰](../SKILL.md)의 답이 여기 남아, 다음에 AI 가 다시 쓸 때도 같은 톤이 유지된다. 형식이 어긋나면 해당 항목만 무시하고 콘솔 경고 1회. 아래 [쓰는 법 고정](#쓰는-법-고정-style) 참조 |
 | `off` | boolean | `false` | `true`면 라이브러리가 **아무것도 하지 않는다** — CSS·UI·DOM 어디에도 손대지 않고 원본 프로토타입 그대로. 정의는 코드에 남아 있고, 주소에 `?screenspec=1`을 붙이면 그때만 켜진다. 아래 [정의서 끄기](#정의서-끄기-off) 참조 |
 | `readonly` | boolean | `false` | `true`면 **고칠 수 없다** — 고칠 수 있는 표식도, 저장 경로도 만들지 않는다(숨김이 아니라 미생성). 남에게 넘기는 전달본이 고쳐지지 않게 할 때 |
+| `save` | `{ write(blockText) }` | — | **저장을 호스트에 맡기는 훅.** 앱(Next.js·Vite 등)에 심어 `http`로 열었을 때 쓴다. 라이브러리가 바뀐 설정 블록 텍스트를 넘기고, 어디에 어떻게 쓸지는 호스트가 정한다. 안 달면 지금까지처럼 `file://`에서 파일을 골라 직접 쓴다. 아래 [저장을 호스트에](#저장을-호스트에-save) 참조 |
 | `screen` | `Screen` | — | 화면이 하나일 때. `specs`와 짝 |
 | `specs` | `Spec[]` | `[]` | 화면이 하나일 때의 기능 설명 |
 | `screens` | `Screen[]` | — | 화면이 여럿일 때. 있으면 `screen`·`specs`는 무시된다 |
@@ -220,6 +221,57 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 ```
 
 > `widths: { mobile, pc }`는 v0.2 호환용으로 아직 동작하지만 폭만 바꾼다. 신규 작성은 `devices` 사용.
+
+### 저장을 호스트에 (save)
+
+단일 HTML 에서는 **문서와 파일이 같은 것**이다. 브라우저에 뜬 그 파일에 그대로 되쓰면 된다.
+
+**앱에 심으면 그 전제가 깨진다.** 브라우저에 뜬 것은 주소이고, 정의가 사는 곳은 소스 파일이다.
+그 파일이 어디인지는 라이브러리가 알 수 없다 — **호스트만 안다.**
+
+그래서 라이브러리는 «바뀐 설정 블록 텍스트» 만 넘기고, 쓰는 일은 호스트가 한다.
+
+```js
+window.SCREENSPEC = {
+  save: {
+    // 라이브러리가 "window.SCREENSPEC = {...};" 한 덩어리를 넘긴다.
+    // 어디에 어떻게 쓸지는 호스트가 정한다. 실패하면 throw — 그것만 보고 저장 표시를 되돌린다.
+    async write(blockText) {
+      const r = await fetch("/api/screenspec", { method: "POST", body: blockText });
+      if (!r.ok) throw new Error(await r.text());
+    },
+  },
+  screens: [ /* ... */ ],
+};
+```
+
+개발 서버에서 받는 쪽은 소스 파일의 그 블록만 갈아끼우면 된다 (Next.js 예):
+
+```js
+// app/api/screenspec/route.js — 개발에서만 열어 둔다
+import fs from "node:fs/promises";
+export async function POST(req) {
+  if (process.env.NODE_ENV !== "development") return new Response("dev only", { status: 403 });
+  const block = await req.text();
+  const at = "app/spec.js";
+  await fs.writeFile(at, block + "\n");
+  return new Response("ok");
+}
+```
+
+| 쓰는 쪽 | 훅 | 어떻게 저장되나 |
+|---|---|---|
+| 단일 HTML (`file://`) | 안 단다 | 파일을 한 번 고르면 그 뒤로 알아서 쓴다 (지금까지 그대로) |
+| 앱에 심기 (`http`) | **단다** | 개발 서버가 소스 파일에 쓴다 |
+| 주소로 받은 전달본 | 안 단다 | 쓸 곳이 없다 — 「설명 복사」 로 옮긴다 |
+
+알아 둘 것
+
+- **훅은 `write` 하나다.** 읽기는 없다 — 문서를 연 그 페이지가 이미 정의를 들고 있다.
+- **`save` 는 저장되지 않는다.** 저장하는 «방법» 이지 정의서 내용이 아니라서, 넘기는 블록 텍스트에서 빠진다 — 안 그러면 한 번 저장한 순간 훅이 지워진다.
+- **밖에서 바뀐 파일 감지는 훅 경로에서 안 돈다.** 그 판정은 파일 손잡이로 수정 시각을 보는 것인데 훅 경로에는 손잡이가 없다. 에이전트가 소스를 고쳤으면 새로고침한다.
+- **「다른 프로토타입을 골랐다」 방어(`edMatches`)도 건너뛴다.** 고르는 창이 없으므로 잘못 고를 일 자체가 없다 — 대상은 호스트가 안다.
+- `readonly: true` 가 우선한다. 잠긴 전달본에는 저장 경로가 아예 안 생긴다.
 
 ## Screen
 

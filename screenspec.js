@@ -43,6 +43,10 @@
  *           설명 패널이 앱을 덮지 않고, 툴바의 모바일/PC 로 앱의 미디어쿼리가 실제로 발화한다.
  *           조건: 앱이 주소로 열리고 same-origin. 화면 추적은 overlay 와 같은 route/root 규칙.
  *
+ * 저장을 호스트에 (앱에 심었을 때): save:{ async write(blockText){...} } — 앱 안에서는 «문서 = 파일» 이 아니다.
+ *   라이브러리는 바뀐 window.SCREENSPEC 블록 텍스트만 넘기고, 어디에 쓸지는 호스트가 정한다(실패는 throw).
+ *   훅을 안 달면 지금까지처럼 file:// 에서 파일을 골라 직접 쓴다.
+ *
  * 액센트: accent 옵션 — 프리셋 blue(기본)·red·orange·green·purple, hex 또는 var(--토큰). 마커·하이라이트·버튼·그립·목차 활성이 묶음으로 바뀐다.
  * 화면 목록(목차): 헤더의 화면 ID 칩 클릭 → path 배열 기반 트리(들여쓰기 + 가이드선, 그룹 행, 최대 6뎁스 들여쓰기).
  *
@@ -355,7 +359,12 @@
     }
     return "null"; /* 함수·undefined 는 설정에 올 수 없다 */
   }
-  function serializeConfig(cfg) { return "window.SCREENSPEC = " + ssVal(cfg, "") + ";"; }
+  /* save 는 «저장하는 방법» 이지 정의서 내용이 아니다 — 파일로 되돌리면 호스트의 훅이 지워진다 (#87) */
+  function serializeConfig(cfg) {
+    const out = {};
+    Object.keys(cfg).forEach((k) => { if (k !== "save") out[k] = cfg[k]; });
+    return "window.SCREENSPEC = " + ssVal(out, "") + ";";
+  }
 
   /* 설정 <script> 블록만 골라낸다 — src 가 있는 태그(라이브러리 로드)는 건드리지 않는다 */
   const CFG_BLOCK_RE = /<script(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script\s*>/gi;
@@ -2202,7 +2211,7 @@ ${HL_CSS}
         const sv = h("button", { class: "ss-headbtn ss-svbtn ss-ui", type: "button" }, "저장");
         edSvBtn = sv;
         sv.onclick = () => {
-          if (typeof window.showOpenFilePicker === "function") edSaveFile();
+          if (edHook() || typeof window.showOpenFilePicker === "function") edSaveFile();
           else edSaveDownload();
         };
         box.appendChild(sv);
@@ -2287,6 +2296,17 @@ ${HL_CSS}
     const AUTO_MS = 1200;   /* 손이 멈추면 이만큼 뒤에 파일로 — 구글 문서와 같은 감각 */
     const WATCH_MS = 3000;  /* 파일이 밖에서 바뀌었는지 보는 주기. 아래 edWatch 주석 참고 */
     function edCanFile() { return typeof window.showOpenFilePicker === "function"; }
+    /* ---- 저장을 호스트에 맡기는 훅 (#87, PM 2026-09-01) ----
+       앱(Next.js·Vite 등)에 정의서를 심으면 «문서 = 파일» 이라는 전제가 깨진다:
+       브라우저에 뜬 것은 주소이고, 정의가 사는 곳은 소스 파일이다.
+       그 파일이 어디인지는 라이브러리가 아니라 «호스트» 가 안다. 그래서 라이브러리는
+       바뀐 설정 블록 텍스트만 넘기고, 쓰는 일은 호스트가 한다:
+         window.SCREENSPEC = { save: { async write(blockText) { ... } }, ... }
+       실패하면 throw 한다 — 그것만 보고 저장 표시를 되돌린다.
+       훅을 안 달면 아무것도 안 바뀐다: 단일 HTML 의 파일 손잡이 경로가 그대로 기본값이다. */
+    function edHook() { const hk = RAW.save; return hk && typeof hk.write === "function" ? hk : null; }
+    /* 쓸 곳이 있는가 — 파일 손잡이든 훅이든. 이 아래로는 둘을 구분하지 않는다 */
+    function edCanWrite() { return !!edHandle || !!edHook(); }
     /* ---- 고른 파일을 기억한다 (#68, PM 2026-08-31) ----
        브라우저는 «이 페이지가 열린 그 파일» 에 스스로 쓰게 해 주지 않는다. 로컬 파일이어도 마찬가지다 —
        사람이 한 번 「이 파일」 을 골라 줘야만 쓸 수 있다. 그 한 번을 «문서당 한 번» 으로 줄인다:
@@ -2319,7 +2339,7 @@ ${HL_CSS}
     }
     /* 다시 열었을 때: 권한이 살아 있으면 조용히 잇고, 브라우저가 확인을 요구하면 «한 번 눌러» 잇는다 */
     async function edRelink() {
-      if (!edCanFile() || edHandle) return;
+      if (!edCanFile() || edHandle || edHook()) return;
       const hd = await hdGet();
       if (!hd) return;
       edKnown = hd;
@@ -2373,7 +2393,7 @@ ${HL_CSS}
        PM: 「수정 열심히 하면 뭐해? 반영이 안 되는데.」 그래서 다 고친 뒤가 아니라 «고치기 전에» 붙잡는다.
        파일에 못 쓰는 브라우저(사파리·모바일)에서는 막지 않는다 — 막으면 거기서는 아예 못 쓴다 */
     function edGate() {
-      if (edHandle) return true;
+      if (edCanWrite()) return true; /* 호스트가 저장을 맡았으면 붙잡을 이유가 없다 (#87) */
       /* 붙잡는 것은 «로컬 파일로 연» 문서뿐이다. 주소로 받아 온 문서(사내 서버·깃허브 페이지)와
          파일에 못 쓰는 브라우저는 애초에 쓸 파일이 없으므로 막을 이유가 없다 —
          거기서는 「설명 복사」가 유일한 길이다. 다만 그 사실을 «고치는 순간» 한 번은 말해 준다 (#84):
@@ -2388,8 +2408,9 @@ ${HL_CSS}
       if (edWhen) edWhen.textContent = edDirty ? "저장 안 됨" : (edSavedAt ? "마지막 저장 " + edSavedAt : "");
       if (!edStat) return;
       let cls = "ss-savest ss-ui", txt;
-      if (!edCanFile()) { cls += " ss-st-off"; txt = "자동저장 안 됨 (크롬·엣지에서 됩니다)"; }
-      else if (!edHandle) { cls += " ss-st-off"; txt = "자동저장 꺼짐"; }
+      const hook = edHook(); /* 훅이 있으면 브라우저가 파일에 못 써도 저장은 된다 (#87) */
+      if (!hook && !edCanFile()) { cls += " ss-st-off"; txt = "자동저장 안 됨 (크롬·엣지에서 됩니다)"; }
+      else if (!hook && !edHandle) { cls += " ss-st-off"; txt = "자동저장 꺼짐"; }
       else if (edOutside) { cls += " ss-st-warn"; txt = "저장 멈춤"; }
       else if (edSaving) { cls += " ss-st-busy"; txt = "저장 중…"; }
       else if (edDirty) { cls += " ss-st-busy"; txt = "저장 대기"; }
@@ -2397,12 +2418,14 @@ ${HL_CSS}
       edStat.className = cls;
       edStat.textContent = txt;
       if (edSvBtn) {
-        edSvBtn.textContent = edHandle ? "저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");
+        const can = edCanWrite();
+        edSvBtn.textContent = can ? "저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");
         /* 자동저장이 켜져 있고 이미 저장됐으면 누를 일이 없다 — 눌러도 되는 것처럼 두지 않는다 (PM 2026-08-30) */
-        const idle = edHandle && !edDirty && !edSaving && !edOutside;
+        const idle = can && !edDirty && !edSaving && !edOutside;
         edSvBtn.disabled = !!idle;
-        edSvBtn.title = !edHandle ? (edCanFile() ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다" : "고친 내용을 파일로 내려받습니다")
-          : idle ? "저장할 것이 없습니다" : "「" + edHandle.name + "」 에 바로 씁니다";
+        edSvBtn.title = !can ? (edCanFile() ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다" : "고친 내용을 파일로 내려받습니다")
+          : idle ? "저장할 것이 없습니다"
+          : edHandle ? "「" + edHandle.name + "」 에 바로 씁니다" : "이 앱이 정의를 소스에 씁니다";
       }
     }
     function edTouched() {
@@ -2426,7 +2449,7 @@ ${HL_CSS}
         그게 프로토타입 파일에 반영되고 그걸 또 클로드가 픽스하고 핑퐁이 되지 않을까.」
        파일을 한 번 고르면(브라우저가 권한을 그때 받는다) 그 뒤로는 손이 멈출 때마다 조용히 쓴다. */
     function edAutoPlan() {
-      if (!edHandle || edOutside) return;
+      if (!edCanWrite() || edOutside) return;
       clearTimeout(edAutoT);
       edAutoT = setTimeout(edAutoSave, AUTO_MS);
     }
@@ -2485,7 +2508,7 @@ ${HL_CSS}
       edWatchT = setInterval(() => { if (!document.hidden) edPeekFile(); }, WATCH_MS);
     }
     async function edAutoSave() {
-      if (!edHandle || edSaving || edOutside) return;
+      if (!edCanWrite() || edSaving || edOutside) return;
       /* 쓰기 직전에 한 번 더 본다 (#83). 자동저장은 1.2초, 감시는 3초 주기라 그 사이에 들어온
          밖의 변경은 «알아채기 전에» 덮여 버렸다. 쓰기 직전 확인이 그 틈을 없앤다 */
       await edPeekFile();
@@ -2495,7 +2518,8 @@ ${HL_CSS}
       edSaving = true; edSync();
       const bad = await edWriteFile();
       edSaving = false;
-      if (bad) { edHandle = null; edSay(bad + " 자동저장을 껐습니다."); }
+      /* 훅이 실패한 것은 호스트 사정이다 — 끄지 않는다. 다음 수정에서 다시 쓴다 (#87) */
+      if (bad) { if (edHook()) edSay(bad); else { edHandle = null; edSay(bad + " 자동저장을 껐습니다."); } }
       else edSavedNow();
       edSync();
     }
@@ -3427,6 +3451,12 @@ ${HL_CSS}
     }
     /* 실제로 쓰는 곳 — 문제가 있으면 «사람에게 할 말» 을 돌려준다 (없으면 null) */
     async function edWriteFile() {
+      const hook = edHook();
+      if (hook) {
+        /* 어디에 어떻게 쓸지는 호스트가 정한다. 우리는 성공·실패만 알면 된다 (#87) */
+        try { await hook.write(edBlockText()); return null; }
+        catch (e) { return "호스트가 저장하지 못했습니다: " + ((e && e.message) || e); }
+      }
       try {
         const html = await edHandle.getFile().then((file) => file.text());
         const out = replaceConfigBlock(html, edBlockText());
@@ -3444,6 +3474,15 @@ ${HL_CSS}
     }
     async function edSaveFile() {
       edFlush();
+      /* 훅이 있으면 고를 파일이 없다 — 바로 쓴다 (#87) */
+      if (edHook()) {
+        edSaving = true; edSync();
+        const bad = await edWriteFile();
+        edSaving = false;
+        if (bad) edSay(bad); else edSavedNow();
+        edSync();
+        return;
+      }
       try {
         if (!edHandle) {
           /* 고르기 창이 «엉뚱한 폴더» 에서 열리던 것 (#78, PM 2026-08-31: 「그냥 제일 최근에 했던 위치가 뜬다」).

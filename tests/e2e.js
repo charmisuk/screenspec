@@ -863,6 +863,72 @@ function check(name, ok, detail) {
       await page.locator(".ss-nofile.ss-show").count() === 0);
   }
 
+  /* ============ 저장을 호스트가 맡는다 (#87) ============
+     앱(Next.js 등)에 심으면 «문서 = 파일» 이 깨진다 — 브라우저에 뜬 것은 주소이고
+     정의가 사는 곳은 소스 파일이다. save.write 훅이 있으면 파일 손잡이 없이도 저장이 돈다. */
+  if (sec("[편집] 저장을 호스트가 맡는다 (#87)")) {
+    const hookDoc = (body) =>
+      '<h1 id="t">홈</h1><button id="buy" data-spec="1" style="margin:40px">구매하기</button>' +
+      "<script>window.SCREENSPEC={save:{async write(t){window.__calls=(window.__calls||0)+1;" + body +
+      "}},screen:{id:'S-H',name:'홈'},specs:[{n:1,target:'1',title:'구매',defs:[{t:'첫 줄'}]}]};<" + "/script>";
+    const stat = () => page.locator(".ss-savest").textContent();
+    const row = '[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]';
+
+    await page.goto("about:blank");
+    await page.setContent(hookDoc("window.__wrote=t;"));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("훅이 있으면 «자동저장 꺼짐» 이 아니다 — 이미 쓸 곳이 있다",
+      (await stat()).indexOf("저장") === 0 && (await stat()).indexOf("꺼짐") < 0, await stat());
+    check("저장 단추가 «자동저장 켜기» 가 아니라 «저장» 이다",
+      (await page.locator(".ss-svbtn").textContent()) === "저장");
+    await page.click(row);
+    await page.waitForTimeout(200);
+    check("훅이 있으면 그 자리에서 바로 고쳐진다 (파일을 안 고른다)",
+      (await page.locator(row).getAttribute("contenteditable")) === "true");
+    check("«파일에 못 쓴다» 안내가 안 뜬다 (#84 와 갈린다)",
+      await page.locator(".ss-nofile.ss-show").count() === 0);
+    check("파일 고르기 레이어도 안 뜬다 (#78 와 갈린다)",
+      await page.locator(".ss-lay.ss-show").count() === 0);
+
+    await page.keyboard.press("End");
+    await page.keyboard.type(" 호스트가 쓴다");
+    await page.waitForTimeout(1600); /* 자동저장 1.2초 */
+    const wrote = await page.evaluate(() => window.__wrote || "");
+    check("자동저장이 훅으로 간다", wrote.indexOf("호스트가 쓴다") >= 0, wrote.slice(0, 140));
+    check("넘기는 것은 설정 블록 텍스트 한 덩어리다",
+      wrote.indexOf("window.SCREENSPEC = ") === 0, wrote.slice(0, 60));
+    /* 훅이 되쓰이면 호스트가 그것을 소스에 저장하는 순간 훅이 사라진다 — 한 번 저장하고 끝난다 */
+    check("훅 자신은 안 실린다", !/\bsave\s*:/.test(wrote), wrote.slice(0, 200));
+    check("저장되면 «저장됨» 으로 바뀐다", (await stat()).indexOf("저장됨") === 0, await stat());
+
+    /* 호스트가 실패하면 — 끄지 않는다. 호스트 사정이고 다음 수정에서 다시 쓴다 */
+    await page.goto("about:blank");
+    await page.setContent(hookDoc('throw new Error("개발 서버가 안 떠 있습니다");'));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    await page.click(row);
+    await page.keyboard.press("End");
+    await page.keyboard.type(" 가");
+    await page.waitForTimeout(1600);
+    check("호스트가 실패하면 그 말을 그대로 전한다",
+      (await page.locator(".ss-edmsg").textContent()).indexOf("개발 서버가 안 떠 있습니다") >= 0,
+      await page.locator(".ss-edmsg").textContent());
+    check("실패하면 «저장됨» 이 되지 않는다", (await stat()).indexOf("저장됨") < 0, await stat());
+    check("«자동저장을 껐습니다» 라고 거짓말하지 않는다 — 훅은 그대로 살아 있다",
+      (await page.locator(".ss-edmsg").textContent()).indexOf("껐습니다") < 0,
+      await page.locator(".ss-edmsg").textContent());
+    await page.keyboard.type("나");
+    await page.waitForTimeout(1600);
+    check("실패해도 자동저장을 끄지 않는다 — 다음 수정에서 다시 쓴다",
+      (await page.evaluate(() => window.__calls || 0)) >= 2,
+      await page.evaluate(() => window.__calls || 0));
+  }
+
   /* ============ root 없는 화면도 전환된다 (#67) ============
      목차에서 골라도 «설명만» 바뀌고 프로토타입은 그대로였다. 정의가 가리키는 요소의
      공통 조상을 찾아 세운다. 어느 요소인지 모호하면 세우지 않고 «말로» 알린다. */
