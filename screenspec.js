@@ -2783,20 +2783,72 @@ ${HL_CSS}
     ];
     let edMenu = null, edMenuAt = 0;
     function edSlashClose() { if (edMenu) { edMenu.remove(); edMenu = null; } }
-    function edSlash() {
+    /* ---- «/» 는 빈 줄에서만 열렸다 (#85, PM 2026-09-01) ----
+       노션은 글자 뒤에 쳐도 그 자리에서 열리고, 고르면 «/» 와 그 뒤에 친 글자가 사라진다.
+       그래서 «/» 를 먹지 않고 «글자로» 넣은 다음, 그 자리를 기억해 뒀다가 고를 때 걷어낸다.
+       기억해 두는 것은 «/» 앞 자리다 — 이어 친 글자는 메뉴를 거르는 말이 된다. */
+    let edSlashAt = null;
+    /* 기억해 둔 자리가 아직 이 칸 안에 살아 있는가 */
+    function edSlashLive() {
+      if (!edSlashAt || !edEl) return false;
+      const n = edSlashAt.node;
+      return n === edEl || edEl.contains(n);
+    }
+    /* «/» 부터 커서까지를 하나의 범위로 — 거를 말을 읽는 데도, 걷어내는 데도 같은 범위를 쓴다 */
+    function edSlashRange() {
+      if (!edSlashLive()) return null;
+      const sel = getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed || !edEl.contains(sel.focusNode)) return null;
+      let r;
+      try {
+        r = document.createRange();
+        r.setStart(edSlashAt.node, edSlashAt.off);
+        r.setEnd(sel.focusNode, sel.focusOffset);
+      } catch (e) { return null; }
+      return r.collapsed && r.toString() === "" ? null : r;
+    }
+    /* 거를 말. «/» 를 지워 버렸으면 null — 그때는 메뉴를 닫는다 */
+    function edSlashQuery() {
+      const r = edSlashRange();
+      if (!r) return null;
+      const t = r.toString();
+      return t.charAt(0) === "/" ? t.slice(1) : null;
+    }
+    /* 고른 순간, «/» 와 그 뒤에 친 글자는 명령이었지 글이 아니다 */
+    function edSlashEat() {
+      const r = edSlashRange();
+      edSlashAt = null;
+      if (!r) return;
+      r.deleteContents();
+      const sel = getSelection();
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      try { edEl.normalize(); } catch (e) { /* 지워진 칸 */ }
+      edPickUp(); /* 걷어낸 결과를 모델에 먼저 옮긴다 — 다시 그려도 «/» 가 안 남게 */
+    }
+    function edSlash(q) {
       const p = edPos();
       if (!p) return;
       edSlashClose();
-      const row = (x, i) =>
-        '<button type="button" data-sl="' + x.k + '"' + (i === 0 ? ' class="on"' : "") + '>' +
+      const hit = (x) => !q || x.nm.indexOf(q) >= 0 || x.k.indexOf(q) === 0 || x.key.indexOf(q) >= 0;
+      const row = (x) =>
+        '<button type="button" data-sl="' + x.k + '">' +
         '<span class="ss-sl-ico">' + x.ico + "</span><span class=\"ss-sl-nm\">" + x.nm + "</span>" +
         '<span class="ss-sl-key">' + esc(x.key) + "</span></button>";
-      const screenPart = specs().some(isBrief) ? "" /* 개요는 화면당 하나다 */
-        : '<div class="ss-slash-g">화면</div>' + SLASH_SCREEN.map((x) => row(x, -1)).join("");
+      const main = SLASH.filter(hit);
+      /* 개요는 «줄» 이 아니라 항목이다 — 글자가 있는 줄을 개요로 바꿀 수는 없으니 빈 줄에서만 준다.
+         화면당 하나이므로 이미 있으면 안 준다 */
+      const bare = edEl.textContent.trim() === "/" + (q || "");
+      const scr = (!bare || specs().some(isBrief)) ? [] : SLASH_SCREEN.filter(hit);
+      /* 걸리는 것이 없으면 열지 않는다 — 그냥 글자를 치고 있는 것이다 (노션과 같다) */
+      if (!main.length && !scr.length) return;
       edMenu = h("div", { class: "ss-slash ss-ui" },
-        '<div class="ss-slash-g">넣기</div>' + SLASH.map(row).join("") + screenPart);
+        (main.length ? '<div class="ss-slash-g">넣기</div>' + main.map(row).join("") : "") +
+        (scr.length ? '<div class="ss-slash-g">화면</div>' + scr.map(row).join("") : ""));
       document.body.appendChild(edMenu);
       edMenuAt = 0;
+      edMenu.querySelector("[data-sl]").classList.add("on");
       const r = edEl.getBoundingClientRect();
       edMenu.style.left = Math.round(Math.min(r.left, innerWidth - 300)) + "px";
       edMenu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - 170)) + "px";
@@ -2822,6 +2874,7 @@ ${HL_CSS}
     }
     function edPick(kind, p) {
       edSlashClose();
+      edSlashEat(); /* «/» 와 거르려고 친 글자를 걷어낸다 (#85) */
       if (kind === "num") { edFinish(true); pickStart(); return; }
       if (kind === "bul") { edSetKind(B_BULLET); return; }
       if (kind === "why") { edSetKind(B_WHY); return; }
@@ -3739,6 +3792,9 @@ ${HL_CSS}
          Enter 나 바깥 클릭을 기다리면 「실시간 저장」 이 아니다 */
       ctx.listEl.addEventListener("input", () => {
         if (!edEl) return;
+        /* 메뉴가 떠 있는 동안 이어 친 글자는 «거르는 말» 이다 (#85).
+           keydown 이 아니라 input 에서 본다 — 한글·IME·붙여넣기는 keydown 을 안 거치기도 한다 */
+        if (edMenu) { const q = edSlashQuery(); if (q === null) edSlashClose(); else edSlash(q); }
         edPickUp();
         edSync();
         edAutoPlan();
@@ -3770,7 +3826,14 @@ ${HL_CSS}
         else if (k === "Escape") { eat(); edSlashClose(); edFinish(true); }
         else if (k === "Tab") { eat(); edIndent(!e.shiftKey); }
         else if (k === "Backspace" && empty) { eat(); edKillLine(); }
-        else if (k === "/" && empty) { eat(); edSlash(); }
+        /* «/» 는 먹지 않는다 — 글자로 들어간 뒤에 그 자리에서 연다 (#85) */
+        else if (k === "/" && !e.ctrlKey && !e.metaKey) {
+          const sel = getSelection();
+          if (sel && sel.rangeCount && sel.isCollapsed && edEl.contains(sel.focusNode)) {
+            edSlashAt = { node: sel.focusNode, off: sel.focusOffset };
+            setTimeout(() => edSlash(""), 0);
+          }
+        }
         /* 노션과 같은 마크다운 단축키 — 빈 줄에서 «-» + 스페이스면 불릿, «>» 면 화살표 (#56) */
         else if (k === " " && edEl.textContent === "-") { eat(); edEl.textContent = ""; edPickUp(); edSetKind(B_BULLET); }
         else if (k === ">" && empty) { eat(); edSetKind(B_WHY); }

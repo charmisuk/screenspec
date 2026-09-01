@@ -929,6 +929,83 @@ function check(name, ok, detail) {
       await page.evaluate(() => window.__calls || 0));
   }
 
+  /* ============ 슬래시는 아무 데서나 열린다 (#85) ============
+     빈 줄에서만 열리던 것을 노션과 맞춘다 — 글자 뒤에 쳐도 그 자리에서 열리고,
+     고르면 «/» 와 그 뒤에 친 글자가 사라진다. 안 걸리면 그냥 글자다. */
+  if (sec("[슬래시] 아무 데서나 열린다 (#85)")) {
+    const DOC = '<h1 id="t">홈</h1><button id="b" data-spec="1" style="margin:40px">사기</button>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-SL',name:'홈'},specs:[{n:1,target:'1',title:'구매'," +
+      "defs:[{t:'첫 줄'}]}]};<" + "/script>";
+    const line = '.ss-dt[data-ed="b"][data-di="0"]';
+    const open = () => page.locator(".ss-slash").count();
+    const fresh = async () => {
+      await page.goto("about:blank");
+      await page.setContent(DOC);
+      await page.addScriptTag({ content: LIB });
+      await page.waitForTimeout(400);
+      await page.click("#ss-mDoc");
+      await page.waitForTimeout(300);
+      await page.click(line);
+      await page.keyboard.press("End");
+    };
+
+    await fresh();
+    await page.keyboard.press("/");
+    await page.waitForTimeout(250);
+    check("글자가 있는 줄에서도 / 로 열린다", (await open()) === 1);
+    check("«넣기» 셋은 그대로 나온다",
+      (await page.locator('.ss-slash [data-sl="num"], .ss-slash [data-sl="bul"], .ss-slash [data-sl="why"]').count()) === 3,
+      await page.locator(".ss-slash [data-sl]").allTextContents());
+    /* 개요는 줄이 아니라 항목이다 — 글자가 있는 줄을 개요로 바꿀 수는 없다 */
+    check("글자가 있는 줄에는 «화면 개요» 를 안 준다",
+      (await page.locator('.ss-slash [data-sl="brief"]').count()) === 0);
+    await page.click('.ss-slash [data-sl="why"]');
+    await page.waitForTimeout(300);
+    check("고르면 «/» 가 글에 안 남는다",
+      (await page.locator(line).textContent()).indexOf("/") < 0,
+      await page.locator(line).textContent());
+    check("고른 것이 적용된다 (화살표 블록)", (await page.locator('.ss-b[data-kind="why"]').count()) > 0);
+    check("원래 글자는 그대로다", (await page.locator(line).textContent()).indexOf("첫 줄") === 0,
+      await page.locator(line).textContent());
+
+    /* 이어 친 글자로 걸러진다 — 노션과 같다 */
+    await fresh();
+    await page.keyboard.press("/");
+    await page.waitForTimeout(200);
+    await page.keyboard.type("불");
+    await page.waitForTimeout(250);
+    check("이어 친 글자로 걸러진다", (await page.locator(".ss-slash [data-sl]").count()) === 1 &&
+      (await page.locator(".ss-slash [data-sl]").getAttribute("data-sl")) === "bul",
+      await page.locator(".ss-slash [data-sl]").allTextContents());
+    await page.click('.ss-slash [data-sl="bul"]');
+    await page.waitForTimeout(300);
+    check("고르면 «/» 와 거르려고 친 글자까지 걷힌다",
+      (await page.locator(line).textContent()) === "첫 줄", await page.locator(line).textContent());
+
+    /* 걸리는 것이 없으면 «/» 는 그냥 글자다 */
+    await fresh();
+    await page.keyboard.press("/");
+    await page.waitForTimeout(200);
+    await page.keyboard.type("결제수단");
+    await page.waitForTimeout(250);
+    check("안 걸리면 메뉴가 닫힌다", (await open()) === 0);
+    check("안 걸리면 «/» 는 그냥 글자로 남는다",
+      (await page.locator(line).textContent()) === "첫 줄/결제수단",
+      await page.locator(line).textContent());
+
+    /* 빈 줄에서는 «화면» 묶음이 그대로 붙는다 (#82 와 갈리지 않는다) */
+    await fresh();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("/");
+    await page.waitForTimeout(250);
+    check("빈 줄에서는 «화면 개요» 가 그대로 나온다 (#82)",
+      (await page.locator('.ss-slash [data-sl="brief"]').count()) === 1);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    check("Esc 로 닫힌다", (await open()) === 0);
+  }
+
   /* ============ root 없는 화면도 전환된다 (#67) ============
      목차에서 골라도 «설명만» 바뀌고 프로토타입은 그대로였다. 정의가 가리키는 요소의
      공통 조상을 찾아 세운다. 어느 요소인지 모호하면 세우지 않고 «말로» 알린다. */
