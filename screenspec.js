@@ -2893,7 +2893,8 @@ ${HL_CSS}
         btns.forEach((b, i) => b.classList.toggle("on", i === edMenuAt));
         return true;
       }
-      if (e.key === "Enter") { const p = edPos(); if (p) edPick(btns[edMenuAt].dataset.sl, p); return true; }
+      /* Shift+Enter 는 어디서나 «여기서 그만» 이다 — 메뉴가 가로채면 안 된다 (#85) */
+      if (e.key === "Enter" && !e.shiftKey) { const p = edPos(); if (p) edPick(btns[edMenuAt].dataset.sl, p); return true; }
       if (e.key === "Escape") { edSlashClose(); return true; }
       return false;
     }
@@ -3856,7 +3857,10 @@ ${HL_CSS}
           const sel = getSelection();
           if (sel && sel.rangeCount && sel.isCollapsed && edEl.contains(sel.focusNode)) {
             edSlashAt = { node: sel.focusNode, off: sel.focusOffset };
-            setTimeout(() => edSlash(""), 0);
+            /* «/» 가 글자로 들어간 뒤에 연다. 그 사이에 더 쳤을 수 있으므로 빈 말이 아니라
+               «지금 무엇이 쳐져 있나» 로 연다 — 안 그러면 «POST /api/items» 처럼 슬래시가 낀 글을
+               빠르게 칠 때 메뉴가 뒤늦게 떠서 다음 키를 삼킨다 (2026-09-01 전체 e2e 가 잡았다) */
+            setTimeout(() => { const q = edSlashQuery(); if (q !== null) edSlash(q); }, 0);
           }
         }
         /* 노션과 같은 마크다운 단축키 — 빈 줄에서 «-» + 스페이스면 불릿, «>» 면 화살표 (#56) */

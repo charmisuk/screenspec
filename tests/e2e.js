@@ -1004,6 +1004,19 @@ function check(name, ok, detail) {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
     check("Esc 로 닫힌다", (await open()) === 0);
+
+    /* 슬래시가 낀 «그냥 글» 을 빠르게 쳐도 한 글자도 안 사라진다.
+       메뉴는 «/» 가 들어간 다음 판에 열리므로, 그 사이에 더 친 글자를 못 보면
+       뒤늦게 빈 메뉴가 떠서 다음 키(Shift+Enter)를 삼킨다 — 전체 e2e 가 이걸 잡았다 */
+    await fresh();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" POST /api/items");
+    await page.keyboard.press("Shift+Enter");
+    await page.waitForTimeout(300);
+    check("슬래시가 낀 글을 빨리 쳐도 안 잘린다 (#85)",
+      (await page.locator(line).textContent()) === "첫 줄 POST /api/items",
+      await page.locator(line).textContent());
+    check("그 뒤에 메뉴가 남아 있지 않다 (#85)", (await open()) === 0);
   }
 
   /* ============ root 없는 화면도 전환된다 (#67) ============
