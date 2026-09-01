@@ -169,10 +169,16 @@ node scripts/backlog-sync.js --apply   # 노션 쪽을 맞추고 실행 후 자�
 
 ## 릴리스
 
-1. lint·e2e·smoke 통과 확인
-2. `CHANGELOG.md`에 항목 추가 (최상단 `## vX.Y.Z`)
-3. 버전 문자열 갱신 — **일곱 곳이다**: `screenspec.js` 헤더 1 · 워터마크 배지 2 · `console.info` 2 · `README.md` CDN 태그 1 · `SKILL.md` CDN 태그 1. 빠뜨리면 lint 가 막는다(서로 같은지 검사). 한 번에 올리는 `--bump` 는 #86
-4. commit → **main 에 올린 뒤** 둘 중 하나로 내보낸다
+1. CI 초록 확인 (push 마다 전체가 돈다)
+2. `CHANGELOG.md`에 항목 추가 (최상단 `## vX.Y.Z`) — **사람이 쓰는 유일한 부분**이다. 판 번호도 여기서 정해진다
+3. `node scripts/release.js --bump --apply` 한 줄. 버전 일곱 곳 → 커밋 → 태그 → 푸시 → 퍼지 → GitHub Release → 실물 확인까지 간다
+
+> 일곱 곳: `screenspec.js` 헤더 1 · 워터마크 배지 2 · `console.info` 2 · `README.md` CDN 태그 1 · `SKILL.md` CDN 태그 1.
+> `--bump` 는 그 일곱 곳을 «CHANGELOG 최상단» 에 맞추는 일만 한다 — 다음 판이 무엇인지는 사람이 이미 적었다.
+> 개수가 예상과 다르면 아무것도 안 고치고 멈춘다. 버전과 태그가 **같은 판에** 나가므로 예전의 «빨간 창» 도 사라진다.
+> `--apply` 없이 `--bump` 만 주면 무엇을 고칠지 보여 주기만 한다. CHANGELOG 한 파일만 미커밋인 것은 봐 준다(그 변경은 release 커밋에 담긴다).
+
+버전이 이미 올라가 있으면 `--bump` 없이 아래 둘 중 하나로도 된다.
 
 **A. Actions 버튼** (터미널 없이 · 태그 푸시 권한이 없는 환경에서도)
 Actions 탭 → **release** → *Run workflow* → 버전(`vX.Y.Z`) 입력.

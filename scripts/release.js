@@ -2,7 +2,9 @@
  * 릴리스 — 태그 → 푸시 → jsDelivr 퍼지 → 실물 확인을 한 번에.
  *
  *   node scripts/release.js                  검사만 (기본 = dry-run). 나갈 준비가 됐는지
- *   node scripts/release.js --apply          로컬에서 실제로 태그·푸시·퍼지하고 결과를 확인
+ *   node scripts/release.js --bump --apply   ★ 배포 한 번 — 버전 7곳 → 커밋 → 태그 → 푸시 → 퍼지 → Release → 확인
+ *   node scripts/release.js --bump           그 배포가 무엇을 고칠지만 보여 준다
+ *   node scripts/release.js --apply          버전은 이미 올라가 있을 때 (태그부터)
  *   node scripts/release.js --notes          CHANGELOG 최상단 절만 출력 (릴리스 본문용)
  *   node scripts/release.js --pre            버전 정합만 확인 (태그 없어도 통과 — 릴리스 직전 CI 용)
  *   node scripts/release.js --tag-gate      문서가 가리키는 태그가 원격에 실재하는지만 (CI 상시 게이트)
@@ -36,6 +38,10 @@ const NOTES = has("--notes");
 const PRE = has("--pre"); /* 릴리스 직전: 버전 정합만. 태그는 아직 없는 게 정상이다 */
 const GATE = has("--tag-gate"); /* 상시 게이트: 문서 버전의 태그가 원격에 있는가. CDN 은 안 본다(전파 지연으로 깜빡임) */
 const EXPECT = argv[argv.indexOf("--expect") + 1] && has("--expect") ? argv[argv.indexOf("--expect") + 1] : null;
+/* 판 번호를 손으로 일곱 곳 고치던 것을 없앤다 (#86).
+   «다음 판이 무엇인가» 는 사람이 CHANGELOG 최상단에 이미 적었다 — 기계는 그것을 코드로 옮길 뿐이다.
+   그래서 major/minor/patch 를 따로 받지 않는다: 받으면 같은 답을 두 곳에서 말하게 되고, 어긋날 자리가 생긴다 */
+const BUMP = has("--bump");
 
 let bad = 0;
 const ok = (m) => console.log("  ✓ " + m);
@@ -71,10 +77,38 @@ const tag = "v" + version;
 
 if (NOTES) { console.log((changelog.split(/^## /m)[1] || "").split("\n").slice(1).join("\n").trim()); process.exit(0); }
 
-const docTags = new Set();
-for (const f of ["README.md", "SKILL.md"]) {
-  const d = fs.readFileSync(path.join(REPO, f), "utf8");
-  [...d.matchAll(/@v(\d+\.\d+\.\d+)/g)].forEach((m) => docTags.add(m[1]));
+const DOC_FILES = ["README.md", "SKILL.md"];
+const readDocTags = () => {
+  const set = new Set();
+  for (const f of DOC_FILES) {
+    const d = fs.readFileSync(path.join(REPO, f), "utf8");
+    [...d.matchAll(/@v(\d+\.\d+\.\d+)/g)].forEach((m) => set.add(m[1]));
+  }
+  return set;
+};
+let docTags = readDocTags();
+
+/* ---- 버전 문자열 일곱 곳 (#86) ----
+   라이브러리는 «판 계열»(v0.26)을, 문서 CDN 태그는 «판»(@v0.26.0)을 쓴다 — 그 둘은 다른 글자다.
+   고친 개수를 세어 예상과 다르면 멈춘다: 문자열이 늘거나 줄었는데 조용히 지나가면 lint 가 뒤에서 잡고,
+   그때는 이미 커밋·태그가 나간 뒤다 */
+function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
+  const done = [];
+  const one = (file, from, to, want) => {
+    const at = path.join(REPO, file);
+    const src = fs.readFileSync(at, "utf8");
+    const n = src.split(from).length - 1;
+    if (n !== want) return `${file}: "${from}" 가 ${n}곳 (예상 ${want}곳) — 손으로 확인해라`;
+    fs.writeFileSync(at, src.split(from).join(to));
+    done.push(`${file} ${want}곳`);
+    return null;
+  };
+  const errs = [
+    one("screenspec.js", "v" + fromMajor, "v" + toMajor, 5),
+    one("README.md", "@v" + fromTag, "@v" + toTag, 1),
+    one("SKILL.md", "@v" + fromTag, "@v" + toTag, 1),
+  ].filter(Boolean);
+  return { errs, done };
 }
 
 (async () => {
@@ -86,11 +120,54 @@ for (const f of ["README.md", "SKILL.md"]) {
     const branch = git("rev-parse --abbrev-ref HEAD");
     const dirty = git("status --porcelain");
     branch === "main" ? ok("브랜치 main") : no(`브랜치가 main 이 아니다 (${branch}) — 릴리스는 main 에서만`);
-    dirty ? no("작업 트리에 커밋 안 된 변경이 있다\n" + dirty) : ok("작업 트리 깨끗");
+    /* --bump 는 «판 내용을 방금 쓴» 상태에서 부르는 것이 자연스럽다 —
+       CHANGELOG 한 파일만 더러운 것은 봐 주고, 그 변경은 아래 release 커밋에 같이 담긴다 (#86) */
+    const stray = BUMP ? dirty.split("\n").filter((l) => l && !/\sCHANGELOG\.md$/.test(l)).join("\n") : dirty;
+    stray ? no("작업 트리에 커밋 안 된 변경이 있다\n" + stray)
+          : ok(dirty ? "작업 트리 깨끗 (CHANGELOG 만 새로 쓴 상태 — release 커밋에 담는다)" : "작업 트리 깨끗");
 
     try { execSync("node tests/lint.js", { cwd: REPO, stdio: "pipe" }); ok("lint 통과"); }
     catch { no("lint 실패 — node tests/lint.js 먼저 통과시켜라"); }
     console.log("    (e2e·smoke 는 브라우저가 필요해 여기서 돌리지 않는다 — AGENTS.md 절차대로 미리 돌려라)");
+  }
+
+  /* ---- 1.5 판 번호를 코드로 옮긴다 (#86) ---- */
+  /* 사전 검사가 깨졌으면 «버전에 손도 대기 전에» 멈춘다. 올려 놓고 태그를 못 달면
+     문서가 없는 태그를 가리킨 채 main 이 빨개진다 — 이 스크립트가 없애려던 바로 그 상태다 */
+  if (BUMP && bad) die(`문제 ${bad}건 — 버전은 손도 안 댔다. 고치고 다시 실행해라`);
+
+  if (BUMP) {
+    console.log("\n버전 올리기");
+    const libSrc = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+    const curMajor = (libSrc.match(/ScreenSpec v(\d+\.\d+)/) || [])[1];
+    const toMajor = version.split(".").slice(0, 2).join(".");
+    const curTag = [...docTags][0];
+    if (!curMajor) die("screenspec.js 헤더에서 판 번호를 못 읽었다");
+    if (docTags.size !== 1) die(`문서 CDN 태그가 여럿이다: ${JSON.stringify([...docTags])} — 먼저 하나로 맞춰라`);
+    if (curMajor === toMajor && curTag === version) {
+      ok(`이미 ${tag} 다 — 고칠 것 없음`);
+    } else {
+      /* 판의 «내용» 은 사람이 쓴다. 기계가 지어낼 수 없으므로, 안 적혀 있으면 여기서 멈춘다 */
+      if (curTag === version) die(`문서는 이미 ${tag} 인데 라이브러리는 v${curMajor} 다 — 반만 올라간 상태다. 손으로 맞춰라`);
+      const title = (changelog.split(/^## /m)[1] || "").split("\n")[0].trim();
+      console.log(`  v${curMajor}/@v${curTag} → v${toMajor}/@v${version}`);
+      console.log(`  판 이름: ${title}`);
+      if (!APPLY) {
+        ok("고칠 곳: screenspec.js 5 · README.md 1 · SKILL.md 1 (일곱 곳)");
+        console.log("\n결과: --apply 를 붙이면 위대로 고치고 커밋·태그·푸시·퍼지·Release 까지 간다");
+        process.exit(0);
+      }
+      const r = bumpFiles(curMajor, toMajor, curTag, version);
+      if (r.errs.length) { r.errs.forEach(no); die("버전 문자열을 못 찾았다 — 아무것도 안 고쳤다면 그대로, 고친 게 있으면 git checkout 으로 되돌려라"); }
+      r.done.forEach((d) => ok("고침 " + d));
+      docTags = readDocTags();
+      try { execSync("node tests/lint.js", { cwd: REPO, stdio: "pipe" }); ok("bump 후 lint 통과"); }
+      catch { die("bump 후 lint 실패 — git checkout 으로 되돌리고 손으로 확인해라"); }
+      git("add -A");
+      execSync(`git commit -q -m ${JSON.stringify("release: " + tag + " — " + title.replace(/^v[\d.]+ \([^)]*\) — /, ""))}`, { cwd: REPO });
+      ok(`커밋 ${git("rev-parse --short HEAD")}`);
+      /* 여기서 커밋이 났으므로 아래 «원격에 태그 없음» 은 정상이다 */
+    }
   }
 
   /* ---- 2. 무슨 버전을 내보내는가 ---- */
@@ -170,10 +247,24 @@ for (const f of ["README.md", "SKILL.md"]) {
   /* ---- 6. 실제로 나갔는지 확인 ---- */
   await verifyLive();
 
-  const notes = (changelog.split(/^## /m)[1] || "").trim();
-  console.log("\n남은 절차 — GitHub Release (본문은 아래 CHANGELOG 절)");
-  console.log(`  gh release create ${tag} --title "${tag}" --notes-file <파일>`);
-  console.log("  ─".repeat(30) + "\n" + notes.split("\n").map((l) => "  " + l).join("\n"));
+  /* ---- 7. GitHub Release — 본문은 CHANGELOG 그 절 그대로 ---- */
+  console.log("\nGitHub Release");
+  const notes = (changelog.split(/^## /m)[1] || "").split("\n").slice(1).join("\n").trim();
+  let already = false;
+  try { execSync(`gh release view ${tag}`, { cwd: REPO, stdio: "pipe" }); already = true; } catch (e) { /* 없다 = 정상 */ }
+  if (already) ok(`${tag} Release 가 이미 있다 — 건드리지 않는다`);
+  else {
+    const at = path.join(REPO, ".release-notes.tmp.md");
+    try {
+      fs.writeFileSync(at, notes + "\n");
+      execSync(`gh release create ${tag} --title ${JSON.stringify(tag)} --notes-file ${JSON.stringify(at)} --latest`,
+        { cwd: REPO, stdio: "pipe" });
+      ok(`${tag} Release 발행 (Latest)`);
+    } catch (e) {
+      no(`Release 발행 실패 — ${String((e.stderr || e.message || e)).trim().split("\n")[0]}`);
+      console.log(`    손으로: gh release create ${tag} --title "${tag}" --notes-file <파일> --latest`);
+    } finally { try { fs.unlinkSync(at); } catch (e) { /* 이미 없다 */ } }
+  }
 
   console.log("\n결과: " + (bad ? `릴리스는 했으나 확인 ${bad}건 실패` : `${tag} 릴리스 완료`));
   process.exit(bad ? 1 : 0);
@@ -195,14 +286,12 @@ for (const f of ["README.md", "SKILL.md"]) {
     });
     pinned ? ok(`${tag} 200 · 헤더 v${pinned.ver}`) : no(`${tag} 가 아직 안 뜬다 — 잠시 후 다시 확인해라`);
 
+    /* 메타 API 가 아니라 «실물 파일» 로 잰다 — 사람에게 나가는 것은 파일이다 (2026-08-31 과 같은 이유) */
     const alias = await until("@0 재해석", async () => {
-      try {
-        const r = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${GH_REPO}/resolved?specifier=0`);
-        const j = await r.json();
-        return j.version === version ? j.version : null;
-      } catch { return null; }
+      const r = await fetchLib(CDN("0"));
+      return r.status === 200 && r.ver === major ? r.ver : null;
     });
-    alias ? ok(`@0 → ${alias}`) : no(`@0 가 아직 ${version} 로 안 간다 — 퍼지 후 지연일 수 있다`);
+    alias ? ok(`@0 → v${alias} (실물 파일 헤더)`) : no(`@0 가 아직 v${major} 로 안 간다 — 퍼지 후 지연일 수 있다`);
 
     /* 문서가 시키는 주소가 진짜 열리는가 — 이 검사가 없어서 404 를 문서에 실을 뻔했다 */
     for (const t of docTags) {
