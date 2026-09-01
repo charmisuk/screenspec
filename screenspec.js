@@ -159,15 +159,31 @@
      프로젝트가 정한 상태 축(checklist)을 화면마다 covers/skip 으로 대조한다.
      specs 에서 자동 추론하지 않는다 — anno:"state" 가 어느 축인지는 기계가 알 수 없고,
      "알고 비운 것"과 "몰라서 빠뜨린 것"은 선언으로만 갈린다. checklist 가 없으면 기능 자체가 꺼진다. */
+  /* 「공통 처리」 축 (#89, 실사용 2026-09-01) — 축은 살아 있는데 화면마다 적지는 않는 것.
+     전에는 두 갈래뿐이었다: 화면마다 skip 사유를 20번 반복하거나, checklist 에서 빼서 축을 잃거나.
+     같은 문구를 20번 쓰면 드리프트가 난다(실제로 한 화면만 문구가 달라져 있었다).
+     그래서 축 자체에 «여기서 한 번만 말한다» 를 선언할 수 있게 한다. */
+  const CHK_COMMON = [];
   const CHECKLIST = (function () {
     const c = RAW.checklist;
     if (c == null) return null;
-    if (!Array.isArray(c) || !c.length || !c.every((v) => typeof v === "string" && v.trim())) {
-      console.warn("[ScreenSpec] checklist 는 문자열 배열이어야 합니다: 무시");
+    const named = (v) => (typeof v === "string" ? v : (v && typeof v === "object" && !Array.isArray(v) ? v.name : null));
+    if (!Array.isArray(c) || !c.length || !c.every((v) => typeof named(v) === "string" && named(v).trim())) {
+      console.warn("[ScreenSpec] checklist 는 문자열 또는 { name, common } 의 배열이어야 합니다: 무시");
       return null;
     }
-    return c.map((v) => v.trim());
+    return c.map((v) => {
+      const nm = named(v).trim();
+      if (typeof v === "string") return nm;
+      /* 사유 없는 common 은 선언이 아니다 — 「왜 화면별로 안 적는가」 가 이 선언의 값이므로 보통 축으로 되돌린다 */
+      const why = typeof v.common === "string" ? v.common.trim() : "";
+      if (why) CHK_COMMON.push({ name: nm, note: why });
+      else if (v.common != null) console.warn("[ScreenSpec] checklist \"" + nm + "\": common 에 사유(문자열)를 적어야 합니다: 보통 축으로 봅니다");
+      return nm;
+    });
   })();
+  /* 화면마다 챙길 축 — 공통 처리로 선언한 것은 뺀다. covers·skip 검사는 여전히 «전체» 를 기준으로 본다 */
+  const CHK_EACH = CHECKLIST ? CHECKLIST.filter((ax) => !CHK_COMMON.some((z) => z.name === ax)) : null;
   /* style — AI 가 읽는 «이 프로젝트의 쓰는 법»(온보딩 인터뷰의 답).
      라이브러리는 이 값으로 렌더를 바꾸지 않는다. 여기서는 형식만 보고 어긋나면 1회 알린다 —
      설정이 조용히 무시되면 AI 가 왜 그 톤으로 안 쓰는지 알 수 없기 때문이다. 규격은 docs/config.md */
@@ -209,7 +225,7 @@
     const r = {
       done: CHECKLIST.filter((ax) => covers.includes(ax)),
       skipped: skipped,
-      missing: CHECKLIST.filter((ax) => !covers.includes(ax) && !skipped.some((z) => z.axis === ax))
+      missing: CHK_EACH.filter((ax) => !covers.includes(ax) && !skipped.some((z) => z.axis === ax))
     };
     COV_CACHE.set(s, r);
     return r;
@@ -229,7 +245,7 @@
        읽는 사람의 패널에 «전부 다룸» 이 계속 떠 있으면 무엇을 하라는 것인지 애매해진다. */
     if (!c.missing.length) return "";
     /* 카드는 스스로를 설명해야 한다 — 이 기능을 모르는 사람에게도 «왜 떴고 뭘 하면 사라지는지» 가 보여야 한다 */
-    const tip = "설정의 checklist 로 이 프로젝트가 정한 점검 항목입니다 (" + CHECKLIST.join(" · ") +
+    const tip = "설정의 checklist 로 이 프로젝트가 정한 점검 항목입니다 (" + CHK_EACH.join(" · ") +
       "). 이 화면의 covers 에 적거나, 해당 없으면 skip: { \"축\": \"사유\" } 로 비우면 사라집니다.";
     let out = '<div class="ss-cov" title="' + esc(tip) + '">' +
       '<div class="ss-cov-miss">⚠ 이 화면에 「' + esc(c.missing.join(" · ")) + '」 설명이 없습니다</div>' +
@@ -852,6 +868,10 @@ ${HL_CSS}
   .ss-toc-row{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;font-size:12.5px;
     border-bottom:1px solid var(--ss-line);transition:background .12s}
   .ss-toc-row:last-child{border-bottom:0}
+  .ss-toc-common{padding:9px 16px 11px;border-top:1px solid var(--ss-line);background:#FAFAF9;font-size:11.5px;color:var(--ss-ink2)}
+  .ss-toc-common b{display:block;font-weight:800;color:var(--ss-ink);margin-bottom:3px}
+  .ss-toc-common span{display:block;line-height:1.55}
+  .ss-toc-common i{font-style:normal;font-weight:700;color:var(--ss-ink);margin-right:5px}
   .ss-toc-row:hover{background:#FAFAF9}
   .ss-toc-row.ss-cur{background:var(--ss-accent-soft)}
   .ss-toc-dot{width:7px;height:7px;border-radius:50%;background:var(--ss-ink);flex-shrink:0}
@@ -1800,8 +1820,13 @@ ${HL_CSS}
       /* 화면이 많으면(≥ TOC_SEARCH_MIN) 검색 — 이름·ID 부분 일치, 매칭 행 + 그 조상 그룹만 남긴다 (#9) */
       const search = SCREENS.length >= TOC_SEARCH_MIN
         ? '<div class="ss-toc-search"><input type="search" placeholder="화면 이름·ID 검색" aria-label="화면 검색"></div>' : "";
+      /* 공통 처리 축은 «문서에 한 번» 나온다 — 화면마다 되풀이하지 않기로 한 것이니 자리도 한 곳이다 (#89) */
+      const common = CHK_COMMON.length
+        ? '<div class="ss-toc-common"><b>공통 처리</b>' +
+          CHK_COMMON.map((z) => '<span><i>' + esc(z.name) + "</i>" + esc(z.note) + "</span>").join("") + "</div>"
+        : "";
       toc.innerHTML = `<div class="ss-toc-head"><b>화면 목록</b><span class="ss-cnt">${defined}/${SCREENS.length} 정의됨</span><button class="ss-toc-x" aria-label="닫기">✕</button></div>` +
-        search + '<div class="ss-toc-body">' + html + "</div>";
+        search + '<div class="ss-toc-body">' + html + "</div>" + common;
       const inp = toc.querySelector(".ss-toc-search input");
       if (inp) inp.addEventListener("input", () => filterToc(inp.value));
     }
@@ -3921,7 +3946,8 @@ ${HL_CSS}
       });
     }));
     /* 상태 점검이 켜져 있으면 그 사실을 알린다 — 설정을 직접 넣지 않은 사람도 «저 ⚠ 가 뭔지» 를 알 수 있게 */
-    if (CHECKLIST) console.info("[ScreenSpec] 상태 점검 켜짐: 화면마다 " + CHECKLIST.join(" · ") + " 를 적었는지 확인합니다. 화면의 covers 에 적거나 skip 에 사유를 적으면 ⚠ 가 사라집니다");
+    if (CHECKLIST) console.info("[ScreenSpec] 상태 점검 켜짐: 화면마다 " + (CHK_EACH.length ? CHK_EACH.join(" · ") : "(없음)") + " 를 적었는지 확인합니다. 화면의 covers 에 적거나 skip 에 사유를 적으면 ⚠ 가 사라집니다" +
+      (CHK_COMMON.length ? " · 공통 처리로 선언한 축: " + CHK_COMMON.map((z) => z.name).join(" · ") : ""));
     /* 아직 아무것도 안 건드린 지금이 원본을 뜰 수 있는 마지막 순간이다 (#37) */
     if (!READONLY) SRC_SNAPSHOT = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
     /* 모드 결정: 명시 > 프레임워크 자동 감지 > wrap */

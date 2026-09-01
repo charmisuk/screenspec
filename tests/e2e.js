@@ -1170,6 +1170,62 @@ function check(name, ok, detail) {
       cWarns.some((w) => w.includes('covers "없는축" 는 checklist 에 없음')), cWarns.join(" | ").slice(0, 200));
     page.off("console", onCMsg);
 
+    /* 「공통 처리」 축 (#89) — 축은 살아 있는데 화면마다 적지는 않는다.
+       전에는 화면마다 skip 사유를 되풀이하거나 축을 통째로 버리거나 둘뿐이었다 */
+    const kWarns = [];
+    const onKMsg = (msg) => { if (msg.type() === "warning") kWarns.push(msg.text()); };
+    page.on("console", onKMsg);
+    await page.goto("about:blank");
+    await page.setContent(covHtml('checklist:["빈 상태",{name:"로딩",common:"공통 컴포넌트가 처리"},' +
+      '{name:"오류",common:"공통 컴포넌트가 처리"}],'));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-B"));
+    await page.waitForTimeout(300);
+    check("공통 처리: 화면마다 안 적어도 경고가 안 난다 (#89)",
+      (await page.locator(".ss-cov").count()) === 0,
+      await page.locator(".ss-cov").allInnerTexts());
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    check("공통 처리: 목차 배지도 안 붙는다 (#89)",
+      (await page.locator('[data-toc="S-B"] .ss-toc-cov').count()) === 0);
+    /* 축이 사라지는 것이 아니다 — 문서에 «한 번» 남는다 */
+    check("공통 처리: 목차 발치에 한 번 보여 준다 (#89)", await page.evaluate(() => {
+      const el = document.querySelector(".ss-toc-common");
+      return !!el && el.innerText.includes("공통 처리") && el.innerText.includes("로딩") &&
+        el.innerText.includes("오류") && el.innerText.includes("공통 컴포넌트가 처리");
+    }), await page.locator(".ss-toc-common").allInnerTexts());
+    /* 화면마다 챙기기로 한 축은 그대로 잡는다 — 이 기능의 값이 사라지면 안 된다 */
+    check("공통 처리: 남은 축(빈 상태)은 여전히 잡는다 (#89)", await page.evaluate(() =>
+      ((document.querySelector('[data-toc="S-C"] .ss-toc-cov') || {}).textContent || "") === "⚠ 빈 상태 미정의"),
+      await page.locator('[data-toc="S-C"] .ss-toc-cov').allTextContents());
+    await page.click(".ss-toc-x");
+    await page.waitForTimeout(200);
+    page.off("console", onKMsg);
+
+    /* 사유 없는 common → 보통 축 + 경고 */
+    const jWarns = [];
+    const onJMsg = (msg) => { if (msg.type() === "warning") jWarns.push(msg.text()); };
+    page.on("console", onJMsg);
+    await page.goto("about:blank");
+    await page.setContent(covHtml('checklist:["빈 상태","로딩",{name:"오류",common:true}],'));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    check("공통 처리: 사유가 없으면 보통 축이다 (#89)", await page.evaluate(() =>
+      ((document.querySelector('[data-toc="S-B"] .ss-toc-cov') || {}).textContent || "") === "⚠ 로딩 · 오류 미정의"),
+      await page.locator('[data-toc="S-B"] .ss-toc-cov').allTextContents());
+    check("공통 처리: 그때는 왜인지 말해 준다 (#89)",
+      jWarns.some((w) => w.includes("common 에 사유")), jWarns.join(" | ").slice(0, 200));
+    await page.click(".ss-toc-x");
+    await page.waitForTimeout(200);
+    page.off("console", onJMsg);
+
     /* checklist 가 없으면 아무 것도 달라지지 않는다 */
     const nWarns = [];
     const onNMsg = (msg) => { if (msg.type() === "warning") nWarns.push(msg.text()); };
@@ -1199,7 +1255,7 @@ function check(name, ok, detail) {
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
     check("checklist 가 빈 배열 → 경고 + 기능 꺼짐", await page.evaluate(() => document.querySelectorAll(".ss-cov").length === 0) &&
-      bWarns.some((w) => w.includes("checklist 는 문자열 배열이어야 합니다")), bWarns.join(" | ").slice(0, 160));
+      bWarns.some((w) => w.includes("checklist 는 문자열 또는 { name, common } 의 배열이어야 합니다")), bWarns.join(" | ").slice(0, 160));
     page.off("console", onBMsg);
   }
 
