@@ -129,8 +129,13 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
     stray ? no("작업 트리에 커밋 안 된 변경이 있다\n" + stray)
           : ok(dirty ? "작업 트리 깨끗 (CHANGELOG 만 새로 쓴 상태 — release 커밋에 담는다)" : "작업 트리 깨끗");
 
-    try { execSync("node tests/lint.js", { cwd: REPO, stdio: "pipe" }); ok("lint 통과"); }
-    catch { no("lint 실패 — node tests/lint.js 먼저 통과시켜라"); }
+    /* --bump 일 때는 여기서 lint 를 안 본다: CHANGELOG 를 먼저 쓰므로 «판 번호가 어긋난다» 가
+       정상이기 때문이다. 그 어긋남을 없애는 것이 bump 의 일이고, 바로 뒤에서 다시 본다 (#86) */
+    if (BUMP) ok("lint 는 bump 뒤에 본다 (지금은 판 번호가 어긋나 있는 것이 정상)");
+    else {
+      try { execSync("node tests/lint.js", { cwd: REPO, stdio: "pipe" }); ok("lint 통과"); }
+      catch { no("lint 실패 — node tests/lint.js 먼저 통과시켜라"); }
+    }
     console.log("    (e2e·smoke 는 브라우저가 필요해 여기서 돌리지 않는다 — AGENTS.md 절차대로 미리 돌려라)");
   }
 
@@ -165,7 +170,12 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
       r.done.forEach((d) => ok("고침 " + d));
       docTags = readDocTags();
       try { execSync("node tests/lint.js", { cwd: REPO, stdio: "pipe" }); ok("bump 후 lint 통과"); }
-      catch { die("bump 후 lint 실패 — git checkout 으로 되돌리고 손으로 확인해라"); }
+      catch (e) {
+        /* 되돌려 놓고 죽는다 — 반쯤 고쳐진 파일을 남기면 다음 사람이 무엇이 원본인지 모른다.
+           CHANGELOG 는 사람이 방금 쓴 글이라 건드리지 않는다 */
+        try { execSync("git checkout -- screenspec.js README.md SKILL.md", { cwd: REPO }); } catch (e2) { /* 그대로 둔다 */ }
+        die("bump 후 lint 실패 — 고친 일곱 곳을 되돌렸다. node tests/lint.js 로 확인해라");
+      }
       git("add -A");
       execSync(`git commit -q -m ${JSON.stringify("release: " + tag + " — " + title.replace(/^v[\d.]+ \([^)]*\) — /, ""))}`, { cwd: REPO });
       ok(`커밋 ${git("rev-parse --short HEAD")}`);
