@@ -5,19 +5,22 @@
  *   node scripts/backlog-sync.js --apply    노션 쪽을 실제로 맞춤 + 실행 후 재검증
  *
  * 보드는 컨베이어다: 백로그 → 검수 → 완료. «안 한다» 로 뺀 것만 보류.
- *   백로그  = GitHub 이슈를 연다. 이슈가 원본이고 카드는 이 스크립트가 만든다.
- *   검수    = 이슈가 닫힌다(= 커밋 메시지의 fix #N). 기계는 «여기까지» 만 옮긴다.
- *   완료    = PM 이 직접 QA 하고 통과시킨다. 기계가 대신 눌러 주면 검수 단계가 사라진다 (2026-08-29 PM).
+ *   백로그  = 이슈만 있다. 이슈가 원본이고 카드는 이 스크립트가 만든다.
+ *   검수    = 고쳤고 커밋이 main 에 있다. «(#N)» 으로 알아본다. 이슈는 아직 열려 있다 — PM 이 만져 볼 자리다.
+ *   완료    = 배포됐다(= 이슈가 닫혔다). 닫는 것은 배포뿐이다: node scripts/release.js --bump --apply (#88).
  *   보류    = 사람 영역 — 이 스크립트가 건드리지 않는다.
+ *
+ * 왜 이렇게 바꿨나 (2026-09-01 PM): 전에는 «고친 순간» 이슈가 닫혀 검수 칸이 이름뿐이었다.
+ *   PM: 「실제로 다 끝나고 닫는 방식이 좋겠다. 배포를 트리거로 잡자.」
+ *   그래서 커밋 메시지에 fix #N(자동 종료)을 쓰지 않고 (#N) 으로 참조만 한다.
  *
  * 묶음(시나리오): GitHub 마일스톤 = 카드 1장, 그 안의 이슈 = 카드 속 체크 1줄 (2026-08-30 PM).
  *   보드에는 큰 시나리오만 보이고 눌러야 세부가 나온다. 체크·진행(n/m)은 이슈 상태로 기계가 맞춘다.
  *
  * 잡는 드리프트 4종:
  *   1) 열린 이슈인데 노션 카드가 없음        → 우선순위 판단에서 누락된다
- *   2) 닫힌 이슈인데 카드가 '완료'가 아님     → 보드가 실제보다 밀린 것처럼 보인다
- *   3) 카드가 '완료'인데 이슈는 열려 있음     → 끝났다고 착각한다
- *   4) 카드의 GitHub 링크가 실존하지 않음     → 죽은 링크
+ *   2) 카드가 있어야 할 칸에 없음            → 보드가 실제와 다른 말을 한다
+ *   3) 카드의 GitHub 링크가 실존하지 않음     → 죽은 링크
  *
  * 자격증명: .env.local 의 NOTION_API_KEY (저장소에 커밋 금지 — .gitignore 처리됨)
  *           GitHub 토큰은 git credential 에서 읽는다
@@ -112,19 +115,26 @@ async function main() {
   issues.filter((i) => i.state === "open" && !i.milestone).forEach((i) => {
     if (!linked.has(i.number)) drift.push({ kind: "카드 없음", issue: i, msg: `#${i.number} ${i.title}` });
   });
-  /* 푸시될 커밋이 «fix #N» 으로 닫을 이슈들 — GitHub 이 닫기 전이라 아직 open 으로 보인다.
-     푸시 훅은 push 직전에 도는데 GitHub 은 push 직후에 닫으므로, 여기서 미리 같은 결론을 낸다. */
-  const closing = new Set();
-  if (FROM_PUSH) {
-    let log = '';
-    try { log = execSync('git log --format=%B origin/main..HEAD', { cwd: REPO }).toString(); } catch { log = ''; }
-    const re = /(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*#(\d+)/gi; /* 정규식 리터럴 — 문자열로 쓰면 \\s 가 글자 s 가 된다 */
+  /* «고쳤다» 는 커밋 제목의 (#N) 으로 알아본다 — 이슈를 닫지 않으므로 GitHub 상태로는 안 보인다 (#88).
+     아직 안 올린 커밋도 센다: 푸시 훅은 push «직전» 에 도는데 그 커밋도 곧 main 이 된다. */
+  const fixed = new Set();
+  {
+    let log = "";
+    try { log = execSync("git log --format=%s -n 400", { cwd: REPO }).toString(); } catch (e) { log = ""; }
+    const re = /\(#(\d+)\)/g; /* 정규식 리터럴 — 문자열로 쓰면 이스케이프가 한 겹 죽는다 */
     let m;
-    while ((m = re.exec(log))) closing.add(Number(m[1]));
-    console.log("푸시 범위: 커밋 " + (log.trim() ? log.trim().split(/^commit /m).length : 0) + "덩이 · 닫을 이슈 " + (closing.size ? [...closing].map((n) => "#" + n).join(" ") : "없음"));
+    while ((m = re.exec(log))) fixed.add(Number(m[1]));
+    if (FROM_PUSH) {
+      let ahead = "";
+      try { ahead = execSync("git log --format=%s origin/main..HEAD", { cwd: REPO }).toString(); } catch (e) { ahead = ""; }
+      console.log("푸시 범위: 커밋 " + (ahead.trim() ? ahead.trim().split("\n").length : 0) + "개");
+    }
   }
+  /* 카드가 «있어야 할» 칸. 이 하나로 네 갈래를 대신한다 — 규칙이 한 곳에만 있어야 어긋나지 않는다 */
+  const want = (i) => (i.state === "closed" ? "완료" : fixed.has(i.number) ? "검수" : "백로그");
   /* ---- 묶음(마일스톤) 판정 — 보드에는 시나리오만, 세부는 카드 안 체크 목록 (2026-08-30 PM) ---- */
-  const isDone = (i) => i.state === "closed" || closing.has(i.number);
+  /* 체크 표시는 «일이 끝났나» 다 — 배포 전이어도 고쳤으면 켠다 */
+  const isDone = (i) => i.state === "closed" || fixed.has(i.number);
   const groups = new Map();
   issues.forEach((i) => {
     if (!i.milestone) return;
@@ -136,12 +146,12 @@ async function main() {
   const msCards = new Map(parsed.filter((c) => msNo(c.url)).map((c) => [msNo(c.url), c]));
   for (const g of groups.values()) {
     g.issues.sort((a, b) => a.number - b.number);
-    g.closing = closing;
+
     g.done = g.issues.filter(isDone).length;
     g.desc = "진행 " + g.done + "/" + g.issues.length;
     const c = msCards.get(g.no);
     if (!c) { drift.push({ kind: "묶음 카드 없음", group: g, msg: g.title + " (세부 " + g.issues.length + "건)" }); continue; }
-    if (c.status === "보류" || c.status === "완료") continue; /* 사람 칸은 기계가 안 건드린다 */
+    if (c.status === "보류") continue; /* 보류는 사람이 «안 한다» 고 정한 칸 */
     /* 진행 문구만 비교하면 안 된다 — 푸시 훅이 «곧 닫힘» 으로 문구를 먼저 써버리면
        나중에 진짜 닫혔을 때 문구가 그대로라 체크가 영영 안 켜진다 (2026-08-30 실측) */
     const want = g.issues.map((i) => (isDone(i) ? "1" : "0")).join("");
@@ -149,9 +159,10 @@ async function main() {
     if ((c.desc || "") !== g.desc || have !== want) {
       drift.push({ kind: "체크 갱신", group: g, card: c, msg: g.title + " · " + g.desc });
     }
-    const all = g.done === g.issues.length && g.issues.length > 0;
-    if (all && c.status !== "검수") drift.push({ kind: "묶음 검수로", group: g, card: c, msg: g.title });
-    if (!all && c.status === "검수") drift.push({ kind: "묶음 되돌리기", group: g, card: c, msg: g.title + " · " + g.desc });
+    /* 묶음도 같은 규칙이다 — 다 닫혔으면 완료, 다 고쳤지만 아직 안 나갔으면 검수 */
+    const shipped = g.issues.filter((i) => i.state === "closed").length;
+    const to = shipped === g.issues.length ? "완료" : g.done === g.issues.length ? "검수" : "백로그";
+    if (c.status !== to) drift.push({ kind: "묶음 " + to + "로", group: g, card: c, to: to, msg: g.title + " · " + g.desc });
   }
 
 
@@ -161,13 +172,8 @@ async function main() {
     const i = byNo.get(n);
     if (!i) { drift.push({ kind: "죽은 링크", card: c, msg: `${c.name} → #${n} 없음` }); return; }
     if (c.status === "보류") return; /* 보류는 사람이 «안 한다» 고 정한 칸 — 기계가 되돌리지 않는다 */
-    if (c.status === "완료") { /* 완료는 PM 이 QA 하고 누른 칸이다. 기계는 되돌리지도 다시 밀지도 않는다 */
-      if (!(i.state === "closed" || closing.has(n))) drift.push({ kind: "완료인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
-      return;
-    }
-    const done = i.state === "closed" || closing.has(n);
-    if (done && c.status !== "검수") drift.push({ kind: "검수로 보낼 것", card: c, msg: `${c.name} (#${n} ${i.state === 'closed' ? '닫힘' : '곧 닫힘'} · 카드 ${c.status})` });
-    if (!done && c.status === "검수") drift.push({ kind: "검수인데 이슈 열림", card: c, msg: `${c.name} (#${n})` });
+    const to = want(i);
+    if (c.status !== to) drift.push({ kind: to + "로", card: c, to: to, msg: `${c.name} (#${n} ${i.state === "closed" ? "닫힘" : fixed.has(n) ? "고침·배포 전" : "열림"} · 카드 ${c.status || "없음"})` });
   });
 
   console.log(`이슈 ${issues.length}건(열림 ${issues.filter((i) => i.state === "open").length}) · 카드 ${parsed.length}장`);
@@ -222,10 +228,10 @@ async function msChecklist(pageId, g) {
         parent: { database_id: DB_ID },
         properties: {
           "이름": { title: rt(i.title.replace(/^\[[^\]]+\]\s*/, "")) },
-          /* 곧 닫힐 이슈(«fix #N» 이 실린 푸시)의 카드는 만들 때부터 검수다. 백로그로 만들어 두면
-             「검수로 보낼 것」 판정은 이미 지나간 뒤라 이 판에서는 못 옮기고, 이어지는 재검증이
-             그걸 드리프트로 잡아 푸시 훅이 매번 실패했다 (2026-08-31 실측) */
-          "상태": { select: { name: isDone(i) ? "검수" : "백로그" } },
+          /* 이미 고쳐진 이슈의 카드는 만들 때부터 그 칸이다. 백로그로 만들어 두면 «옮길 것» 판정은
+             이미 지나간 뒤라 이 판에서는 못 옮기고, 이어지는 재검증이 그걸 드리프트로 잡아
+             푸시 훅이 매번 실패했다 (2026-08-31 실측) */
+          "상태": { select: { name: want(i) } },
           "유형": { select: { name: /버그|bug/i.test(i.title + label(i)) ? "버그" : "기능" } },
           "근거": { select: { name: "내부 발견" } },
           "우선순위": { select: { name: "P2" } }, /* 들어온 직후는 P2. 전체 재비교에서 올린다 */
@@ -234,16 +240,18 @@ async function msChecklist(pageId, g) {
         },
       });
       console.log("  + 카드 생성: #" + i.number);
-    } else if (d.kind === "검수로 보낼 것") {
-      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "검수" } } } });
-      console.log("  ~ 검수로: " + d.card.name + "  (완료는 PM 이 QA 후 직접)");
+    } else if (d.to && d.card && !d.group) {
+      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: d.to } } } });
+      console.log("  ~ " + d.to + "로: " + d.card.name +
+        (d.to === "검수" ? "  (완료는 배포가 옮긴다)" : ""));
     } else if (d.kind === "묶음 카드 없음") {
       const g = d.group;
       const pg = await nApi("POST", "/pages", {
         parent: { database_id: DB_ID },
         properties: {
           "이름": { title: rt(g.title) },
-          "상태": { select: { name: g.done === g.issues.length && g.issues.length ? "검수" : "백로그" } },
+          "상태": { select: { name: g.issues.length && g.issues.every((i) => i.state === "closed") ? "완료"
+            : g.done === g.issues.length && g.issues.length ? "검수" : "백로그" } },
           "유형": { select: { name: "기능" } },
           "근거": { select: { name: "내부 발견" } },
           "우선순위": { select: { name: "P1" } },
@@ -257,12 +265,9 @@ async function msChecklist(pageId, g) {
       await nApi("PATCH", "/pages/" + d.card.id, { properties: { "설명": { rich_text: rt(d.group.desc) } } });
       await msChecklist(d.card.id, d.group);
       console.log("  ~ 체크: " + d.group.title + " (" + d.group.desc + ")");
-    } else if (d.kind === "묶음 검수로") {
-      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "검수" } } } });
-      console.log("  ~ 검수로: " + d.group.title + "  (완료는 PM 이 QA 후 직접)");
-    } else if (d.kind === "묶음 되돌리기") {
-      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: "백로그" } } } });
-      console.log("  ~ 백로그로: " + d.group.title + " (세부가 다 안 끝났다)");
+    } else if (d.to && d.group) {
+      await nApi("PATCH", "/pages/" + d.card.id, { properties: { "상태": { select: { name: d.to } } } });
+      console.log("  ~ " + d.to + "로: " + d.group.title + " (" + d.group.desc + ")");
     } else {
       console.log("  ! 수동 확인 필요: [" + d.kind + "] " + d.msg);
     }

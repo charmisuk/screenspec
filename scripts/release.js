@@ -2,7 +2,7 @@
  * 릴리스 — 태그 → 푸시 → jsDelivr 퍼지 → 실물 확인을 한 번에.
  *
  *   node scripts/release.js                  검사만 (기본 = dry-run). 나갈 준비가 됐는지
- *   node scripts/release.js --bump --apply   ★ 배포 한 번 — 버전 7곳 → 커밋 → 태그 → 푸시 → 퍼지 → Release → 확인
+ *   node scripts/release.js --bump --apply   ★ 배포 한 번 — 버전 7곳 → 커밋 → 태그 → 푸시 → 퍼지 → Release → 확인 → 이슈·보드 정리
  *   node scripts/release.js --bump           그 배포가 무엇을 고칠지만 보여 준다
  *   node scripts/release.js --apply          버전은 이미 올라가 있을 때 (태그부터)
  *   node scripts/release.js --notes          CHANGELOG 최상단 절만 출력 (릴리스 본문용)
@@ -74,6 +74,9 @@ const changelog = fs.readFileSync(path.join(REPO, "CHANGELOG.md"), "utf8");
 const version = (changelog.match(/^## v(\d+\.\d+\.\d+)/m) || [])[1];
 if (!version) die("CHANGELOG.md 최상단에서 '## vX.Y.Z' 를 찾지 못했다");
 const tag = "v" + version;
+/* 이 판에 나간 이슈 = CHANGELOG 최상단 절이 적은 #N 들 (#88).
+   판의 내용은 사람이 쓰고, 거기 안 적힌 것은 나간 것이 아니다 — 그래서 이것이 유일한 기준이다 */
+const shipped = [...new Set([...((changelog.split(/^## /m)[1] || "").matchAll(/#(\d+)/g))].map((m) => m[1]))];
 
 if (NOTES) { console.log((changelog.split(/^## /m)[1] || "").split("\n").slice(1).join("\n").trim()); process.exit(0); }
 
@@ -204,6 +207,10 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
   else no(`원격에 ${tag} 태그가 없다 — 문서는 ${tag} 를 가리키는데 그 주소는 404 다. --apply 로 릴리스하거나 문서 태그를 되돌려라`);
 
   /* ---- 3. 실물 확인 (검사 모드·CI 모드) ---- */
+  if (!APPLY && !VERIFY) {
+    console.log("\n이 판에 나갈 이슈 (닫는 것은 배포뿐이다 — #88)");
+    shipped.length ? ok(shipped.map((n) => "#" + n).join(" ")) : ok("CHANGELOG 최상단에 이슈 번호가 없다");
+  }
   if (!APPLY) {
     if (tagged) {
       console.log("\n실물 확인");
@@ -250,6 +257,7 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
   /* ---- 7. GitHub Release — 본문은 CHANGELOG 그 절 그대로 ---- */
   console.log("\nGitHub Release");
   const notes = (changelog.split(/^## /m)[1] || "").split("\n").slice(1).join("\n").trim();
+  const relUrl = `https://github.com/${GH_REPO}/releases/tag/${tag}`;
   let already = false;
   try { execSync(`gh release view ${tag}`, { cwd: REPO, stdio: "pipe" }); already = true; } catch (e) { /* 없다 = 정상 */ }
   if (already) ok(`${tag} Release 가 이미 있다 — 건드리지 않는다`);
@@ -265,6 +273,26 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
       console.log(`    손으로: gh release create ${tag} --title "${tag}" --notes-file <파일> --latest`);
     } finally { try { fs.unlinkSync(at); } catch (e) { /* 이미 없다 */ } }
   }
+
+  /* ---- 8. 이 판에 나간 이슈를 닫고 보드를 옮긴다 (#88, PM 2026-09-01) ----
+     PM: 「실제로 다 끝나고 닫는 방식이 좋겠다. 배포를 트리거로 잡자.」
+     고친 순간 닫으면 PM 이 만져 볼 자리가 없다. «배포해 달라» 는 말이 곧 인수다.
+     그러니 커밋 메시지는 fix #N 이 아니라 (#N) 이고, 닫는 일은 여기 한 곳에서만 일어난다 */
+  console.log("\n이슈 정리");
+  if (!shipped.length) ok("CHANGELOG 최상단에 이슈 번호가 없다 — 닫을 것 없음");
+  for (const n of shipped) {
+    let state = "";
+    try { state = JSON.parse(execSync(`gh issue view ${n} --json state`, { cwd: REPO, stdio: "pipe" }).toString()).state; }
+    catch (e) { no(`#${n} 을 못 찾았다 — CHANGELOG 의 번호가 맞는지 봐라`); continue; }
+    if (state !== "OPEN") { ok(`#${n} 은 이미 닫혀 있다`); continue; }
+    try {
+      execSync(`gh issue close ${n} -c ${JSON.stringify(tag + " 로 나갔습니다. " + relUrl)}`, { cwd: REPO, stdio: "pipe" });
+      ok(`#${n} 닫음`);
+    } catch (e) { no(`#${n} 을 못 닫았다 — ${String(e.stderr || e.message || e).trim().split("\n")[0]}`); }
+  }
+  console.log("\n보드");
+  try { execSync("node scripts/backlog-sync.js --apply", { cwd: REPO, stdio: "pipe" }); ok("노션 보드 반영 (닫힌 것은 완료 칸으로)"); }
+  catch (e) { no("보드 반영 실패 — node scripts/backlog-sync.js --apply 로 따로 확인해라"); }
 
   console.log("\n결과: " + (bad ? `릴리스는 했으나 확인 ${bad}건 실패` : `${tag} 릴리스 완료`));
   process.exit(bad ? 1 : 0);
