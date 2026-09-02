@@ -1214,6 +1214,87 @@ function check(name, ok, detail) {
       await page.locator(line).textContent());
   }
 
+  /* ============ route 로도 화면이 간다 (#99) ============
+     전에는 목차만 route 를 소프트로 시도했고(접두도 안 붙였다), setScreen·flow ▶ 는 문서만 바꿨다.
+     한 길(setScreen→goRoute)로 접었다: 신호(screenspec:screenchange) → 호스트가 안 맡으면
+     frame 은 액자를 우리가 옮기고, overlay 는 pushState+popstate 소프트 시도. */
+  if (sec("[화면] route 로도 간다 (#99)")) {
+    const mkSrv = (mode) => http.createServer((req, res) => {
+      if (req.url.endsWith("screenspec.js")) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html");
+      res.end(fs.readFileSync(path.join(REPO, "examples/overlay-spa.html"), "utf8")
+        .replace("../screenspec.js", "/screenspec.js").replace('mode: "overlay"', 'mode: "' + mode + '"'));
+    });
+    /* ── frame: 액자는 우리가 소유한다 — 우리가 옮긴다 ── */
+    const sF = mkSrv("frame");
+    await new Promise((r) => sF.listen(4197, r));
+    const infos = [];
+    const onInfo = (m) => { if (m.type() === "info") infos.push(m.text()); };
+    page.on("console", onInfo);
+    await page.goto("http://localhost:4197/screenspec/examples/overlay-spa.html");
+    await page.waitForTimeout(1200);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(900);
+    const fst = () => page.evaluate(() => {
+      const f = document.querySelector("iframe[data-ss-frame]");
+      return { cur: window.ScreenSpec.current(), inner: f && f.contentWindow ? f.contentWindow.location.pathname : null };
+    });
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-09"));
+    await page.waitForTimeout(1300);
+    let a = await fst();
+    check("frame·API: 액자가 따라간다 — 접두(basePath)를 도로 붙여서", a.inner === "/screenspec/examples/members" && a.cur === "S-09", a);
+    await page.click(".ss-toc-btn");
+    await page.waitForTimeout(300);
+    await page.click('[data-toc="S-01"]');
+    await page.waitForTimeout(1300);
+    a = await fst();
+    check("frame·목차: 같은 길이라 같이 고쳐졌다 (#74 의 교훈)", a.inner === "/screenspec/examples/home" && a.cur === "S-01", a);
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-10"));
+    await page.waitForTimeout(600);
+    a = await fst();
+    check("frame·패턴 라우트: 갈 주소가 없다 — 문서만 바꾸고 콘솔로 말한다",
+      a.cur === "S-10" && a.inner === "/screenspec/examples/home" && infos.some((t) => t.indexOf("패턴이라") >= 0),
+      { a: a, tail: infos.slice(-1) });
+    const got = await page.evaluate(async () => {
+      let d = null;
+      window.addEventListener("screenspec:screenchange", (e) => { d = e.detail; e.preventDefault(); }, { once: true });
+      window.ScreenSpec.setScreen("S-11");
+      await new Promise((r) => setTimeout(r, 700));
+      const f = document.querySelector("iframe[data-ss-frame]");
+      return { d: d, inner: f.contentWindow.location.pathname };
+    });
+    check("frame·신호: screenchange(detail id·route) 가 오고, preventDefault 면 우리는 비킨다",
+      !!got.d && got.d.id === "S-11" && got.d.route === "/members/invite" && got.inner === "/screenspec/examples/home", got);
+    page.off("console", onInfo);
+    sF.close();
+
+    /* ── overlay: 앱이 라우팅을 소유한다 — 소프트 시도 + 신호 ── */
+    const sO = mkSrv("overlay");
+    await new Promise((r) => sO.listen(4196, r));
+    await page.goto("http://localhost:4196/screenspec/examples/overlay-spa.html");
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-09"));
+    await page.waitForTimeout(700);
+    const o = await page.evaluate(() => ({ cur: window.ScreenSpec.current(), path: location.pathname }));
+    check("overlay·API: 소프트 시도로 popstate 듣는 라우터가 따라온다 — 접두 보존",
+      o.cur === "S-09" && o.path === "/screenspec/examples/members", o);
+    const og = await page.evaluate(async () => {
+      let d = null, pathRight = null;
+      window.addEventListener("screenspec:screenchange", (e) => { d = e.detail; e.preventDefault(); }, { once: true });
+      window.ScreenSpec.setScreen("S-01");
+      pathRight = location.pathname; /* preventDefault 직후 — 우리는 주소를 안 건드렸다 */
+      await new Promise((r) => setTimeout(r, 400));
+      return { d: d, pathRight: pathRight, revert: window.ScreenSpec.current() };
+    });
+    check("overlay·신호: preventDefault 면 주소를 안 건드리고, 호스트가 안 가면 감지가 정직하게 되돌린다",
+      !!og.d && og.d.id === "S-01" && og.pathRight === "/screenspec/examples/members" && og.revert === "S-09", og);
+    await page.evaluate(() => { const l = [...document.querySelectorAll("a")].find((x) => /home/.test(x.getAttribute("href") || "")); if (l) l.click(); });
+    await page.waitForTimeout(700);
+    const fin = await page.evaluate(() => ({ cur: window.ScreenSpec.current(), path: location.pathname }));
+    check("overlay·신호: 호스트가 정말로 이동하면 문서가 따라온다", fin.cur === "S-01" && /home$/.test(fin.path), fin);
+    sO.close();
+  }
+
   /* ============ root 없는 화면도 전환된다 (#67) ============
      목차에서 골라도 «설명만» 바뀌고 프로토타입은 그대로였다. 정의가 가리키는 요소의
      공통 조상을 찾아 세운다. 어느 요소인지 모호하면 세우지 않고 «말로» 알린다. */

@@ -481,6 +481,25 @@ useEffect(() => {
 - **화면이 바뀌면 자동으로 꺼진다** — 켜져 있던 항목에 `on:false` 가 가고 재현 중 띠도 사라진다. 앱이 가짜 상태에 갇힌 채 다른 화면으로 넘어가지 않는다.
 - 리스너를 심을 수 없는 상태(그 프로토타입이 못 만드는 상태)에는 `preview` 를 주지 않는다. 정의만 남기면 된다.
 
+### 화면 전환과 라우팅 (`screenspec:screenchange`)
+
+목차 클릭 · flow ▶ · `ScreenSpec.setScreen(id)` 는 전부 같은 길을 탄다. `route` 가 있는 화면으로 갈 때:
+
+1. **`screenspec:screenchange` 이벤트가 먼저 나간다** (`window`, `detail: { id, route }`, 취소 가능). `preventDefault()` 하면 라이브러리는 이동하지 않는다 — **앱 라우터로 직접 이동하면 된다** (Next.js App Router 처럼 `popstate` 를 안 듣는 라우터는 이 길이 정석이다)
+
+```js
+window.addEventListener("screenspec:screenchange", (e) => {
+  e.preventDefault();
+  router.push(e.detail.route);   // Next.js: useRouter() 의 push
+});
+```
+
+2. 아무도 안 맡으면 **모드가 가른다**: `frame` 은 액자를 라이브러리가 소유하므로 **액자 주소를 직접 옮긴다** (접두·basePath 는 지금 주소에서 알아내 도로 붙인다). `overlay` 는 앱이 라우팅을 소유하므로 `pushState` + `popstate` 의 **부드러운 시도**만 한다 — `popstate` 를 듣는 라우터는 따라오고, 아니면 정의서만 바뀐다(위 이벤트를 받아라)
+3. **패턴 라우트**(`/members/[id]`)는 갈 구체적인 주소가 없다 — 정의서만 바꾸고 콘솔로 알린다. 이동시키려면 위 이벤트를 받아 앱이 아는 id 로 직접 간다
+4. 해시 라우터(`#/…`)는 해시로 이동한다 — `hashchange` 는 어느 라우터든 듣는다
+
+호스트가 이동을 맡아 놓고 실제로 안 가면, 화면 감지가 정직하게 문서를 «실제 화면» 으로 되돌린다.
+
 ## HTML 속성
 
 | 속성 | 붙이는 곳 | 설명 |

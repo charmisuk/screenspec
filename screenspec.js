@@ -1602,12 +1602,58 @@ ${HL_CSS}
       soloOn = false;
       made.forEach((sc) => { sc._rootEl.style.display = sc._rootWas || ""; });
     }
+    /* 화면을 «보이게 하는» 한 길 (#99) — 목차 클릭 · flow ▶ · setScreen API 가 전부 여기로 온다.
+       #74 의 교훈 그대로다: 같은 의도가 길마다 딴 코드를 타면 하나만 고쳐지고 나머지는 남는다.
+       (전에는 목차만 route 를 소프트로 시도했고, API·flow 는 문서만 바꿨다 — 그 어긋남이 #99 다) */
     function setScreen(id) {
       const next = SCREENS.find((s) => s.id === id);
       if (!next) return;
       /* 라우트 없는 root 화면은 앱 화면도 같이 전환해야 화면 감지가 되돌리지 않는다 (wrap 한정) */
       if ((next.root || next._rootEl) && !next.route && ctx.toggleRoot === true) showRoot(next);
+      else if (next.route) goRoute(next);
       setCurrent(next);
+    }
+    /* route 화면으로 «가는» 일 (#99). 신호를 먼저 쏜다 — 호스트가 자기 라우터로 가겠다고
+       preventDefault 하면 우리는 비킨다. 그 다음은 소유가 가른다:
+       액자(frame)는 우리가 만들었으니 우리가 옮기고(확실한 이동),
+       overlay 는 앱이 라우팅을 소유하므로 pushState+popstate «부드러운 시도» 만 한다 —
+       popstate 를 안 듣는 라우터(Next App Router 등)는 신호를 받아 직접 이동해야 한다 */
+    function goRoute(sc) {
+      let go = true;
+      try {
+        go = window.dispatchEvent(new CustomEvent("screenspec:screenchange", {
+          detail: { id: sc.id, route: sc.route }, cancelable: true }));
+      } catch (e) { /* CustomEvent 가 없는 환경 — 신호 없이 진행 */ }
+      if (!go) return; /* 호스트가 맡았다 */
+      if (/\[[^\]]+\]/.test(sc.route)) {
+        /* 패턴 라우트는 갈 «구체적인 주소» 가 없다 — 조용히 아무 일도 없으면 사람이 고장 난 줄 안다 */
+        console.info("[ScreenSpec] " + sc.id + " 의 route \"" + sc.route + "\" 는 패턴이라 이동할 주소가 없습니다. 정의서만 전환합니다 (screenspec:screenchange 를 받아 직접 이동할 수 있습니다)");
+        return;
+      }
+      const aw = appWin(), loc = aw.location;
+      /* 해시 라우터(#/…)면 해시로 — hashchange 는 어느 라우터든 듣는다 */
+      if (loc.hash.indexOf("#/") === 0) {
+        if (loc.hash.slice(1).split("?")[0] !== sc.route) loc.hash = "#" + sc.route;
+        return;
+      }
+      /* 감지는 접두(basePath·정적 호스팅)를 «떼고» 맞춘다 — 갈 때는 도로 «붙인다» (#99) */
+      const to = routeBase(loc.pathname) + sc.route;
+      if (loc.pathname.replace(/\/+$/, "") === to.replace(/\/+$/, "")) return; /* 이미 거기다 */
+      if (ctx.hardNav === true) { try { loc.assign(to); } catch (e2) { /* 로드 전 */ } return; }
+      try {
+        aw.history.pushState({}, "", to);
+        aw.dispatchEvent(new aw.PopStateEvent("popstate"));
+      } catch (err) { /* file:// 등 pushState 불가 방어 */ }
+    }
+    /* 지금 주소에 어느 route 든 suffix 로 맞으면 그 앞이 접두다. 못 찾으면 접두 없음 */
+    function routeBase(p) {
+      for (let i = 0; i < SCREENS.length; i++) {
+        const r = SCREENS[i].route;
+        if (!r || r === "/" || /\[[^\]]+\]/.test(r)) continue;
+        const m = routeToSuffixRe(r).exec(p);
+        if (m) return p.slice(0, m.index);
+      }
+      return "";
     }
 
     function placeMarkers() {
@@ -1971,21 +2017,9 @@ ${HL_CSS}
       const sc = SCREENS.find((s) => s.id === row.dataset.toc);
       closeToc();
       if (!sc) return;
-      setCurrent(sc);
-      /* route가 있으면 소프트 내비게이션 시도 — popstate 리스너형 라우터(SPA)는 화면도 따라온다.
-         라우터가 반응하지 않는 앱이면 정의서만 전환되고 마커는 자동 숨김(콘솔 진단). */
-      const aw = appWin();
-      if (sc.route && aw.location.pathname !== sc.route) {
-        try {
-          aw.history.pushState({}, "", sc.route);
-          aw.dispatchEvent(new aw.PopStateEvent("popstate")); /* 이벤트도 그 창의 realm 것으로 */
-        } catch (err) { /* file:// 등 pushState 불가 환경 방어 */ }
-      } else if (!sc.route && (sc.root || sc._rootEl)) {
-        /* root 기반 화면: 앱 화면도 같은 방식(표시/숨김)으로 전환 — 정의서·앱 동기 유지.
-           안 하면 화면 감지가 "앱은 그대로"라며 이전 화면으로 되돌린다.
-           추론해서 세운 화면(_rootEl)도 같다 (#74) — 여기서 sc.root 만 보면 목차 클릭만 안 먹는다 */
-        showRoot(sc);
-      }
+      /* 목차만의 전환 코드를 두지 않는다 (#99) — 전에는 여기만 route 를 소프트로 시도했고
+         접두(basePath)도 안 붙여 틀린 주소로 쐈다. 한 길(setScreen)이 모드·접두·신호를 다 안다 */
+      setScreen(sc.id);
     });
     document.addEventListener("click", (e) => { if (!toc.contains(e.target)) closeToc(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToc(); });
@@ -4505,6 +4539,7 @@ ${HL_CSS}
         win: { get: () => appFrame.contentWindow || window }
       });
       coreCtx.toggleRoot = false; /* 앱 DOM 은 앱의 것 — overlay 와 같은 규칙 */
+      coreCtx.hardNav = true; /* 액자는 우리가 소유한다 — route 전환은 확실한 이동(주소 배정)으로 (#99) */
       coreCtx.posOf = (t) => {
         const off = frameOffset(), r = t.getBoundingClientRect();
         return {

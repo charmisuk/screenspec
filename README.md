@@ -286,6 +286,7 @@ window.SCREENSPEC = { off: true, screens: [ /* 정의는 그대로 둔다 */ ] }
 | 저장할 파일을 잘못 골랐다 | 안 쓴다. 고른 파일의 화면 ID 가 이 문서와 하나도 안 겹치면 「이 화면정의서의 파일이 아닙니다」로 멈춘다. 설정이 없는 파일도 마찬가지 |
 | 앱(Next.js 등)에 심었더니 저장만 안 된다 | 주소로 연 문서라 브라우저가 쓸 파일이 없다. `save.write` 훅을 달면 저장을 앱이 맡는다 → [저장을 호스트에](docs/config.md#저장을-호스트에-save) |
 | 「자동저장 켜기」가 안 눌린다 | 파일에 직접 쓰는 기능이 없는 브라우저다. 크롬·엣지에서 열거나 「설명 복사」를 쓴다 |
+| 목차로 골라도 앱이 안 움직인다 (Next 등) | 라우터가 `popstate` 를 안 듣는 앱이다. `screenspec:screenchange` 를 받아 앱 라우터로 이동한다 → [화면 전환과 라우팅](docs/config.md#화면-전환과-라우팅-screenspecscreenchange) |
 | 목차에서 화면을 골라도 프로토타입이 그대로 | 그 화면에 `root`를 안 적은 것. 정의가 가리키는 요소로 되찾아 보고, 그래도 모르면 콘솔로 알린다 (전환 알림에도 「설명만」으로 뜬다) |
 | 화면이 바뀌어도 문서가 그대로 | 자동 감지 실패. `root`(단일 HTML)나 `route`(프레임워크) 지정, 또는 `ScreenSpec.setScreen(id)` 호출 |
 | 프레임워크 화면이 깨진다 | wrap으로 붙은 것. `mode: "overlay"` 명시 |
@@ -318,7 +319,7 @@ node tests/smoke.js # 예제 전수 클릭 (playwright 필요 · 22초)
 고치는 동안에는 관련 섹션만 돌린다 — 한 건 고칠 때마다 2분 40초를 두 번 기다릴 이유가 없다.
 
 ```bash
-node tests/e2e.js --list          # 섹션 39개 목록
+node tests/e2e.js --list          # 섹션 40개 목록
 node tests/e2e.js --only 자동저장  # 그 섹션만 (수 초 ~ 20초)
 ```
 

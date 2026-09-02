@@ -133,6 +133,7 @@ import Script from "next/script";
 - 기본은 overlay 다. 다만 **앱의 우측 드로어·사이드시트가 설명 패널에 가려지거나, 모바일 폭을 확인해야 하면 `mode:"frame"`**(액자)로 바꾼다 — 앱이 iframe 안에 들어가고 뷰어는 밖에 남으므로 패널이 앱을 덮지 않고, 툴바의 **모바일/PC** 로 앱의 미디어쿼리가 실제로 발화한다(진짜 반응형 확인). 설정은 `mode` 한 줄만 바꾸면 되고 `route`·`root`·`data-spec`은 그대로다. 조건: 앱이 주소로 열리고 same-origin (cross-origin 임베드는 불가)
 - overlay 를 유지한다면 폭을 바꿔 보려면 브라우저 **개발자 도구의 기기 툴바**(⌘⇧M / Ctrl+Shift+M)를 쓴다. 정의서 헤더에 현재 **앱 영역 폭(px)** 이 표시되고, `body`에 `.ss-pc`(≥1100px)/`.ss-narrow`(≤520px) 훅이 붙는다(§6 과 같은 기준 — 미디어쿼리가 이미 동작하므로 선택 사항)
 - **고친 것을 소스로 되돌리려면 `save.write` 훅을 단다.** 앱에서는 브라우저가 쓸 파일이 없어 편집만 되고 저장이 막힌다. 훅을 달면 라이브러리가 바뀐 설정 블록 텍스트를 넘기고, 개발 서버가 그것을 정의 소스 파일에 쓴다 (개발에서만 열어 둔다). 안 달면 「설명 복사」로 직접 옮겨야 한다 → [저장을 호스트에](https://github.com/charmisuk/screenspec/blob/main/docs/config.md#저장을-호스트에-save)
+- **목차·flow 전환을 앱 라우터와 잇는다**: `screenspec:screenchange` 이벤트를 받아 `e.preventDefault()` 후 `router.push(e.detail.route)`. 안 이으면 frame 은 라이브러리가 액자를 직접 옮기고, overlay 는 popstate 를 듣는 라우터만 따라온다
 - z-index: 오버레이 모드의 ScreenSpec UI는 항상 최상위(브라우저 최대 z) — 앱 z 대역은 신경 쓸 필요 없다
 - 주의: overlay 에서 앱이 자체 고정 헤더(top:0)를 쓰면 정의서 모드에서 ScreenSpec 헤더(48px)와 겹칠 수 있다 — `mode:"frame"` 이면 사라지고, overlay 를 유지해야 하면 사용자에게 보고
 
