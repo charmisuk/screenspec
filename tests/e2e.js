@@ -1433,6 +1433,109 @@ function check(name, ok, detail) {
       await page.locator(line).textContent());
   }
 
+  /* ============ 무대가 창을 못 채운다 (#102) ============
+     앱이 화면에 고정한 패널(position:fixed; right:0)은 프레임이 창보다 크면 창 밖으로 나간다.
+     그리고 그건 스크롤로 못 고친다 — 고정 요소는 액자 «밖» 의 스크롤러를 움직이지 못해서
+     scrollIntoView·focus·폼 검증의 «첫 오류로 이동» 이 전부 닿지 못한다 (2026-09-02 실측).
+     그래서 고침은 «자동» 프리셋이다: 프레임을 창에 맞춰 애초에 넘지 않게 한다.
+     같이 통일한 것 — 여백을 두 모드가 한 토큰에서 쓰고, 스크롤은 상자 하나가 두 축을 맡는다. */
+  if (sec("[무대] 프레임이 창을 넘지 않는다 (#102)")) {
+    const APP = `<meta charset="utf-8"><title>고정 패널</title>
+      <style>body{margin:0;font:14px system-ui}
+        .p{position:fixed;right:0;top:0;bottom:0;width:420px;background:#eee}
+        #pin{position:absolute;right:16px;bottom:16px;padding:10px}</style>
+      <button id="top">기준</button><aside class="p"><button id="pin">저장</button></aside>
+      <script>window.SCREENSPEC={mode:"frame",baseViewport:"pc",
+        screens:[{id:"SCR-001",name:"고정 패널",specs:[{target:"#top",title:"기준",desc:"."}]}]};<\/script>
+      <script src="/screenspec.js"><\/script>`;
+    const sP = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html"); res.end(APP);
+    });
+    await new Promise((r) => sP.listen(4210, r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("http://localhost:4210/app.html");
+    await page.waitForTimeout(900);
+
+    const box = () => page.evaluate(() => {
+      const w = document.querySelector(".ss-proto-wrap"), st = document.querySelector(".ss-stage");
+      const cs = getComputedStyle(w), pad = (e) => getComputedStyle(e).paddingRight;
+      return {
+        wrapX: w.scrollWidth - w.clientWidth, wrapY: w.scrollHeight - w.clientHeight,
+        docY: document.documentElement.scrollHeight - innerHeight,
+        docX: document.documentElement.scrollWidth - innerWidth,
+        padTop: cs.paddingTop, padRight: pad(w), stagePad: pad(st),
+        size: document.getElementById("ss-wpx").textContent,
+        edgeR: document.querySelector(".ss-edge-r").getBoundingClientRect().right
+      };
+    });
+
+    /* ① 스크롤러는 하나 — 가로는 이 상자, 세로는 문서로 갈라 두지 않는다 */
+    let m = await box();
+    check("PC 프리셋: 프레임이 창보다 커서 두 축 다 밀린다", m.wrapX > 0 && m.wrapY > 0, m);
+    check("그 두 축이 «같은 상자» 다 (문서는 안 민다)", m.docY <= 1 && m.docX <= 1, m);
+
+    /* ② 여백은 두 모드가 한 값에서 — 74px 과 24px 로 갈라져 있던 것을 하나로 */
+    check("프로토타입·정의서의 여백이 같다", m.padRight === m.stagePad, [m.padRight, m.stagePad]);
+    check("툴바 비키기는 여백이 아니라 상자 위치가 맡는다 (padding-top = 여백 그대로)",
+      m.padTop === m.padRight, [m.padTop, m.padRight]);
+
+    /* ③ 여백을 0 으로 못 줄이는 이유를 기계가 지킨다 — 손잡이는 시트 «밖» 20px 에 산다 */
+    check("폭 조절 손잡이가 여백 안에 들어온다 (0 으로 줄이면 잘린다)",
+      parseFloat(m.padRight) >= 20, m.padRight);
+
+    /* ④ 자동 = 창에 맞춘다. 이게 실제 고침이다 */
+    await page.click('.ss-seg button[data-w="auto"]');
+    await page.waitForTimeout(400);
+    m = await box();
+    check("자동: 프레임이 창을 넘지 않는다 (밀 것이 남지 않는다)", m.wrapX === 0 && m.wrapY === 0, m);
+    const pin = await page.frameLocator("iframe[data-ss-frame]").locator("#pin").boundingBox();
+    check("자동: 앱이 화면에 고정한 버튼이 창 안에 있다",
+      !!pin && pin.x >= 0 && pin.x + pin.width <= 1280 && pin.y >= 0 && pin.y + pin.height <= 800, pin);
+    check("자동: 손잡이도 창 안에 남는다", m.edgeR <= 1280, m.edgeR);
+
+    /* ⑤ 문법: 자동은 창을 따라가고, 손으로 끌면 그 크기를 지킨다 (버튼은 «복귀» 자리로 눌린 채) */
+    const was = m.size;
+    await page.setViewportSize({ width: 1100, height: 700 });
+    await page.waitForTimeout(400);
+    const followed = (await box()).size;
+    check("자동: 창이 줄면 따라 준다", followed !== was, [was, followed]);
+    const er = await page.locator(".ss-edge-r").boundingBox();
+    await page.mouse.move(er.x + 5, er.y + er.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(er.x - 120, er.y + er.height / 2, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const dragged = (await box()).size;
+    await page.setViewportSize({ width: 1320, height: 840 });
+    await page.waitForTimeout(400);
+    check("끌어서 정한 크기는 다음 창 크기 변경에 지워지지 않는다",
+      (await box()).size === dragged, [dragged, (await box()).size]);
+    check("그래도 «자동» 은 눌린 채 — 누르면 돌아갈 자리다",
+      (await page.getAttribute('.ss-seg button[data-w="auto"]', "aria-pressed")) === "true");
+    await page.click('.ss-seg button[data-w="auto"]');
+    await page.waitForTimeout(350);
+    check("다시 누르면 창에 맞춘다", (await box()).wrapX === 0);
+
+    /* ⑥ 정의서는 기준 폭을 지킨다 — 여기서 폭이 창을 따라가면 «16열이 다 보인다» 가 검증할 대상을 잃는다 */
+    const beforeDoc = (await box()).size;
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+    check("정의서 모드로 가도 기준 폭은 그대로다",
+      (await page.textContent("#ss-wpx")) === beforeDoc, [beforeDoc, await page.textContent("#ss-wpx")]);
+    await page.setViewportSize({ width: 1100, height: 700 });
+    await page.waitForTimeout(400);
+    check("정의서에서는 창을 줄여도 기준 폭이 안 따라간다",
+      (await page.textContent("#ss-wpx")) === beforeDoc, await page.textContent("#ss-wpx"));
+
+    /* ⑦ 기본값은 안 바뀐다 */
+    check("자동은 프리셋을 «하나 더» 둔 것 — 기본은 그대로",
+      (await page.evaluate(() => document.querySelectorAll(".ss-seg button").length)) === 3);
+    check("JS 에러 0건", errors.length === 0, errors);
+    sP.close();
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+
   /* ============ route 로도 화면이 간다 (#99) ============
      전에는 목차만 route 를 소프트로 시도했고(접두도 안 붙였다), setScreen·flow ▶ 는 문서만 바꿨다.
      한 길(setScreen→goRoute)로 접었다: 신호(screenspec:screenchange) → 호스트가 안 맡으면

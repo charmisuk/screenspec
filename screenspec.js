@@ -66,7 +66,8 @@
  *   공용 부유 요소(목차·툴팁·전환 토스트)는 양 모드 모두 최대 대역.
  *
  * 크기 시뮬레이터 (wrap, DevTools 벤치마크): 시트 = 기기 뷰포트(폭×높이, 내부 스크롤).
- * 프리셋 모바일 360×800 · PC 1920×1080 + 우측/하단/코너 드래그. 프리셋 클릭 = 복귀.
+ * 프리셋 모바일 360×800 · PC 1920×1080 · 자동(창을 따라감) + 우측/하단/코너 드래그. 프리셋 클릭 = 복귀.
+ * 스크롤은 두 모드 모두 «상자 하나가 두 축» — 갈라 두면 브라우저의 보이게 스크롤이 경계를 못 넘는다 (#102).
  *
  * 내부 구조(v0.6): 마커·기능정의·활성화·화살표·툴팁은 createCore() 공통 코어 하나가
  * 담당하고, wrap/overlay 부트는 좌표계·모드 전환·화면 감지만 ctx로 주입한다.
@@ -100,7 +101,12 @@
   /* 프리셋 = 가장 대중화된 실기기 사이즈 (statcounter 최다) */
   const DEVICES = {
     mobile: { w: 360, h: 800 },   /* 갤럭시 표준 해상도 */
-    pc:     { w: 1920, h: 1080 }  /* FHD 데스크톱 */
+    pc:     { w: 1920, h: 1080 }, /* FHD 데스크톱 */
+    /* 창을 따라간다 (#102) — 「pc 1920×1080」 은 통계적 최다이지 «내 모니터» 가 아니어서,
+       노트북에서 열면 매번 넘쳤다. 프리셋을 대체하는 게 아니라 하나 더 두는 것이다:
+       화면정의서는 기준 폭이 있어야 «16열이 다 보인다» 같은 서술이 검증되므로 기본값은 그대로다.
+       DevTools 가 Responsive 를 프리셋 목록에 같이 두는 것과 같은 자리 */
+    auto:   { fit: true }
   };
   if (RAW.devices) for (const k in RAW.devices) DEVICES[k] = Object.assign({}, DEVICES[k], RAW.devices[k]);
   else if (RAW.widths) { /* v0.2 호환 */
@@ -477,7 +483,11 @@
     /* 글자의 «잉크» 중심은 줄 상자 중심보다 아래에 있다 — 한글은 밑선 위로 넓게 앉기 때문이다.
        줄 상자 기준으로 글머리를 가운데 두면 눈에는 살짝 위로 뜬다 (PM 2026-08-30).
        12.5px/20px Pretendard 실측: 0.88px. 글머리를 그만큼 내린다 */
-    --ss-blk-ink:0.9px}
+    --ss-blk-ink:0.9px;
+    /* 무대 여백 (#102) — 프로토타입·정의서가 같은 값을 쓴다. 두 모드가 달라야 할 이유가 없었고,
+       74px 과 24px 로 갈려 있던 것은 각자 자란 결과였다. 20px 아래로는 못 내린다 —
+       폭 조절 손잡이가 시트 «밖» 20px 에 살아서, 여백이 그보다 좁으면 손잡이가 잘린다 */
+    --ss-stage-pad:24px}
   body.ss-wrap{margin:0;background:var(--ss-canvas)}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -517,7 +527,12 @@
     .ss-toolbar.ss-save-busy .ss-more::after{display:block;background:#B8862B}
     .ss-toolbar.ss-save-warn .ss-more::after{display:block;background:#E0522F}
   }
-  .ss-proto-wrap{padding:74px 16px 60px;overflow-x:auto}
+  /* 스크롤러는 하나다 (#102). 툴바 아래를 채우는 상자 하나가 두 축을 다 맡는다 — 정의서 모드의 .ss-stage 와 같은 꼴.
+     가로는 이 상자가, 세로는 문서가 맡던 동안 브라우저의 «보이게 스크롤» 이 그 경계를 못 넘었다.
+     앱이 position:fixed 로 붙인 패널·버튼(프레임이 창보다 크면 창 밖으로 나간다)에
+     scrollIntoView·focus()·폼 검증의 «첫 오류로 이동» 이 전부 닿지 못했다. 손으로는 밀 수 있었으므로
+     «못 닿는다» 가 아니라 «자동으로는 못 닿는다» 였고, 그래서 눈에 잘 안 띄었다 */
+  .ss-proto-wrap{position:fixed;top:50px;left:0;right:0;bottom:0;overflow:auto;padding:var(--ss-stage-pad)}
   body.ss-mode-doc .ss-proto-wrap{display:none}
   .ss-holder{margin:0 auto;width:max-content}
   .ss-docmode{display:none}
@@ -528,7 +543,7 @@
   .ss-dh .ss-v.ss-monoV{font-family:var(--ss-mono);font-size:13px}
   .ss-dh .ss-sep{color:var(--ss-ink3);font-weight:400;margin:0 4px}
   .ss-doc-body{flex:1;display:flex;min-height:0;background:var(--ss-canvas)}
-  .ss-stage{flex:1;min-width:0;overflow:auto;padding:24px}
+  .ss-stage{flex:1;min-width:0;overflow:auto;padding:var(--ss-stage-pad)}
   .ss-fit{position:relative;margin:0 auto;transition:width .15s,height .15s}
   .ss-defs{width:var(--ss-panel-w,50vw);flex-shrink:0;background:#fff;border-left:1px solid var(--ss-line2);
     display:flex;flex-direction:column;min-height:0;position:relative}
@@ -745,6 +760,10 @@
     body.ss-mode-doc.ss-pv-on .ss-docmode{top:auto;padding-top:78px} /* 좁은 폭: 흐름 배치라 여백으로 민다 */
     .ss-doc-body{display:block}.ss-stage{overflow:visible}
     .ss-defs{width:100%;border-left:0;border-top:1px solid var(--ss-line2)}
+    /* 좁은 폭에서는 문서가 두 축을 다 맡는다 — 규칙(«스크롤러는 하나»)은 같고 맡는 쪽만 바뀐다 (#102).
+       고정 높이 상자를 폰에 두면 주소창이 접히지 않아 화면이 그만큼 계속 줄어든 채로 남는다 */
+    .ss-proto-wrap{position:static;overflow:visible;
+      padding:calc(50px + var(--ss-stage-pad)) var(--ss-stage-pad) var(--ss-stage-pad)}
   }
   /* 번호 블록 = 하나의 덩어리 (노션 콜아웃). PM: 「1~9번 라벨 자체도 컴포넌트가 돼야 한다 —
      크게 보면 에디터가 있고 그 안에 번호가 있고 그 안에 또 넣을 수 있는 구조」 */
@@ -4551,6 +4570,7 @@ ${HL_CSS}
         <div class="ss-seg" id="ss-seg">
           <button data-w="mobile" aria-pressed="true">모바일</button>
           <button data-w="pc" aria-pressed="false">PC</button>
+          <button data-w="auto" aria-pressed="false" title="지금 창에 맞춘다">자동</button>
         </div>
         <span class="ss-wpx" id="ss-wpx"></span>
       </div>`);
@@ -4582,10 +4602,11 @@ ${HL_CSS}
     protoHolder.appendChild(frame);
     document.body.classList.add("ss-mode-proto");
 
-    /* ---- 크기: 프리셋 2(폭×높이) + DevTools식 드래그 3핸들, 프리셋 클릭 = 복귀 ---- */
+    /* ---- 크기: 프리셋 3(고정 둘 + 자동) + DevTools식 드래그 3핸들, 프리셋 클릭 = 복귀 ---- */
     let sheetW = DEVICES.mobile.w;
     let sheetH = DEVICES.mobile.h;
     let scale = 1;
+    let fitOn = false; /* 창을 따라가는 중인가 — 눌린 버튼과는 다르다 (아래 usePreset 참고) */
     const wpx = document.getElementById("ss-wpx");
     function applySize(w, hgt) {
       /* 터치 기기: 시트가 화면보다 넓으면 핸들이 화면 밖으로 나가 조작 불가 → 뷰포트에 맞게 클램프 */
@@ -4600,18 +4621,38 @@ ${HL_CSS}
       wpx.textContent = sheetW + "×" + sheetH;
       requestAnimationFrame(layout);
     }
+    /* 상자의 «안쪽» 크기. 여백을 CSS 한 곳(--ss-stage-pad)에서만 정하게 하려고 값을 베끼지 않고 읽는다 */
+    function inner(el) {
+      const cs = getComputedStyle(el);
+      return { w: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+               h: el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
+    }
+    /* 자동 = 프로토타입 무대를 꽉 채운다. 정의서 모드는 채우지 않는다 —
+       거기서 폭이 창을 따라가면 «16열이 다 보인다» 같은 서술이 검증할 기준을 잃는다 (#102) */
+    function fitToStage() {
+      if (document.body.classList.contains("ss-mode-doc")) return;
+      const b = inner(protoWrap);
+      if (b.w > 0 && b.h > 0) applySize(b.w, b.h);
+    }
     const seg = document.getElementById("ss-seg");
+    /* 눌린 버튼 = «누르면 돌아갈 자리», fitOn = «지금 창을 따라가는 중».
+       둘을 나눈 이유: 자동에서 손잡이를 끌면 그 크기를 지켜야 하는데, 따라가기가 켜진 채면
+       다음 창 크기 변경이 방금 끈 것을 지운다. 그래서 끌기는 따라가기만 끄고 버튼은 눌린 채 둔다 */
+    function usePreset(k) {
+      const d = DEVICES[k] || DEVICES.mobile;
+      seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === k)));
+      fitOn = !!d.fit;
+      if (fitOn) fitToStage(); else applySize(d.w, d.h);
+    }
     seg.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
-      if (!btn) return;
-      seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
-      const d = DEVICES[btn.dataset.w];
-      applySize(d.w, d.h);
+      if (btn) usePreset(btn.dataset.w);
     });
     let drag = null;
     function makeDrag(el, useW, useH) {
       el.addEventListener("pointerdown", (e) => {
         drag = { x: e.clientX, y: e.clientY, w: sheetW, h: sheetH, s: scale };
+        fitOn = false; /* 손으로 정한 크기가 다음 창 크기 변경에 지워지지 않게 */
         el.classList.add("ss-dragging");
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* 일부 환경(합성 이벤트 등) 방어 */ }
         e.preventDefault();
@@ -4645,7 +4686,7 @@ ${HL_CSS}
       else { protoHolder.appendChild(frame); frame.style.transform = ""; }
       if (back) appFrame.src = back;
       core.soloRoots(m === "doc"); /* 정의서 모드에서는 설명하는 화면만 (#75) */
-      requestAnimationFrame(layout);
+      requestAnimationFrame(() => { if (fitOn) fitToStage(); layout(); });
     }
     mProto.onclick = () => setMode("proto");
     mDoc.onclick = () => setMode("doc");
@@ -4653,7 +4694,7 @@ ${HL_CSS}
     /* ---- 축소 배치 ---- */
     function layout() {
       if (document.body.classList.contains("ss-mode-doc")) {
-        const avail = stage.clientWidth - 48;
+        const avail = inner(stage).w;
         scale = Math.min(1, avail / sheetW);
         frame.style.transformOrigin = "top left";
         frame.style.transform = "scale(" + scale + ")";
@@ -4839,7 +4880,7 @@ ${HL_CSS}
     }
 
     /* ---- 재배치 트리거 ---- */
-    window.addEventListener("resize", layout);
+    window.addEventListener("resize", () => { if (fitOn) fitToStage(); layout(); });
     document.querySelectorAll("img").forEach((im) => im.addEventListener("load", layout));
     document.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => requestAnimationFrame(layout)));
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
@@ -4929,11 +4970,11 @@ ${HL_CSS}
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
-    /* 시작 폭 = 이 문서가 서술하는 기준 폭. baseViewport: "mobile"(기본) | "pc" — 어드민은 PC, 앱은 모바일 (#17) */
+    /* 시작 폭 = 이 문서가 서술하는 기준 폭. baseViewport: "mobile"(기본) | "pc" | "auto" — 어드민은 PC, 앱은 모바일 (#17).
+       기본을 auto 로 바꾸지 않는 이유: 기준 폭이 없으면 정의서의 서술이 검증할 대상을 잃는다 (#102) */
     const base = DEVICES[RAW.baseViewport] ? RAW.baseViewport : "mobile";
     if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가: mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
-    seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === base)));
-    applySize(DEVICES[base].w, DEVICES[base].h);
+    usePreset(base);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
     console.info("[ScreenSpec v0.29] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }

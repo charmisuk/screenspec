@@ -171,6 +171,21 @@ const MUTS = [
   { id: "brief-breaks-root", only: "[개요]", why: "개요가 있으면 화면 연결이 끊긴다 (#82)",
     find: "        const sps = (sc.specs || []).filter((sp) => !isBrief(sp));",
     to:   "        const sps = (sc.specs || []);" },
+  { id: "split-scrollers", only: "[무대]", why: "가로는 상자가 세로는 문서가 맡던 옛 배치로 되돌린다 (#102)",
+    find: "  .ss-proto-wrap{position:fixed;top:50px;left:0;right:0;bottom:0;overflow:auto;padding:var(--ss-stage-pad)}",
+    to:   "  .ss-proto-wrap{padding:74px 16px 60px;overflow-x:auto}" },
+  { id: "stage-pad-zero", only: "[무대]", why: "프로토타입 여백을 0 으로 — 손잡이가 잘린다 (#102 제안 ②)",
+    find: "    --ss-stage-pad:24px}",
+    to:   "    --ss-stage-pad:0px}" },
+  { id: "fit-off", only: "[무대]", why: "«자동» 이 창을 안 따라간다 — 프리셋이 이름만 남는다 (#102)",
+    find: "      if (fitOn) fitToStage(); else applySize(d.w, d.h);",
+    to:   "      applySize(d.w || sheetW, d.h || sheetH);" },
+  { id: "fit-sticks", only: "[무대]", why: "손으로 끈 크기를 다음 창 크기 변경이 지운다 (#102)",
+    find: "        fitOn = false; /* 손으로 정한 크기가 다음 창 크기 변경에 지워지지 않게 */\n",
+    to:   "" },
+  { id: "fit-in-doc", only: "[무대]", why: "정의서에서도 폭이 창을 따라가 기준 폭을 잃는다 (#102)",
+    find: "      if (document.body.classList.contains(\"ss-mode-doc\")) return;\n      const b = inner(protoWrap);",
+    to:   "      const b = inner(document.body.classList.contains(\"ss-mode-doc\") ? stage : protoWrap);" },
 ];
 
 const argv = process.argv.slice(2);
