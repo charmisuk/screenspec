@@ -754,6 +754,11 @@
   .ss-in2{margin-left:calc(var(--ss-blk-mark) * 2)}
   /* 표 (#97) — 좁으면 «접기» 가 아니라 블록 안에서 가로로 굴린다. 정의서는 읽는 것이 목적이라
      기본을 숨김으로 두면 손해다 (노션도 같다) */
+  .ss-blkmenu{position:fixed;z-index:2147483090;background:#fff;border:1px solid var(--ss-line2);
+    border-radius:10px;box-shadow:0 12px 32px rgba(17,24,39,.18);padding:5px;min-width:132px}
+  .ss-blkmenu button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;
+    font:inherit;font-size:12.5px;color:var(--ss-ink);padding:7px 9px;border-radius:7px;cursor:pointer;text-align:left}
+  .ss-blkmenu button:hover{background:var(--ss-canvas)}
   .ss-tbl-wrap{overflow-x:auto;max-width:100%;margin:2px 0 4px}
   .ss-tbl{border-collapse:collapse;font-size:12px;min-width:100%}
   .ss-tbl th,.ss-tbl td{border:1px solid var(--ss-line2);padding:5px 8px;text-align:left;vertical-align:top}
@@ -1042,8 +1047,12 @@ ${HL_CSS}
       '<button type="button" class="ss-g-add" title="여기에 넣기" data-add="' + kind + '"' + at + ">＋</button>" +
       '<button type="button" class="ss-g-grip" title="잡아서 옮기기" draggable="true" data-g="' + kind + '"' + at + ">⠿</button></span>";
   }
-  /* 줄 지우기 버튼은 없앴다 (PM 2026-08-30) — 빈 줄에서 Backspace 가 그 일을 한다.
-     버튼이 하나 더 있으면 «어느 쪽이 맞나» 를 사용자가 판단해야 한다 */
+  /* 줄 지우기 «버튼» 은 없앴다 (PM 2026-08-30) — 빈 줄에서 Backspace 가 그 일을 한다.
+     버튼이 하나 더 있으면 «어느 쪽이 맞나» 를 사용자가 판단해야 한다.
+     그 결정은 지금도 유효하다: 늘 보이는 × 는 없다. 다만 표처럼 «글자가 아닌 블록» 은
+     비울 수가 없어서 Backspace 로 지울 길이 없었다 (#97, PM 2026-09-02).
+     그래서 이미 있는 ⠿ 를 «눌렀을 때» 를 쓴다 — 노션의 블록 메뉴와 같은 자리다.
+     늘 보이는 것이 늘지 않으므로 위 결정과 부딪히지 않는다 */
   /* 항목(상위) 손잡이 — 순서·삭제는 여기서만. 번호는 옮기고 지운 뒤 라이브러리가 다시 매긴다 */
   /* 항목 삭제는 제목 줄 «오른쪽» 에 (PM: 「원래 그 상태값 쪽으로」). 아래에 줄로 매달려 있으면
      무엇에 붙은 것인지 흐려지고, 블록의 머리에 있어야 «이 덩어리를 지운다» 로 읽힌다 */
@@ -2944,6 +2953,43 @@ ${HL_CSS}
     const SLASH_SCREEN = [
       { k: "brief", ico: "▤", nm: "화면 개요", key: "맨 위에" },
     ];
+    /* 블록 메뉴 (#97) — ⠿ 를 누르면 뜬다. 지금 항목은 «삭제» 하나다 */
+    let edBlkMenu = null;
+    function edBlkClose() { if (edBlkMenu) { edBlkMenu.remove(); edBlkMenu = null; } }
+    function edBlkMenuOpen(grip) {
+      edBlkClose();
+      const box = grip.closest(".ss-b");
+      if (!box) return;
+      edBlkMenu = h("div", { class: "ss-blkmenu ss-ui" },
+        '<button type="button" data-bm="del"><span class="ss-sl-ico">🗑</span>' +
+        '<span class="ss-sl-nm">삭제</span></button>');
+      document.body.appendChild(edBlkMenu);
+      const r = grip.getBoundingClientRect();
+      edBlkMenu.style.left = Math.round(Math.min(r.left, innerWidth - 150)) + "px";
+      edBlkMenu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - 60)) + "px";
+      edBlkMenu.addEventListener("mousedown", (e) => {
+        const b = e.target.closest("[data-bm]");
+        if (!b) return;
+        e.preventDefault();
+        edBlkClose();
+        if (b.dataset.bm === "del") edKillBlockAt(box);
+      });
+    }
+    /* 그 블록을 통째로 지운다 — 글자든 표든 같은 길이다 */
+    function edKillBlockAt(box) {
+      const raw = box.dataset.path;
+      const it = itemOf(edKeyOf(box));
+      if (!raw || !it) return;
+      const sp = it.spec;
+      const spot = atPath(sp.defs || (sp.defs = []), raw.split(".").map(Number));
+      if (!spot || !spot.owner[spot.idx]) return;
+      edSnap();
+      const b = spot.owner[spot.idx];
+      /* 하위는 «있던 자리» 에 남긴다 — edKillLine 과 같은 약속이다 */
+      spot.owner.splice(spot.idx, 1, ...(b.c || []));
+      edTouched();
+      render();
+    }
     let edMenu = null, edMenuAt = 0;
     function edSlashClose() { if (edMenu) { edMenu.remove(); edMenu = null; } }
     /* ---- «/» 는 빈 줄에서만 열렸다 (#85, PM 2026-09-01) ----
@@ -3076,6 +3122,23 @@ ${HL_CSS}
       if (to) { edFinish(true); edBegin(to); return true; }
       if (back) return true; /* 첫 칸에서 Shift+Tab — 그대로 머문다 */
       return tblAddRow(el);
+    }
+    /* 그 칸이 속한 행이 통째로 비었으면 행을 지운다. 머리행은 안 지운다 (표의 뼈대다) */
+    function tblKillRow(el) {
+      const r = Number(el.dataset.r);
+      if (r < 0) return false;
+      const p = edPos(), sp = p && p.s, d = sp && tblOf(el, sp);
+      if (!d || !d.rows[r]) return false;
+      if (d.rows[r].some((v) => String(v || "").trim())) return false; /* 아직 글자가 남아 있다 */
+      if (d.rows.length <= 1) return false; /* 마지막 행은 남긴다 — 표를 지우려면 ⠿ 로 */
+      edFinish(false);
+      edSnapOnce();
+      d.rows.splice(r, 1);
+      edTouched();
+      render();
+      const to = ctx.listEl.querySelector('.ss-tcell[data-r="' + Math.max(0, r - 1) + '"][data-c="0"]');
+      if (to) edBegin(to);
+      return true;
     }
     function tblAddRow(el) {
       const p = edPos();
@@ -3569,7 +3632,20 @@ ${HL_CSS}
         d.addEventListener("dragover", d === document ? over : allow, true);
       });
 
-      ctx.listEl.addEventListener("dragstart", (e) => { if (!edGate()) { e.preventDefault(); return; } dragBegin(e); });
+      ctx.listEl.addEventListener("dragstart", (e) => { edBlkClose(); if (!edGate()) { e.preventDefault(); return; } dragBegin(e); });
+      /* ⠿ 를 «끌지 않고 눌렀을» 때만 메뉴가 열린다 — click 은 드래그가 없었을 때만 온다 (#97) */
+      ctx.listEl.addEventListener("click", (e) => {
+        const g = e.target.closest(".ss-g-grip");
+        if (!g) return;
+        e.preventDefault(); e.stopPropagation();
+        if (!edGate()) return;
+        edBlkMenuOpen(g);
+      });
+      document.addEventListener("mousedown", (e) => {
+        if (!edBlkMenu) return;
+        if (e.target && e.target.closest && (e.target.closest(".ss-blkmenu") || e.target.closest(".ss-g-grip"))) return;
+        edBlkClose();
+      });
       ctx.listEl.addEventListener("drop", (e) => {
         if (!drag) return;
         e.preventDefault();
@@ -4043,7 +4119,9 @@ ${HL_CSS}
           if (k === "Enter" && !e.shiftKey) { eat(); tblAddRow(edEl); return; }
           if (k === "Enter") { eat(); edFinish(true); return; }
           if (k === "Escape") { eat(); edFinish(true); return; }
-          if (k === "Backspace" && empty) return; /* 빈 칸은 지우지 않는다 — 칸은 표의 뼈대다 */
+          /* 빈 «행» 에서 Backspace 면 그 행을 지운다 — 「빈 줄에서 Backspace」 규칙의 자연스러운 확장이다.
+             칸 하나가 비었다고 지우지는 않는다 (칸은 표의 뼈대다) */
+          if (k === "Backspace" && empty) { if (tblKillRow(edEl)) eat(); return; }
         }
         if (k === "Enter" && !e.shiftKey) { eat(); edNewLine(); }
         else if (k === "Enter") { eat(); edFinish(true); } /* Shift+Enter = 여기서 그만 */

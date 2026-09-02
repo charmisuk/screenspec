@@ -1019,6 +1019,44 @@ function check(name, ok, detail) {
       const a = document.activeElement;
       return !!a && a.dataset.ed === "cell" && a.dataset.r === "-1";
     }));
+
+    /* 지우는 길 (#97, PM 2026-09-02) — 표는 «비울» 수가 없어서 Backspace 로 지울 길이 없었다.
+       늘 보이는 × 는 여전히 안 만든다(2026-08-30 결정) — 이미 있는 ⠿ 를 «눌렀을 때» 를 쓴다 */
+    await page.goto("about:blank");
+    await page.setContent(TDOC);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    /* 빈 행에서 Backspace → 그 행만 */
+    await page.click('.ss-tcell[data-r="1"][data-c="0"]');
+    await page.keyboard.press(MOD + "+a"); await page.keyboard.press("Delete");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press(MOD + "+a"); await page.keyboard.press("Delete");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(400);
+    check("빈 행에서 Backspace 면 그 행이 지워진다 (#97)", await page.evaluate(() =>
+      document.querySelectorAll(".ss-tbl tbody tr").length === 1),
+      await page.evaluate(() => document.querySelectorAll(".ss-tbl tbody tr").length));
+    /* ⠿ → 메뉴 → 삭제 */
+    await page.click('.ss-b[data-kind="table"] .ss-g-grip');
+    await page.waitForTimeout(300);
+    check("⠿ 를 누르면 블록 메뉴가 뜬다 (#97)", (await page.locator(".ss-blkmenu").count()) === 1);
+    await page.click('.ss-blkmenu [data-bm="del"]');
+    await page.waitForTimeout(400);
+    check("메뉴의 삭제로 표가 통째로 사라진다 (#97)", await page.evaluate(() =>
+      document.querySelectorAll('.ss-b[data-kind="table"]').length === 0 &&
+      window.ScreenSpec.serialize().indexOf('kind: "table"') < 0));
+    check("옆의 글자 줄은 그대로다", await page.evaluate(() =>
+      window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") >= 0));
+    /* 같은 길이 글자 블록에도 통한다 — 표만의 특례를 만들지 않는다 */
+    await page.click('.ss-b:not([data-kind="table"]) .ss-g-grip');
+    await page.waitForTimeout(300);
+    await page.click('.ss-blkmenu [data-bm="del"]');
+    await page.waitForTimeout(400);
+    check("글자 블록도 같은 메뉴로 지워진다 (#97)", await page.evaluate(() =>
+      window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") < 0));
   }
 
   /* ============ 폰 폭에서 툴바가 접힌다 (#94) ============
