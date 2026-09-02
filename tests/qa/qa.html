@@ -120,6 +120,14 @@
   <div class="card" data-spec="82"><b>초대 버튼</b><span>상태에 따라 문구가 바뀐다</span></div>
 </section>
 
+<!-- ══ QA-10 · 출처 각주 (#100) ══ -->
+<section class="scr" id="qa10">
+  <span class="tag">QA-10</span>
+  <h1 data-spec="97">출처 각주</h1>
+  <p class="sub">값의 근거가 줄 끝 위첨자로 붙는다. 오른쪽 정의서에서 번호를 눌러 본다.</p>
+  <div class="card" data-spec="98"><b>차량번호 입력</b><span>형식·상한의 근거가 각주다</span></div>
+</section>
+
 <!-- ══ QA-09 · 순서도 (#98, 실물 CDN) ══ -->
 <section class="scr" id="qa09">
   <span class="tag">QA-09</span>
@@ -142,6 +150,10 @@
 <script>
 window.SCREENSPEC = {
   mode: "wrap",
+  sources: {
+    kps: { label: "KPS 연동 정책/화면기획 (예시)", href: "https://github.com/charmisuk/screenspec" },
+    ctrl: { label: "Ctrl.R 방문자 초대 (예시)", href: "https://github.com/charmisuk/screenspec/blob/main/README.md" },
+  },
   screens: [
     { id: "QA-01-SWITCH", name: "화면 전환", path: ["QA", "화면 전환"], specs: [
       { n: 1, target: "11", anno: "box", title: "화면 제목", defs: [
@@ -320,6 +332,21 @@ window.SCREENSPEC = {
         ]},
         { t: "「내보내기」 에서 «기능 설명 표» 를 켜고 뽑는다" },
         { t: "확인 : 그림 속 기능 설명 칸에도 이 표가 표로 들어간다" }
+      ]}
+    ]},
+    { id: "QA-10-REFS", name: "출처 각주", path: ["QA", "출처 각주"], specs: [
+      { n: 1, target: "97", anno: "box", title: "각주 읽기", defs: [
+        { t: "확인 : 아래 항목의 줄 끝에 ¹ ² 위첨자가 붙어 있다 (같은 출처는 같은 번호)" },
+        { t: "번호를 누른다" },
+        { t: "확인 : 원본 문서가 새 탭으로 열린다" },
+        { t: "확인 : 화면 발치에 「출처」 목록이 서 있다 — 이 화면이 무엇에 근거하나" }
+      ]},
+      { n: 2, target: "98", anno: "box", title: "차량번호 입력", defs: [
+        { t: "형식을 검사하지 않음", ref: "kps" },
+        { t: "16자째부터 입력되지 않음", ref: "kps" },
+        { t: "초대 상한은 계약 기간 총량", ref: "ctrl" },
+        { t: "줄 글자를 고쳐 본다" },
+        { t: "확인 : 고쳐도 각주가 그대로 붙어 있고 저장에도 남는다" }
       ]}
     ]},
     { id: "QA-09-MERMAID", name: "순서도", path: ["QA", "순서도"], specs: [

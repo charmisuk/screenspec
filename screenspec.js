@@ -152,6 +152,30 @@
     return ACCENT_PRESETS.blue;
   })();
 
+  /* ============ 출처 사전 (#100, 실사용 2026-09-02) ============
+     사양의 값에는 대개 원본이 있다(정책 문서·실측·API 명세). 그 근거가 정의서 밖에만 있으면
+     읽는 사람이 낡은 문서를 최신으로 오인한다 — 실제로 그런 사고가 셋 있었다.
+     본문에 링크를 섞으면 사양이 밀려나므로 «각주» 로 단다: 줄은 키만 가리키고(ref),
+     출처는 최상위 사전(sources)에 한 번만 산다 — 같은 문구를 열 줄에 반복하면
+     그중 하나가 반드시 어긋난다 (#89 에서 실측한 그 병이다). 번호는 라이브러리가
+     화면별 첫 등장 순서로 매긴다 — n 이 자동인 것과 같은 사상이다 */
+  const SOURCES = (function () {
+    const raw = RAW.sources;
+    if (raw == null) return null;
+    if (typeof raw !== "object" || Array.isArray(raw)) {
+      console.warn("[ScreenSpec] sources 는 { 키: { label, href } } 객체여야 합니다: 무시");
+      return null;
+    }
+    const out = {};
+    Object.keys(raw).forEach((k) => {
+      const v = raw[k];
+      if (v && typeof v === "object" && typeof v.href === "string" && v.href) {
+        out[k] = { label: String(v.label || v.href), href: v.href };
+      } else console.warn("[ScreenSpec] sources." + k + " 에 href 가 없습니다: 그 출처는 무시");
+    });
+    return Object.keys(out).length ? out : null;
+  })();
+
   /* v0.14 의 panel:"left" 는 폐기 — 겹침의 정식 해법은 mode:"frame" */
   if (RAW.panel) console.warn("[ScreenSpec] panel 설정은 v0.15 에서 폐기. 설명 패널은 오른쪽 고정. 앱의 우측 서랍과 겹치면 mode:\"frame\" 을 쓰세요");
 
@@ -328,10 +352,10 @@
      ============================================================ */
   /* 필드 순서를 고정해야 «고친 줄만» 바뀐 파일이 나온다 — 순서가 흔들리면 매 저장이 전면 수정으로 보인다.
      모르는 키는 뒤에 원래 순서로 붙인다: 설정이 늘어나도 저장이 필드를 잃지 않는다 */
-  const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "style", "off", "readonly",
+  const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "sources", "style", "off", "readonly",
     "vocab", "prefixes", "endings", "idScheme", "notes",
     "screen", "screens", "id", "name", "path", "route", "root", "viewports", "covers", "skip",
-    "n", "target", "sel", "anno", "title", "optional", "t", "head", "rows", "why", "subs", "layer", "defs", "dev", "parts",
+    "n", "target", "sel", "anno", "title", "optional", "t", "ref", "head", "rows", "why", "subs", "layer", "defs", "dev", "parts",
     "play", "preview", "flowTo", "arrowTo", "selector", "label", "w", "h", "specs"];
   function ssStr(s) {
     /* JSON.stringify 가 따옴표·역슬래시·줄바꿈을 맡고, 우리는 «스크립트 블록을 깨뜨리는» 것만 더 막는다.
@@ -660,6 +684,9 @@
   .ss-pr-in-tbl{border-collapse:collapse;margin:3px 0;font-size:10.5px;width:100%}
   .ss-pr-in-tbl th,.ss-pr-in-tbl td{border:1px solid #D3D1CB;padding:2px 5px;text-align:left;vertical-align:top}
   .ss-pr-in-tbl th{background:#F4F4F2;font-weight:800}
+  .ss-pr-ref{font-size:8px;font-weight:800;color:#50524E;margin-left:1px}
+  .ss-pr-srcs{margin-top:6px;font-size:9.5px;color:#50524E;line-height:1.6}
+  .ss-pr-srcs b{font-weight:800;margin-right:4px}
   .ss-pr-mm svg{max-width:100%;height:auto}
   .ss-pr-mm-code{margin:3px 0;padding:6px 8px;background:#F7F7F5;border:1px solid #D3D1CB;border-radius:6px;
     font-family:var(--ss-mono);font-size:9.5px;line-height:1.5;white-space:pre;overflow:hidden}
@@ -762,6 +789,15 @@
      (이미 있는 「전부 삭제」 규칙과 같다) */
   .ss-blkmenu button{color:var(--ss-ink2)}
   .ss-blkmenu button:hover{background:color-mix(in srgb,#E0522F 8%,#fff);color:#E0522F}
+  .ss-ref{font-size:9px;line-height:1;margin-left:2px;vertical-align:super}
+  .ss-ref a{color:var(--ss-accent);text-decoration:none;font-weight:800}
+  .ss-ref a:hover{text-decoration:underline}
+  .ss-srcs{margin:14px 4px 6px;padding-top:9px;border-top:1px solid var(--ss-line);font-size:11.5px;color:var(--ss-ink2)}
+  .ss-srcs-t{font-weight:800;font-size:10.5px;color:var(--ss-ink3);letter-spacing:.03em;margin-bottom:4px}
+  .ss-srcs ol{margin:0;padding-left:18px}
+  .ss-srcs li{margin:2px 0}
+  .ss-srcs a{color:var(--ss-ink2)}
+  .ss-srcs a:hover{color:var(--ss-accent)}
   .ss-mm{margin:2px 0 4px;max-width:100%}
   .ss-mm-code{margin:0;padding:8px 10px;background:#FAFAF9;border:1px solid var(--ss-line);border-radius:7px;
     font-family:var(--ss-mono);font-size:11px;line-height:1.55;color:var(--ss-ink2);overflow-x:auto;white-space:pre}
@@ -1134,6 +1170,7 @@ ${HL_CSS}
     const b = { t: (d && d.t) || "" };
     if (d.kind) b.kind = d.kind;
     if (d.layer) b.layer = d.layer;
+    if (d.ref != null && String(d.ref)) b.ref = String(d.ref); /* 출처 각주 (#100) */
     const kids = [];
     /* 옛 문서 두 가지를 여기서 흡수한다: why 속성 · subs 중첩 */
     if (d.why) kids.push({ t: String(d.why), kind: B_WHY });
@@ -1192,6 +1229,43 @@ ${HL_CSS}
     });
   }
 
+  /* ---- 출처 각주 (#100) — 번호는 이 화면에서의 첫 등장 순서다. render 마다 다시 매긴다 ---- */
+  let refNos = {};
+  const refWarned = {};
+  function refIndex(sc) {
+    refNos = {};
+    if (!SOURCES || !sc) return;
+    let n = 0;
+    const walk = (list) => flatten(list, null).forEach((x) => {
+      const k = x.b.ref;
+      if (!k) return;
+      if (!SOURCES[k]) {
+        if (!refWarned[k]) { refWarned[k] = 1; console.warn('[ScreenSpec] ref "' + k + '" 가 sources 에 없습니다: 각주를 안 답니다'); }
+        return;
+      }
+      if (!(k in refNos)) refNos[k] = ++n;
+    });
+    (sc.specs || []).forEach((sp) => walk(sp.defs));
+    walk(sc.dev || []);
+  }
+  /* 본문 침범은 위첨자 한 글자다 — 누르면 원본으로 간다 */
+  function refSupHTML(d) {
+    if (!d || !d.ref || !SOURCES || !SOURCES[d.ref] || !refNos[d.ref]) return "";
+    const src = SOURCES[d.ref];
+    return '<sup class="ss-ref"><a href="' + esc(src.href) + '" target="_blank" rel="noopener" title="' +
+      esc(src.label) + '">' + refNos[d.ref] + "</a></sup>";
+  }
+  /* 화면 발치의 «이 화면이 무엇에 근거하나» — 그 자체로 쓸모가 있다 (#100) */
+  function refBlockHTML() {
+    if (!SOURCES) return "";
+    const ks = Object.keys(refNos).sort((a, b) => refNos[a] - refNos[b]);
+    if (!ks.length) return "";
+    return '<div class="ss-srcs"><div class="ss-srcs-t">출처</div><ol>' +
+      ks.map((k) => '<li value="' + refNos[k] + '"><a href="' + esc(SOURCES[k].href) +
+        '" target="_blank" rel="noopener">' + esc(SOURCES[k].label) + "</a></li>").join("") +
+      "</ol></div>";
+  }
+
   /* 블록 하나 — 종류와 들여쓰기가 화면을 정한다. 편집은 언제나 가능하다(#58) */
   /* di = «펼친 순번» (화면에서 몇 번째 줄인가) · data-path = 트리에서의 자리.
      화면은 순번으로 짚고, 모델은 자리 번호로 짚는다 — 둘을 갈라 두면 트리를 바꿔도 그리기가 안 흔들린다 */
@@ -1233,7 +1307,7 @@ ${HL_CSS}
     return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
       edGut("b", di) +
       (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' : "") +
-      '<span class="ss-dt"' + edMark("b", di) + ">" + rich(d.t) + "</span></div>";
+      '<span class="ss-dt"' + edMark("b", di) + ">" + rich(d.t) + "</span>" + refSupHTML(d) + "</div>";
   }
   function blocksHTML(defs, want) {
     return flatten(defs, want).map(blockHTML).join("");
@@ -1429,6 +1503,7 @@ ${HL_CSS}
     function blockOf(it) { return document.getElementById("ss-def-" + it.key); }
 
     function render() {
+      refIndex(current); /* 각주 번호는 화면 단위다 — 그리기 전에 매긴다 (#100) */
       ctx.headerEl.innerHTML = headerFieldsHTML(current);
       if (current._unmapped) {
         ctx.cntEl.textContent = "항목 0개";
@@ -1462,7 +1537,7 @@ ${HL_CSS}
         return;
       }
       /* 개발 정의는 «언제나 기획 다음» 이다 — 항목 안에서도, 화면 층에서도 (#41) */
-      ctx.listEl.innerHTML = defsRowsHTML(specs()) + devCommonHTML(current) + covBlockHTML(current);
+      ctx.listEl.innerHTML = defsRowsHTML(specs()) + devCommonHTML(current) + refBlockHTML() + covBlockHTML(current);
       if (previewKey != null) pvSetBtn(pvBtn(previewKey), true); /* 재렌더돼도 켜진 스위치는 켜진 채로 — 라벨(원래대로)까지 (#27·#29) */
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
@@ -2144,7 +2219,16 @@ ${HL_CSS}
         t.rows.forEach((row) => { inner += "<tr>" + row.map((v) => "<td>" + rich(v) + "</td>").join("") + "</tr>"; });
         return '<li class="' + cls + ' ss-pr-tbl-li">' + inner + "</table></li>";
       }
-      return '<li class="' + cls + '">' + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) + "</li>";
+      return '<li class="' + cls + '">' + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) +
+        (d.ref && SOURCES && SOURCES[d.ref] && refNos[d.ref] ? '<sup class="ss-pr-ref">' + refNos[d.ref] + "</sup>" : "") + "</li>";
+    }
+    /* 그림 속 출처 절 — 링크는 그림에서 못 누르니 이름이 정보다 (#100) */
+    function refFootPr() {
+      if (!SOURCES) return "";
+      const ks = Object.keys(refNos).sort((a, b) => refNos[a] - refNos[b]);
+      if (!ks.length) return "";
+      return '<div class="ss-pr-srcs"><b>출처</b> ' +
+        ks.map((k) => refNos[k] + ". " + esc(SOURCES[k].label)).join(" · ") + "</div>";
     }
     function prKeep(d, layer) {
       if (layer === "plan") return d.layer !== "dev";
@@ -2202,7 +2286,7 @@ ${HL_CSS}
       const box = h("div", { class: "ss-cap ss-ui" },
         (opt.head === false ? "" : capHeadHTML(current || {})) + '<div class="ss-cap-body"></div>' +
         (opt.table ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
-          prRows(opt.layer || LAYER) + "</tbody></table>" : "") +
+          prRows(opt.layer || LAYER) + "</tbody></table>" + refFootPr() : "") +
         ""); /* 꼬리표는 DOM 이 아니라 캔버스에 직접 쓴다 — 밑단 잘라내기(아래) 뒤에 붙여야 간격이 안 벌어진다 */
       document.body.appendChild(box);
       return box;

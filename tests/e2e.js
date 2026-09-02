@@ -1059,6 +1059,83 @@ function check(name, ok, detail) {
       window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") < 0));
   }
 
+  /* ============ 출처 각주 (#100) ============
+     출처는 사전에 한 번, 줄은 ref 키만. 번호는 화면별 첫 등장 순서로 자동.
+     낡은 문서를 최신으로 오인하는 사고가 실제로 셋 있었다 — 값 옆에 근거가 서는 것이 목적이다. */
+  if (sec("[출처] 근거 각주 (#100)")) {
+    const RDOC = '<h1 id="t">홈</h1><button id="b" data-spec="1" style="margin:40px">초대</button>' +
+      "<script>window.SCREENSPEC={" +
+      "sources:{kps:{label:'KPS 연동 정책',href:'https://example.com/kps'}," +
+      "ctrl:{label:'Ctrl.R 방문자 초대',href:'https://example.com/ctrl'}}," +
+      "screen:{id:'S-R',name:'홈'},specs:[{n:1,target:'1',title:'차량번호',defs:[" +
+      "{t:'형식을 검사하지 않음',ref:'kps'}," +
+      "{t:'16자째부터 입력되지 않음',ref:'kps'}," +
+      "{t:'초대 상한은 계약 기간 총량',ref:'ctrl'}," +
+      "{t:'근거 없는 줄'}," +
+      "{t:'죽은 키를 가리키는 줄',ref:'ghost'}" +
+      "]}]};<" + "/script>";
+    const rWarns = [];
+    const onRW = (m) => { if (m.type() === "warning") rWarns.push(m.text()); };
+    page.on("console", onRW);
+    await page.goto("about:blank");
+    await page.setContent(RDOC);
+    await page.evaluate(() => {
+      const orig = Element.prototype.appendChild;
+      window.__caps = [];
+      Element.prototype.appendChild = function (n) {
+        if (n && n.classList && n.classList.contains("ss-cap")) window.__caps.push(n);
+        return orig.call(this, n);
+      };
+    });
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+
+    check("줄 끝에 각주가 선다 — 같은 출처는 같은 번호, 첫 등장 순서", await page.evaluate(() => {
+      const sups = [...document.querySelectorAll(".ss-ref a")].map((a) => a.textContent);
+      return sups.join("|") === "1|1|2";
+    }), await page.$$eval(".ss-ref a", (e) => e.map((x) => x.textContent)));
+    check("번호가 곧 링크다 (새 탭 · 원본 제목)", await page.evaluate(() => {
+      const a = document.querySelector(".ss-ref a");
+      return a.getAttribute("href") === "https://example.com/kps" && a.target === "_blank" &&
+        a.getAttribute("title") === "KPS 연동 정책";
+    }));
+    check("화면 발치에 「출처」 목록 — 이 화면이 무엇에 근거하나", await page.evaluate(() => {
+      const box = document.querySelector(".ss-srcs");
+      if (!box) return false;
+      const items = [...box.querySelectorAll("li a")].map((a) => a.textContent);
+      return items.join("|") === "KPS 연동 정책|Ctrl.R 방문자 초대";
+    }), await page.$$eval(".ss-srcs li a", (e) => e.map((x) => x.textContent)));
+    check("죽은 키는 각주를 안 달고 콘솔로 말한다",
+      (await page.locator(".ss-ref a").count()) === 3 && rWarns.some((t) => t.indexOf('ref "ghost"') >= 0),
+      rWarns.slice(-2));
+
+    /* 글자를 고쳐도 ref 는 산다 */
+    await page.click('.ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.type(" (고침)");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    check("줄을 고쳐도 ref 가 설정에 남는다", await page.evaluate(() => {
+      const t = window.ScreenSpec.serialize();
+      return t.indexOf('ref: "kps"') >= 0 && t.indexOf("(고침)") >= 0 && /sources:/.test(t);
+    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 260));
+
+    /* PNG — 번호와 출처 절이 그림에 같이 실린다 */
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    await page.evaluate(() => (document.querySelector("#ss-prTable").checked = true));
+    await page.click('[data-pr="go"]');
+    await page.waitForTimeout(1200);
+    const rcap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
+    check("PNG 조립물에 위첨자 번호 + 「출처」 절이 실린다 (#100)",
+      rcap.indexOf("ss-pr-ref") >= 0 && rcap.indexOf("ss-pr-srcs") >= 0 && rcap.indexOf("KPS 연동 정책") >= 0,
+      rcap.slice(-200));
+    await page.click('[data-pr="cancel"]');
+    page.off("console", onRW);
+  }
+
   /* ============ 머메이드 블록 (#98) ============
      순서도 «코드» 를 블록으로 담는다 — 원본이 하나이고 목적지마다 그쪽 뷰어가 그린다.
      mermaid.js 는 그 블록이 있는 문서에서만 CDN 지연 로드. 여기서는 네트워크를 안 탄다 —
