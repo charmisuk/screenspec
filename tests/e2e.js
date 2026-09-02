@@ -1101,6 +1101,37 @@ function check(name, ok, detail) {
       return a.getAttribute("href") === "https://example.com/kps" && a.target === "_blank" &&
         a.getAttribute("title") === "KPS 연동 정책";
     }));
+    /* 보이는 건 9px 숫자지만 «누르는 상자» 는 커야 한다 — 특히 폰 (PM 2026-09-02) */
+    check("클릭 상자가 글자보다 크다 (높이 ≥ 16px)", await page.evaluate(() => {
+      const r = document.querySelector(".ss-ref a").getBoundingClientRect();
+      return r.height >= 16 && r.width >= 12;
+    }), await page.evaluate(() => { const r = document.querySelector(".ss-ref a").getBoundingClientRect(); return Math.round(r.width) + "×" + Math.round(r.height); }));
+    /* 각주는 그 «글자에» 붙어야 한다 — 줄 오른쪽 끝으로 밀리면 무엇의 근거인지 안 보인다 */
+    check("각주가 글자 바로 뒤에 붙는다 (줄 끝으로 안 밀린다)", await page.evaluate(() => {
+      const blk = document.querySelector(".ss-b .ss-ref").closest(".ss-b");
+      const txt = blk.querySelector(".ss-dt");
+      const sup = blk.querySelector(".ss-ref").getBoundingClientRect();
+      const rng = document.createRange();
+      rng.selectNodeContents(txt.firstChild || txt);
+      const end = rng.getBoundingClientRect().right; /* 글자가 끝나는 자리 */
+      return sup.left - end < 24 && blk.getBoundingClientRect().right - sup.right > 40;
+    }), await page.evaluate(() => {
+      const blk = document.querySelector(".ss-b .ss-ref").closest(".ss-b");
+      const sup = blk.querySelector(".ss-ref").getBoundingClientRect();
+      return "블록우 " + Math.round(blk.getBoundingClientRect().right) + " · 각주우 " + Math.round(sup.right);
+    }));
+    /* 각주는 위젯이다 — 사람의 글이 아니므로 저장 텍스트에 절대 섞이면 안 된다 */
+    check("각주가 저장 텍스트에 안 섞인다 (여러 번 고쳐도)", await page.evaluate(async () => {
+      const cell = document.querySelector('.ss-dt[data-ed="b"][data-di="0"]');
+      for (let i = 0; i < 2; i++) {
+        cell.click();
+        await new Promise((r) => setTimeout(r, 60));
+        document.body.click();
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      const t = window.ScreenSpec.serialize();
+      return t.indexOf('t: "형식을 검사하지 않음"') >= 0 && t.indexOf("않음1") < 0;
+    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 220));
     check("화면 발치에 「출처」 목록 — 이 화면이 무엇에 근거하나", await page.evaluate(() => {
       const box = document.querySelector(".ss-srcs");
       if (!box) return false;

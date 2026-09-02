@@ -329,6 +329,9 @@
   function richIn(el) {
     const box = document.createElement("div");
     box.innerHTML = el.innerHTML;
+    /* 각주는 우리가 심은 «위젯» 이지 사람이 친 글이 아니다 (#100) — 저장 텍스트에 섞이면
+       고칠 때마다 번호가 글자로 눌러앉는다. 읽기 전에 걷어낸다 (노션의 인라인 멘션과 같은 수법) */
+    box.querySelectorAll(".ss-ref").forEach((n) => n.remove());
     box.querySelectorAll("b,strong,i,em,u,span,font,div,p,br").forEach((n) => {
       const t = n.tagName;
       if (t === "B" || t === "STRONG") { const w = document.createElement("strong"); w.innerHTML = n.innerHTML; n.replaceWith(w); return; }
@@ -789,9 +792,15 @@
      (이미 있는 「전부 삭제」 규칙과 같다) */
   .ss-blkmenu button{color:var(--ss-ink2)}
   .ss-blkmenu button:hover{background:color-mix(in srgb,#E0522F 8%,#fff);color:#E0522F}
-  .ss-ref{font-size:9px;line-height:1;margin-left:2px;vertical-align:super}
-  .ss-ref a{color:var(--ss-accent);text-decoration:none;font-weight:800}
-  .ss-ref a:hover{text-decoration:underline}
+  /* 각주 (#100) — 글자 «바로 뒤» 에 붙는다. 액센트 파랑은 마커·활성 표시가 쓰는 색이라
+     각주가 그걸 흉내 내면 위계가 무너진다: 평소엔 조용하고 얹었을 때만 액센트로 (노션의 인라인 링크와 같은 결).
+     보이는 건 숫자 하나지만 «누르는 상자» 는 키운다 (PM 2026-09-02) — 9px 글자를 그대로
+     누르게 하면 특히 폰에서 못 맞춘다. 안쪽 여백으로 늘리고 음수 여백으로 줄 간격을 상쇄한다 */
+  .ss-ref{font-size:9.5px;line-height:1;vertical-align:super;user-select:none}
+  .ss-ref a{display:inline-block;color:var(--ss-ink3);text-decoration:none;font-weight:800;
+    padding:5px 4px;margin:-5px -2px;border-radius:7px}
+  .ss-ref a:hover{color:var(--ss-accent);background:var(--ss-accent-soft)}
+  @media(pointer:coarse){.ss-ref a{padding:8px 6px;margin:-8px -4px}}
   .ss-srcs{margin:14px 4px 6px;padding-top:9px;border-top:1px solid var(--ss-line);font-size:11.5px;color:var(--ss-ink2)}
   .ss-srcs-t{font-weight:800;font-size:10.5px;color:var(--ss-ink3);letter-spacing:.03em;margin-bottom:4px}
   .ss-srcs ol{margin:0;padding-left:18px}
@@ -1250,10 +1259,19 @@ ${HL_CSS}
   }
   /* 본문 침범은 위첨자 한 글자다 — 누르면 원본으로 간다 */
   function refSupHTML(d) {
-    if (!d || !d.ref || !SOURCES || !SOURCES[d.ref] || !refNos[d.ref]) return "";
-    const src = SOURCES[d.ref];
-    return '<sup class="ss-ref"><a href="' + esc(src.href) + '" target="_blank" rel="noopener" title="' +
-      esc(src.label) + '">' + refNos[d.ref] + "</a></sup>";
+    return d && d.ref ? refSupOf(d.ref) : "";
+  }
+  function refSupOf(key) {
+    if (!SOURCES || !SOURCES[key] || !refNos[key]) return "";
+    const src = SOURCES[key];
+    return '<sup class="ss-ref" contenteditable="false"><a href="' + esc(src.href) +
+      '" target="_blank" rel="noopener" title="' + esc(src.label) + '">' + refNos[key] + "</a></sup>";
+  }
+  /* 글자를 고치고 나면 그 칸을 다시 칠하는데(innerHTML), 그때 각주가 같이 지워진다 — 도로 붙인다 */
+  function refRepaint(el) {
+    if (!el || !el.dataset || !el.dataset.ref || el.querySelector(".ss-ref")) return;
+    const html = refSupOf(el.dataset.ref);
+    if (html) el.insertAdjacentHTML("beforeend", html);
   }
   /* 화면 발치의 «이 화면이 무엇에 근거하나» — 그 자체로 쓸모가 있다 (#100) */
   function refBlockHTML() {
@@ -1307,7 +1325,8 @@ ${HL_CSS}
     return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
       edGut("b", di) +
       (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' : "") +
-      '<span class="ss-dt"' + edMark("b", di) + ">" + rich(d.t) + "</span>" + refSupHTML(d) + "</div>";
+      '<span class="ss-dt"' + edMark("b", di) + (d.ref ? ' data-ref="' + esc(d.ref) + '"' : "") + ">" +
+      rich(d.t) + refSupHTML(d) + "</span></div>";
   }
   function blocksHTML(defs, want) {
     return flatten(defs, want).map(blockHTML).join("");
@@ -2956,6 +2975,7 @@ ${HL_CSS}
       const next = richIn(el); /* <b>→<strong> 정규화 + 허용 목록 밖 서식 제거 (#44) */
       if (!commit || next === edWas) {
         el.innerHTML = rich(edWas);
+        refRepaint(el); /* 다시 칠하면서 각주가 지워졌다 — 도로 붙인다 (#100) */
         /* 갓 만든 빈 줄에서 그냥 빠져나오면 «안 쓰기로 한 것» 이다 — 빈 껍데기를 남기지 않는다 (0-6).
            el.isConnected 를 보는 이유: 다시 그리면 옛 요소가 떨어져 나간 채 여기로 오는데,
            그건 사용자가 그만둔 게 아니라 우리가 화면을 갈아 끼운 것이다 (그걸 «취소» 로 읽으면 방금 만든 줄을 지운다) */
@@ -2963,7 +2983,7 @@ ${HL_CSS}
         return;
       }
       const it = itemOf(edKeyOf(el));
-      if (!it) { el.innerHTML = rich(edWas); return; }
+      if (!it) { el.innerHTML = rich(edWas); refRepaint(el); return; }
       const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di);
       let redraw = false;
       edSnapOnce();
@@ -2983,7 +3003,7 @@ ${HL_CSS}
       edTouched();
       /* 화면을 «저장된 형태» 로 맞춘다 — 브라우저는 굵게를 <b> 로 만드는데 우리가 담는 것은 <strong> 이다.
          여기서 안 맞추면 눈에 보이는 것과 저장된 것이 갈라진 채 다음 편집이 시작된다 (#44) */
-      if (!redraw && el.isConnected && el.innerHTML !== rich(next)) el.innerHTML = rich(next);
+      if (!redraw && el.isConnected && richIn(el) !== next) { el.innerHTML = rich(next); refRepaint(el); }
       if (redraw) render();
     }
 
