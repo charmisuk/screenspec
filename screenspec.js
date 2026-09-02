@@ -454,7 +454,7 @@
   .ss-ui button{flex:none}
   .ss-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
-  .ss-modes{display:flex;border:1px solid var(--ss-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
+  .ss-modes{display:flex;flex-shrink:0;border:1px solid var(--ss-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
   .ss-modes button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;color:var(--ss-ink2)}
   .ss-modes button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
   .ss-widthsim{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ss-ink2)}
@@ -462,7 +462,29 @@
   .ss-widthsim .ss-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
   .ss-widthsim .ss-seg button[aria-pressed="true"]{background:#fff;color:var(--ss-ink);box-shadow:0 1px 2px rgba(17,24,39,.12)}
   .ss-wpx{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);min-width:52px;text-align:right}
+  .ss-tools{display:flex;align-items:center;gap:14px}
+  .ss-more{display:none;position:relative;width:34px;height:32px;flex-shrink:0;margin-left:auto;
+    border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);border-radius:8px;
+    font-size:16px;font-weight:800;line-height:1;align-items:center;justify-content:center}
+  .ss-more::after{content:"";position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;display:none}
   @media(max-width:640px){.ss-wpx{display:none}}
+  /* 폰 폭 (#94, PM 2026-09-01) — 툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다.
+     좁은 폭에서는 ① 폭 시뮬레이터를 숨긴다: 진짜 폰에서는 자기 화면이 곧 기기다 (v0.19.2 와 같은 논리)
+     ② 도구(저장·복사·내보내기·상태)는 「⋯」 하나로 접는다 — 노션이 모바일에서 하는 방식 */
+  @media(max-width:640px){
+    .ss-toolbar{gap:10px;padding:0 12px}
+    .ss-toolbar .ss-widthsim{display:none}
+    .ss-toolbar .ss-more{display:inline-flex}
+    .ss-toolbar .ss-tools{display:none;position:fixed;top:56px;right:10px;z-index:9030;
+      flex-direction:column;align-items:stretch;gap:8px;background:#fff;border:1px solid var(--ss-line2);
+      border-radius:12px;padding:10px;box-shadow:0 12px 32px rgba(17,24,39,.16)}
+    .ss-toolbar.ss-tools-open .ss-tools{display:flex}
+    .ss-toolbar .ss-tools .ss-headbtn{padding:9px 14px;text-align:center}
+    .ss-toolbar .ss-tools .ss-savest{justify-content:center}
+    /* 접힌 동안에도 «봐야 할 상태» 는 점 하나로 — 미저장(호박)·멈춤(주황) */
+    .ss-toolbar.ss-save-busy .ss-more::after{display:block;background:#B8862B}
+    .ss-toolbar.ss-save-warn .ss-more::after{display:block;background:#E0522F}
+  }
   .ss-proto-wrap{padding:74px 16px 60px;overflow-x:auto}
   body.ss-mode-doc .ss-proto-wrap{display:none}
   .ss-holder{margin:0 auto;width:max-content}
@@ -2227,28 +2249,50 @@ ${HL_CSS}
     /* 내보내기 진입점은 «화면 단위» 동작이 모이는 자리에 둔다 — 툴바(wrap)·모드 알약(overlay) */
     function prMount(box) {
       if (!box) return;
+      let home = box;
+      if (box.classList && box.classList.contains("ss-toolbar")) {
+        /* 폰 폭에서 도구를 접을 수 있으려면 도구가 «한 상자» 여야 한다 (#94).
+           넓은 폭에서는 상자가 투명하다 — 간격·순서가 전과 같다 */
+        const more = h("button", { class: "ss-more ss-ui", type: "button",
+          title: "도구", "aria-label": "도구 열기", "aria-expanded": "false" }, "⋯");
+        home = h("div", { class: "ss-tools ss-ui" });
+        more.onclick = (e) => {
+          e.stopPropagation();
+          const on = box.classList.toggle("ss-tools-open");
+          more.setAttribute("aria-expanded", on ? "true" : "false");
+        };
+        /* 바깥을 누르면 닫는다 — 메뉴의 기본 예의 */
+        document.addEventListener("click", (e) => {
+          if (!box.classList.contains("ss-tools-open")) return;
+          if (e.target && e.target.closest && e.target.closest(".ss-toolbar")) return;
+          box.classList.remove("ss-tools-open");
+          more.setAttribute("aria-expanded", "false");
+        });
+        box.appendChild(more);
+        box.appendChild(home);
+      }
       /* 저장은 툴바로 (#58) — 패널 머리는 «쓰는 자리» 라 서식이 온다.
          고친 것을 어디에 남길지는 문서 전체에 대한 일이므로 위가 맞다.
          상태(자동저장 꺼짐·저장 중·저장됨)를 «오른쪽 위» 에 늘 띄운다 (PM 2026-08-29) */
       if (!READONLY) {
         edStat = h("span", { class: "ss-savest ss-ui" });
-        box.appendChild(edStat);
+        home.appendChild(edStat);
         const sv = h("button", { class: "ss-headbtn ss-svbtn ss-ui", type: "button" }, "저장");
         edSvBtn = sv;
         sv.onclick = () => {
           if (edHook() || typeof window.showOpenFilePicker === "function") edSaveFile();
           else edSaveDownload();
         };
-        box.appendChild(sv);
+        home.appendChild(sv);
         edSync();
         const cp = h("button", { class: "ss-headbtn ss-ui", type: "button",
           title: "지금까지 쓴 기능 설명을 통째로 복사합니다 (자동저장이 안 되는 브라우저용)" }, "설명 복사");
         cp.onclick = edCopyBlock;
-        box.appendChild(cp);
+        home.appendChild(cp);
       }
       const b = h("button", { class: "ss-headbtn ss-prbtn ss-ui", type: "button" }, "내보내기");
       b.onclick = printOpen;
-      box.appendChild(b);
+      home.appendChild(b);
     }
 
     /* 레이어 필터 (#38) — 리뷰어는 기획만, 개발자는 개발만. 기본은 전체 */
@@ -2442,6 +2486,12 @@ ${HL_CSS}
       else { cls += " ss-st-on"; txt = "저장됨" + (edSavedAt ? " · " + edSavedAt : ""); }
       edStat.className = cls;
       edStat.textContent = txt;
+      /* 접힌 툴바(폰)에서는 상태 글줄이 안 보인다 — «봐야 할» 상태만 ⋯ 위 점으로 (#94) */
+      const tb = edStat.closest && edStat.closest(".ss-toolbar");
+      if (tb) {
+        tb.classList.toggle("ss-save-warn", cls.indexOf("ss-st-warn") >= 0);
+        tb.classList.toggle("ss-save-busy", cls.indexOf("ss-st-warn") < 0 && (edDirty || edSaving));
+      }
       if (edSvBtn) {
         const can = edCanWrite();
         edSvBtn.textContent = can ? "저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");

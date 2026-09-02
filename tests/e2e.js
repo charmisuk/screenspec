@@ -929,6 +929,59 @@ function check(name, ok, detail) {
       await page.evaluate(() => window.__calls || 0));
   }
 
+  /* ============ 폰 폭에서 툴바가 접힌다 (#94) ============
+     툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다 — 폰에서는
+     문서 모드에 들어갈 수조차 없었다. 좁은 폭: 폭 시뮬레이터 숨김 + 도구는 ⋯ 로. */
+  if (sec("[모바일] 폰 폭에서 툴바가 접힌다 (#94)")) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
+    await page.waitForTimeout(600);
+    check("«화면정의서» 버튼이 다른 버튼 아래 깔리지 않는다", await page.evaluate(() => {
+      const b = document.getElementById("ss-mDoc"), r = b.getBoundingClientRect();
+      const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+      return hit === b || b.contains(hit);
+    }));
+    check("폭 시뮬레이터는 숨는다 — 자기 화면이 곧 기기다", await page.evaluate(() => {
+      const w = document.querySelector(".ss-widthsim");
+      return !w || !w.getClientRects().length;
+    }));
+    check("보이는 툴바 요소가 화면 밖으로 안 잘린다", await page.evaluate(() =>
+      [...document.querySelectorAll(".ss-toolbar *")].every((el) => {
+        if (!el.getClientRects().length) return true;
+        const r = el.getBoundingClientRect();
+        return r.right <= innerWidth + 1 && r.left >= -1;
+      })));
+    check("도구는 ⋯ 뒤로 접힌다 (개별 버튼 비표시)", await page.evaluate(() => {
+      const more = document.querySelector(".ss-more");
+      const sv = document.querySelector(".ss-svbtn");
+      return !!more && more.getClientRects().length > 0 && sv && !sv.getClientRects().length;
+    }));
+    await page.click(".ss-more");
+    await page.waitForTimeout(200);
+    check("⋯ 를 누르면 도구가 펼쳐진다", await page.evaluate(() => {
+      const sv = document.querySelector(".ss-svbtn"), pr = document.querySelector(".ss-prbtn");
+      return sv && sv.getClientRects().length > 0 && pr && pr.getClientRects().length > 0;
+    }));
+    await page.click("body", { position: { x: 200, y: 500 } });
+    await page.waitForTimeout(200);
+    check("바깥을 누르면 닫힌다", await page.evaluate(() =>
+      !document.querySelector(".ss-toolbar").classList.contains("ss-tools-open")));
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    check("폰 폭에서 문서 모드 전환이 «탭으로» 된다", await page.evaluate(() =>
+      document.body.classList.contains("ss-mode-doc")));
+    /* 넓은 폭으로 돌아오면 전과 같다 */
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(300);
+    check("넓은 폭: ⋯ 는 없고 도구가 한 줄로 보인다", await page.evaluate(() => {
+      const more = document.querySelector(".ss-more");
+      const pr = document.querySelector(".ss-prbtn");
+      const w = document.querySelector(".ss-widthsim .ss-seg");
+      return more && !more.getClientRects().length && pr && pr.getClientRects().length > 0 &&
+        w && w.getClientRects().length > 0;
+    }));
+  }
+
   /* ============ 슬래시는 아무 데서나 열린다 (#85) ============
      빈 줄에서만 열리던 것을 노션과 맞춘다 — 글자 뒤에 쳐도 그 자리에서 열리고,
      고르면 «/» 와 그 뒤에 친 글자가 사라진다. 안 걸리면 그냥 글자다. */
