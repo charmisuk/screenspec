@@ -1120,18 +1120,7 @@ function check(name, ok, detail) {
       const sup = blk.querySelector(".ss-ref").getBoundingClientRect();
       return "블록우 " + Math.round(blk.getBoundingClientRect().right) + " · 각주우 " + Math.round(sup.right);
     }));
-    /* 각주는 위젯이다 — 사람의 글이 아니므로 저장 텍스트에 절대 섞이면 안 된다 */
-    check("각주가 저장 텍스트에 안 섞인다 (여러 번 고쳐도)", await page.evaluate(async () => {
-      const cell = document.querySelector('.ss-dt[data-ed="b"][data-di="0"]');
-      for (let i = 0; i < 2; i++) {
-        cell.click();
-        await new Promise((r) => setTimeout(r, 60));
-        document.body.click();
-        await new Promise((r) => setTimeout(r, 120));
-      }
-      const t = window.ScreenSpec.serialize();
-      return t.indexOf('t: "형식을 검사하지 않음"') >= 0 && t.indexOf("않음1") < 0;
-    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 220));
+
     check("화면 발치에 「출처」 목록 — 이 화면이 무엇에 근거하나", await page.evaluate(() => {
       const box = document.querySelector(".ss-srcs");
       if (!box) return false;
@@ -1142,16 +1131,23 @@ function check(name, ok, detail) {
       (await page.locator(".ss-ref a").count()) === 3 && rWarns.some((t) => t.indexOf('ref "ghost"') >= 0),
       rWarns.slice(-2));
 
-    /* 글자를 고쳐도 ref 는 산다 */
-    await page.click('.ss-dt[data-ed="b"][data-di="0"]');
-    await page.keyboard.press("End");
-    await page.keyboard.type(" (고침)");
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
-    check("줄을 고쳐도 ref 가 설정에 남는다", await page.evaluate(() => {
+    /* 글자를 «실제로 쳐서» 저장까지 간다 — 안 치고 나오면 「안 바뀜」 으로 빠져나가 저장이 안 일어난다.
+       각주는 위젯이라 사람의 글에 절대 섞이면 안 된다: 섞이면 고칠 때마다 번호가 눌러앉는다 */
+    for (let i = 0; i < 2; i++) {
+      await page.click('.ss-dt[data-ed="b"][data-di="0"]');
+      await page.keyboard.press("End");
+      await page.keyboard.type("!");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+    }
+    check("두 번 고쳐도 각주가 글자에 안 섞인다 · ref 는 산다", await page.evaluate(() => {
       const t = window.ScreenSpec.serialize();
-      return t.indexOf('ref: "kps"') >= 0 && t.indexOf("(고침)") >= 0 && /sources:/.test(t);
-    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 260));
+      return t.indexOf('t: "형식을 검사하지 않음!!"') >= 0 && t.indexOf('ref: "kps"') >= 0 && /sources:/.test(t);
+    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 300));
+    check("고친 뒤에도 각주가 화면에 그대로 붙어 있다", await page.evaluate(() => {
+      const blk = document.querySelector('.ss-dt[data-ed="b"][data-di="0"]');
+      return !!blk.querySelector(".ss-ref a") && blk.querySelector(".ss-ref a").textContent === "1";
+    }));
 
     /* PNG — 번호와 출처 절이 그림에 같이 실린다 */
     await page.click(".ss-prbtn");
