@@ -278,6 +278,11 @@
     return out + "</div>";
   }
 
+  /* 추론해 세운 화면 컨테이너 (#67). 옛 판이 저장한 파일에는 «_rootEl: {}» 이 들어 있을 수 있어
+     (파생값이 파일로 새던 버그, 2026-09-02 고침) 요소가 아닌 것은 «없는 것» 으로 본다 —
+     안 그러면 style 을 만지는 자리에서 예외가 나 화면 전환·렌더가 통째로 죽는다 */
+  const rootElOf = (o) => (o && o._rootEl && o._rootEl.nodeType === 1 ? o._rootEl : null);
+
   /* 사용자 텍스트는 전부 이걸 거쳐 innerHTML에 들어간다 */
   function esc(x) {
     return String(x == null ? "" : x)
@@ -370,7 +375,10 @@
   }
   function ssKey(k) { return /^[A-Za-z_$][\w$]*$/.test(k) ? k : ssStr(k); }
   function ssKeys(o) {
-    const ks = Object.keys(o).filter((k) => o[k] !== undefined && typeof o[k] !== "function");
+    /* «_» 로 시작하는 것은 우리가 부팅 때 계산해 붙인 파생값이다 (sc._rootEl 등) — 파일에 나가면 안 된다.
+       나가면 두 가지가 깨진다: ① 사람이 안 쓴 필드가 설정에 생기고 ② 다시 열 때 DOM 요소 자리에
+       «빈 객체» 가 앉아 화면 전환이 그 자리에서 죽는다 (2026-09-02 실측, #67 의 약속 위반) */
+    const ks = Object.keys(o).filter((k) => o[k] !== undefined && typeof o[k] !== "function" && k.charAt(0) !== "_");
     const orig = {};
     ks.forEach((k, i) => (orig[k] = i));
     return ks.slice().sort((a, b) => {
@@ -796,11 +804,15 @@
      각주가 그걸 흉내 내면 위계가 무너진다: 평소엔 조용하고 얹었을 때만 액센트로 (노션의 인라인 링크와 같은 결).
      보이는 건 숫자 하나지만 «누르는 상자» 는 키운다 (PM 2026-09-02) — 9px 글자를 그대로
      누르게 하면 특히 폰에서 못 맞춘다. 안쪽 여백으로 늘리고 음수 여백으로 줄 간격을 상쇄한다 */
-  .ss-ref{font-size:9.5px;line-height:1;vertical-align:super;user-select:none}
-  .ss-ref a{display:inline-block;color:var(--ss-ink3);text-decoration:none;font-weight:800;
-    padding:5px 4px;margin:-5px -2px;border-radius:7px}
-  .ss-ref a:hover{color:var(--ss-accent);background:var(--ss-accent-soft)}
-  @media(pointer:coarse){.ss-ref a{padding:8px 6px;margin:-8px -4px}}
+  .ss-ref{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:4px;max-width:44%;
+    color:var(--ss-ink3);text-decoration:none;font-size:10.5px;line-height:1.5;
+    padding:3px 7px;margin-right:-4px;border-radius:7px;user-select:none}
+  .ss-ref:hover{color:var(--ss-accent);background:var(--ss-accent-soft)}
+  .ss-ref-n{flex:none;font-weight:800;font-family:var(--ss-mono);font-size:9.5px;
+    border:1px solid currentColor;border-radius:4px;padding:0 3px;line-height:1.5;opacity:.7}
+  .ss-ref-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media(max-width:520px){.ss-ref-l{display:none}}
+  .ss-defs[style*="--ss-panel-w"] .ss-ref{max-width:44%}
   .ss-srcs{margin:14px 4px 6px;padding-top:9px;border-top:1px solid var(--ss-line);font-size:11.5px;color:var(--ss-ink2)}
   .ss-srcs-t{font-weight:800;font-size:10.5px;color:var(--ss-ink3);letter-spacing:.03em;margin-bottom:4px}
   .ss-srcs ol{margin:0;padding-left:18px}
@@ -1264,14 +1276,11 @@ ${HL_CSS}
   function refSupOf(key) {
     if (!SOURCES || !SOURCES[key] || !refNos[key]) return "";
     const src = SOURCES[key];
-    return '<sup class="ss-ref" contenteditable="false"><a href="' + esc(src.href) +
-      '" target="_blank" rel="noopener" title="' + esc(src.label) + '">' + refNos[key] + "</a></sup>";
-  }
-  /* 글자를 고치고 나면 그 칸을 다시 칠하는데(innerHTML), 그때 각주가 같이 지워진다 — 도로 붙인다 */
-  function refRepaint(el) {
-    if (!el || !el.dataset || !el.dataset.ref || el.querySelector(".ss-ref")) return;
-    const html = refSupOf(el.dataset.ref);
-    if (html) el.insertAdjacentHTML("beforeend", html);
+    /* 줄 «오른쪽 끝» 에 선다 (PM 2026-09-02: 글자에 바로 붙이니 애매하다).
+       거기서는 숫자 하나만으로는 무엇인지 모르므로 이름을 같이 보여 준다 — 좁으면 이름이 접히고 번호가 남는다 */
+    return '<a class="ss-ref" href="' + esc(src.href) + '" target="_blank" rel="noopener" title="' +
+      esc(src.label) + '"><span class="ss-ref-n">' + refNos[key] + '</span>' +
+      '<span class="ss-ref-l">' + esc(src.label) + "</span></a>";
   }
   /* 화면 발치의 «이 화면이 무엇에 근거하나» — 그 자체로 쓸모가 있다 (#100) */
   function refBlockHTML() {
@@ -1325,8 +1334,7 @@ ${HL_CSS}
     return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
       edGut("b", di) +
       (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' : "") +
-      '<span class="ss-dt"' + edMark("b", di) + (d.ref ? ' data-ref="' + esc(d.ref) + '"' : "") + ">" +
-      rich(d.t) + refSupHTML(d) + "</span></div>";
+      '<span class="ss-dt"' + edMark("b", di) + ">" + rich(d.t) + "</span>" + refSupHTML(d) + "</div>";
   }
   function blocksHTML(defs, want) {
     return flatten(defs, want).map(blockHTML).join("");
@@ -1453,8 +1461,8 @@ ${HL_CSS}
     /* 라우트 없는 root 화면 중 실제로 보이는 것 — 여럿이면 문서 순서상 마지막 */
     let top = null, topEl = null;
     SCREENS.forEach((sc) => {
-      if ((!sc.root && !sc._rootEl) || sc.route) return;
-      const el = sc._rootEl || doc.querySelector(sc.root);
+      if ((!sc.root && !rootElOf(sc)) || sc.route) return;
+      const el = rootElOf(sc) || doc.querySelector(sc.root);
       if (!el || el.getClientRects().length === 0) return;
       if (!top || (topEl.compareDocumentPosition(el) & 4 /* DOCUMENT_POSITION_FOLLOWING */)) { top = sc; topEl = el; }
     });
@@ -1492,7 +1500,7 @@ ${HL_CSS}
     function rootEl() {
       const d = appDoc();
       if (!current) return d;
-      return current._rootEl || (current.root ? d.querySelector(current.root) || d : d);
+      return rootElOf(current) || (current.root ? d.querySelector(current.root) || d : d);
     }
     /* 요소를 찾는 길이 둘이다 (2026-08-30).
          ① 이름표 data-spec — 원래의 길
@@ -1717,9 +1725,10 @@ ${HL_CSS}
        앱 DOM을 건드리므로 wrap 전용(ctx.toggleRoot)이며, overlay는 앱 DOM을 소유하지 않는다. */
     function showRoot(sc) {
       SCREENS.forEach((o) => {
-        if (!o.root && !o._rootEl) return;
-        const el = o._rootEl || appDoc().querySelector(o.root);
-        if (el) el.style.display = o === sc ? "" : "none";
+        const own = rootElOf(o);
+        if (!o.root && !own) return;
+        const el = own || appDoc().querySelector(o.root);
+        if (el && el.style) el.style.display = o === sc ? "" : "none";
       });
     }
     /* 프로토타입에 «연결» 되지 않은 화면 — root 도 route 도 없으면 목차에서 골라도
@@ -1739,6 +1748,7 @@ ${HL_CSS}
     let rootsTold = false;
     function ensureRoots() {
       if (SCREENS.length < 2) return;
+      SCREENS.forEach((sc) => { if (sc._rootEl && sc._rootEl.nodeType !== 1) delete sc._rootEl; }); /* 오염된 값 청소 */
       const open = () => SCREENS.filter((sc) => !sc.root && !sc._rootEl && !sc.route);
       if (!open().length) return;
       const d = appDoc(), guess = new Map();
@@ -1764,19 +1774,19 @@ ${HL_CSS}
           " · 목차에서 골라도 설명만 바뀌고 화면은 그대로다. 각 화면을 감싸는 요소를 root 로 적어라 (예: root: '#screen-home')");
       }
     }
-    const unwired = (sc) => SCREENS.length > 1 && !sc.route && !sc.root && !sc._rootEl;
+    const unwired = (sc) => SCREENS.length > 1 && !sc.route && !sc.root && !rootElOf(sc);
     /* 정의서 모드에서는 «지금 설명하는 화면» 만 보인다 (#75).
        우리가 세운 화면(_rootEl)에만 적용한다 — root 를 적은 화면은 프로토타입이 스스로 관리하는 것이다.
        프로토타입 모드로 돌아가면 원래 모습 그대로 되돌린다: 우리가 숨긴 것을 우리가 되살린다 */
     let soloOn = false;
     function soloRoots(on) {
       if (ctx.toggleRoot !== true) return;
-      const made = SCREENS.filter((sc) => sc._rootEl);
+      const made = SCREENS.filter(rootElOf);
       if (made.length < 2) return;
       if (on) {
         made.forEach((sc) => { if (sc._rootWas === undefined) sc._rootWas = sc._rootEl.style.display; });
         soloOn = true;
-        showRoot(current && current._rootEl ? current : made[0]);
+        showRoot(current && rootElOf(current) ? current : made[0]);
         return;
       }
       if (!soloOn) return;
@@ -1790,7 +1800,7 @@ ${HL_CSS}
       const next = SCREENS.find((s) => s.id === id);
       if (!next) return;
       /* 라우트 없는 root 화면은 앱 화면도 같이 전환해야 화면 감지가 되돌리지 않는다 (wrap 한정) */
-      if ((next.root || next._rootEl) && !next.route && ctx.toggleRoot === true) showRoot(next);
+      if ((next.root || rootElOf(next)) && !next.route && ctx.toggleRoot === true) showRoot(next);
       else if (next.route) goRoute(next);
       setCurrent(next);
     }
@@ -2975,7 +2985,6 @@ ${HL_CSS}
       const next = richIn(el); /* <b>→<strong> 정규화 + 허용 목록 밖 서식 제거 (#44) */
       if (!commit || next === edWas) {
         el.innerHTML = rich(edWas);
-        refRepaint(el); /* 다시 칠하면서 각주가 지워졌다 — 도로 붙인다 (#100) */
         /* 갓 만든 빈 줄에서 그냥 빠져나오면 «안 쓰기로 한 것» 이다 — 빈 껍데기를 남기지 않는다 (0-6).
            el.isConnected 를 보는 이유: 다시 그리면 옛 요소가 떨어져 나간 채 여기로 오는데,
            그건 사용자가 그만둔 게 아니라 우리가 화면을 갈아 끼운 것이다 (그걸 «취소» 로 읽으면 방금 만든 줄을 지운다) */
@@ -2983,7 +2992,7 @@ ${HL_CSS}
         return;
       }
       const it = itemOf(edKeyOf(el));
-      if (!it) { el.innerHTML = rich(edWas); refRepaint(el); return; }
+      if (!it) { el.innerHTML = rich(edWas); return; }
       const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di);
       let redraw = false;
       edSnapOnce();
@@ -3003,7 +3012,7 @@ ${HL_CSS}
       edTouched();
       /* 화면을 «저장된 형태» 로 맞춘다 — 브라우저는 굵게를 <b> 로 만드는데 우리가 담는 것은 <strong> 이다.
          여기서 안 맞추면 눈에 보이는 것과 저장된 것이 갈라진 채 다음 편집이 시작된다 (#44) */
-      if (!redraw && el.isConnected && richIn(el) !== next) { el.innerHTML = rich(next); refRepaint(el); }
+      if (!redraw && el.isConnected && richIn(el) !== next) el.innerHTML = rich(next);
       if (redraw) render();
     }
 

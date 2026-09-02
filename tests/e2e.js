@@ -1059,6 +1059,47 @@ function check(name, ok, detail) {
       window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") < 0));
   }
 
+  /* ============ 파생값은 파일에 안 나간다 (#101) ============
+     추론해 세운 화면 컨테이너(_rootEl)가 저장 텍스트에 «_rootEl: {}» 으로 실려 나갔다.
+     그 파일을 다시 열면 요소가 아닌 빈 객체가 그 자리에 앉아 showRoot 가 예외를 던지고,
+     화면 전환·렌더가 통째로 죽는다 — 쓰던 사람에게는 «갑자기 되돌아간» 것으로 보인다. */
+  if (sec("[파생] _rootEl 이 파일로 새지 않는다 (#101)")) {
+    const two = '<div id="A"><h1 data-spec="1">A</h1><p data-spec="2">a</p></div>' +
+      '<div id="B"><h1 data-spec="3">B</h1><p data-spec="4">b</p></div>';
+    const cfg = (extra) => "<script>window.SCREENSPEC={mode:\"wrap\",screens:[" +
+      '{id:"S-01",name:"A",path:["A"]' + (extra || "") + ',specs:[{n:1,target:"1",title:"제목",defs:[{t:"정의"}]},{n:2,target:"2",title:"본문",defs:[{t:"정의"}]}]},' +
+      '{id:"S-02",name:"B",path:["B"],specs:[{n:1,target:"3",title:"제목",defs:[{t:"정의"}]},{n:2,target:"4",title:"본문",defs:[{t:"정의"}]}]}' +
+      "]}<\/script>";
+    await page.goto("about:blank");
+    await page.setContent(two + cfg(""));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    check("추론은 그대로 돈다 (_rootEl 이 진짜 요소다)", await page.evaluate(() =>
+      window.SCREENSPEC.screens.every((s) => s._rootEl && s._rootEl.nodeType === 1)));
+    check("저장 텍스트에 _rootEl 이 안 실린다", await page.evaluate(() =>
+      window.ScreenSpec.serialize().indexOf("_rootEl") < 0),
+      (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 200));
+
+    /* 옛 판이 이미 오염시킨 파일도 열려야 한다 — 요소가 아닌 값은 «없는 것» 으로 본다 */
+    const errs2 = [];
+    const onErr2 = (e) => errs2.push(String(e.message));
+    page.on("pageerror", onErr2);
+    await page.goto("about:blank");
+    await page.setContent(two + cfg(',_rootEl:{}'));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => window.ScreenSpec.setScreen("S-02"));
+    await page.waitForTimeout(400);
+    check("오염된 파일(_rootEl:{})에서도 화면 전환이 안 죽는다", errs2.length === 0, errs2.slice(0, 2));
+    check("오염된 값은 청소하고 추론을 다시 돌린다", await page.evaluate(() =>
+      window.SCREENSPEC.screens.every((s) => !s._rootEl || s._rootEl.nodeType === 1)));
+    check("그 뒤 저장은 깨끗하다", await page.evaluate(() =>
+      window.ScreenSpec.serialize().indexOf("_rootEl") < 0));
+    page.off("pageerror", onErr2);
+  }
+
   /* ============ 출처 각주 (#100) ============
      출처는 사전에 한 번, 줄은 ref 키만. 번호는 화면별 첫 등장 순서로 자동.
      낡은 문서를 최신으로 오인하는 사고가 실제로 셋 있었다 — 값 옆에 근거가 서는 것이 목적이다. */
@@ -1093,32 +1134,29 @@ function check(name, ok, detail) {
     await page.waitForTimeout(400);
 
     check("줄 끝에 각주가 선다 — 같은 출처는 같은 번호, 첫 등장 순서", await page.evaluate(() => {
-      const sups = [...document.querySelectorAll(".ss-ref a")].map((a) => a.textContent);
-      return sups.join("|") === "1|1|2";
-    }), await page.$$eval(".ss-ref a", (e) => e.map((x) => x.textContent)));
-    check("번호가 곧 링크다 (새 탭 · 원본 제목)", await page.evaluate(() => {
-      const a = document.querySelector(".ss-ref a");
+      const ns = [...document.querySelectorAll(".ss-ref .ss-ref-n")].map((a) => a.textContent);
+      return ns.join("|") === "1|1|2";
+    }), await page.$$eval(".ss-ref .ss-ref-n", (e) => e.map((x) => x.textContent)));
+    check("각주가 곧 링크다 (새 탭 · 이름까지 보인다)", await page.evaluate(() => {
+      const a = document.querySelector(".ss-ref");
       return a.getAttribute("href") === "https://example.com/kps" && a.target === "_blank" &&
-        a.getAttribute("title") === "KPS 연동 정책";
+        a.getAttribute("title") === "KPS 연동 정책" &&
+        a.querySelector(".ss-ref-l").textContent === "KPS 연동 정책";
     }));
-    /* 보이는 건 9px 숫자지만 «누르는 상자» 는 커야 한다 — 특히 폰 (PM 2026-09-02) */
-    check("클릭 상자가 글자보다 크다 (높이 ≥ 16px)", await page.evaluate(() => {
-      const r = document.querySelector(".ss-ref a").getBoundingClientRect();
-      return r.height >= 16 && r.width >= 12;
-    }), await page.evaluate(() => { const r = document.querySelector(".ss-ref a").getBoundingClientRect(); return Math.round(r.width) + "×" + Math.round(r.height); }));
-    /* 각주는 그 «글자에» 붙어야 한다 — 줄 오른쪽 끝으로 밀리면 무엇의 근거인지 안 보인다 */
-    check("각주가 글자 바로 뒤에 붙는다 (줄 끝으로 안 밀린다)", await page.evaluate(() => {
+    /* 클릭 상자는 손가락이 닿을 크기여야 한다 (PM 2026-09-02) */
+    check("클릭 상자가 손가락 크기다 (높이 ≥ 16px)", await page.evaluate(() => {
+      const r = document.querySelector(".ss-ref").getBoundingClientRect();
+      return r.height >= 16 && r.width >= 24;
+    }), await page.evaluate(() => { const r = document.querySelector(".ss-ref").getBoundingClientRect(); return Math.round(r.width) + "×" + Math.round(r.height); }));
+    /* 각주는 줄 «오른쪽 끝» 에 정렬된다 — 글자에 바로 붙으면 애매하다 (PM 2026-09-02) */
+    check("각주가 줄 오른쪽 끝에 정렬된다", await page.evaluate(() => {
       const blk = document.querySelector(".ss-b .ss-ref").closest(".ss-b");
-      const txt = blk.querySelector(".ss-dt");
-      const sup = blk.querySelector(".ss-ref").getBoundingClientRect();
-      const rng = document.createRange();
-      rng.selectNodeContents(txt.firstChild || txt);
-      const end = rng.getBoundingClientRect().right; /* 글자가 끝나는 자리 */
-      return sup.left - end < 24 && blk.getBoundingClientRect().right - sup.right > 40;
+      const a = blk.querySelector(".ss-ref").getBoundingClientRect();
+      return blk.getBoundingClientRect().right - a.right < 14;
     }), await page.evaluate(() => {
       const blk = document.querySelector(".ss-b .ss-ref").closest(".ss-b");
-      const sup = blk.querySelector(".ss-ref").getBoundingClientRect();
-      return "블록우 " + Math.round(blk.getBoundingClientRect().right) + " · 각주우 " + Math.round(sup.right);
+      const a = blk.querySelector(".ss-ref").getBoundingClientRect();
+      return "블록우 " + Math.round(blk.getBoundingClientRect().right) + " · 각주우 " + Math.round(a.right);
     }));
 
     check("화면 발치에 「출처」 목록 — 이 화면이 무엇에 근거하나", await page.evaluate(() => {
@@ -1128,7 +1166,7 @@ function check(name, ok, detail) {
       return items.join("|") === "KPS 연동 정책|Ctrl.R 방문자 초대";
     }), await page.$$eval(".ss-srcs li a", (e) => e.map((x) => x.textContent)));
     check("죽은 키는 각주를 안 달고 콘솔로 말한다",
-      (await page.locator(".ss-ref a").count()) === 3 && rWarns.some((t) => t.indexOf('ref "ghost"') >= 0),
+      (await page.locator(".ss-ref").count()) === 3 && rWarns.some((t) => t.indexOf('ref "ghost"') >= 0),
       rWarns.slice(-2));
 
     /* 글자를 «실제로 쳐서» 저장까지 간다 — 안 치고 나오면 「안 바뀜」 으로 빠져나가 저장이 안 일어난다.
@@ -1144,9 +1182,10 @@ function check(name, ok, detail) {
       const t = window.ScreenSpec.serialize();
       return t.indexOf('t: "형식을 검사하지 않음!!"') >= 0 && t.indexOf('ref: "kps"') >= 0 && /sources:/.test(t);
     }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 300));
-    check("고친 뒤에도 각주가 화면에 그대로 붙어 있다", await page.evaluate(() => {
-      const blk = document.querySelector('.ss-dt[data-ed="b"][data-di="0"]');
-      return !!blk.querySelector(".ss-ref a") && blk.querySelector(".ss-ref a").textContent === "1";
+    check("고친 뒤에도 각주가 화면에 그대로 있다", await page.evaluate(() => {
+      const blk = document.querySelector('.ss-dt[data-ed="b"][data-di="0"]').closest(".ss-b");
+      const n = blk.querySelector(".ss-ref .ss-ref-n");
+      return !!n && n.textContent === "1";
     }));
 
     /* PNG — 번호와 출처 절이 그림에 같이 실린다 */
