@@ -9,7 +9,7 @@
 
 | 경로 | 역할 |
 |---|---|
-| `screenspec.js` | 라이브러리 전부. 단일 파일, 의존성 0, 빌드 없음 |
+| `screenspec.js` | 라이브러리 전부. 단일 파일, 빌드 없음. **코어 의존성 0** — 예외는 딱 하나: 머메이드 블록(#98)을 쓴 문서만 `mermaid.js` 를 CDN 에서 지연 로드한다 (PM 결정 2026-09-02: 「이거 하나 정도는 의존성을 가져가는 게 맞다」). 번들에는 안 들어가므로 용량 lint 는 그대로다. 못 불러오면 코드 블록이 바닥 |
 | `SKILL.md` | AI가 남의 프로토타입에 적용할 때의 작업 지시서 |
 | `docs/config.md` | 설정 필드 전체의 단일 출처 |
 | `examples/*.html` | 실행 가능한 예제 겸 e2e 대상 |
@@ -122,7 +122,7 @@
 
 ```bash
 node tests/lint.js                 # 의존성 없음, 0초
-node tests/e2e.js --only <섹션>     # 건드린 섹션만. 목록은 --list (40개)
+node tests/e2e.js --only <섹션>     # 건드린 섹션만. 목록은 --list (41개)
 node scripts/mutate.js <id>        # 새 기능·수정을 넣었으면 그 돌연변이 하나
 ```
 

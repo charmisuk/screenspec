@@ -120,6 +120,14 @@
   <div class="card" data-spec="82"><b>초대 버튼</b><span>상태에 따라 문구가 바뀐다</span></div>
 </section>
 
+<!-- ══ QA-09 · 순서도 (#98, 실물 CDN) ══ -->
+<section class="scr" id="qa09">
+  <span class="tag">QA-09</span>
+  <h1 data-spec="95">순서도</h1>
+  <p class="sub">이 화면은 <b>진짜 CDN</b> 에서 mermaid.js 를 불러와 그린다. e2e 는 가짜로 재고, 실물은 여기서 본다.</p>
+  <div class="card" data-spec="96"><b>초대 버튼 상태 갈림</b><span>오른쪽 정의서에 순서도가 있다</span></div>
+</section>
+
 <script>
   /* 프로토타입 자신의 동작 — 정의서 모드에서도 이게 그대로 돌아야 한다 */
   (function () {
@@ -312,6 +320,21 @@ window.SCREENSPEC = {
         ]},
         { t: "「내보내기」 에서 «기능 설명 표» 를 켜고 뽑는다" },
         { t: "확인 : 그림 속 기능 설명 칸에도 이 표가 표로 들어간다" }
+      ]}
+    ]},
+    { id: "QA-09-MERMAID", name: "순서도", path: ["QA", "순서도"], specs: [
+      { n: 1, target: "95", anno: "box", title: "그려지는가 (실물 CDN)", defs: [
+        { t: "확인 : 아래 항목의 순서도가 «그림으로» 그려진다 (인터넷 연결 필요)", c: [
+          { t: "mermaid.js 는 이 블록이 있는 문서에서만 CDN 에서 지연 로드된다", kind: "why" }
+        ]},
+        { t: "네트워크를 끊고 새로고침한다" },
+        { t: "확인 : 그림 대신 코드 블록이 그대로 보인다 — 내용이 사라지지 않는다" }
+      ]},
+      { n: 2, target: "96", anno: "box", title: "초대 버튼 상태 갈림", defs: [
+        { t: "상태 우선순위 : 위에서 먼저 걸리는 것이 이긴다" },
+        { kind: "mermaid", code: "flowchart TD\n  A[계약 확인] -->|막힘| B[초대 불가]\n  A -->|통과| C[오류 건수]\n  C -->|있음| D[고치면 초대 가능]\n  C -->|없음| E[한도 확인]\n  E -->|초과| F[한도 초과 안내]\n  E -->|여유| G[정상 : N명 초대하기]" },
+        { t: "확인 : ⠿ 를 누르면 «삭제» 로 통째로 지워진다 (Ctrl+Z 로 되돌리기)" },
+        { t: "「내보내기」 로 뽑으면 그림 속에도 이 순서도가 들어간다" }
       ]}
     ]},
     { id: "QA-04-UNWIRED", name: "연결 안 된 화면", path: ["QA", "연결 안 된 화면"], specs: [

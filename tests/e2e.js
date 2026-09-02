@@ -1059,6 +1059,81 @@ function check(name, ok, detail) {
       window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") < 0));
   }
 
+  /* ============ 머메이드 블록 (#98) ============
+     순서도 «코드» 를 블록으로 담는다 — 원본이 하나이고 목적지마다 그쪽 뷰어가 그린다.
+     mermaid.js 는 그 블록이 있는 문서에서만 CDN 지연 로드. 여기서는 네트워크를 안 탄다 —
+     window.mermaid 가 있으면 로더가 CDN 을 안 부르므로 가짜를 먼저 심는다. 실물 CDN 은 QA-09. */
+  if (sec("[머메이드] 순서도 코드 블록 (#98)")) {
+    const MDOC = '<h1 id="t">홈</h1><button id="b" data-spec="1" style="margin:40px">초대</button>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-M',name:'홈'},specs:[{n:1,target:'1',title:'초대 버튼',defs:[" +
+      "{t:'상태 우선순위'}," +
+      "{kind:'mermaid',code:'graph TD; A-->B'}" +
+      "]}]};<" + "/script>";
+    /* ── 그려지는 길: 가짜 mermaid 가 svg 를 준다 ── */
+    await page.goto("about:blank");
+    await page.setContent(MDOC);
+    await page.evaluate(() => {
+      window.mermaid = { initialize() {}, render: async (id, code) => ({ svg: '<svg data-fake="1"><text>' + code.length + "</text></svg>" }) };
+      const orig = Element.prototype.appendChild;
+      window.__caps = [];
+      Element.prototype.appendChild = function (n) {
+        if (n && n.classList && n.classList.contains("ss-cap")) window.__caps.push(n);
+        return orig.call(this, n);
+      };
+    });
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+    check("설정의 머메이드 블록이 그려진다 (코드는 숨는다)", await page.evaluate(() => {
+      const svg = document.querySelector('.ss-mm-svg svg[data-fake]');
+      const code = document.querySelector(".ss-mm-code");
+      return !!svg && !!code && code.hidden === true;
+    }));
+    check("직렬화에 코드가 그대로 남는다 — t 가 비어도 안 지워진다", await page.evaluate(() => {
+      const t = window.ScreenSpec.serialize();
+      return /kind:\s*"mermaid"/.test(t) && t.indexOf("graph TD; A-->B") >= 0;
+    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 200));
+    /* PNG — 뷰어가 그려 둔 svg 를 재사용한다 */
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    await page.evaluate(() => (document.querySelector("#ss-prTable").checked = true));
+    await page.click('[data-pr="go"]');
+    await page.waitForTimeout(1200);
+    const mcap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
+    check("PNG 조립물에 그린 svg 가 들어간다 (#98)", mcap.indexOf('data-fake="1"') >= 0, mcap.slice(0, 160));
+    await page.click('[data-pr="cancel"]');
+    /* ⠿ 로 지워진다 — 표와 같은 길 */
+    await page.click('.ss-b[data-kind="mermaid"] .ss-g-grip');
+    await page.waitForTimeout(250);
+    await page.click('.ss-blkmenu [data-bm="del"]');
+    await page.waitForTimeout(300);
+    check("⠿ 메뉴로 지워진다 (표와 같은 길)", await page.evaluate(() =>
+      !document.querySelector('.ss-b[data-kind="mermaid"]') &&
+      window.ScreenSpec.serialize().indexOf("mermaid") < 0));
+
+    /* ── 바닥: 그리기가 실패하면 코드가 그대로 남는다 ── */
+    await page.goto("about:blank");
+    await page.setContent(MDOC);
+    const mWarns = [];
+    const onMW = (m) => { if (m.type() === "warning") mWarns.push(m.text()); };
+    page.on("console", onMW);
+    await page.evaluate(() => {
+      window.mermaid = { initialize() {}, render: async () => { throw new Error("문법이 틀렸다"); } };
+    });
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+    check("실패하면 코드 블록이 바닥이다 — 내용이 사라지지 않는다", await page.evaluate(() => {
+      const code = document.querySelector(".ss-mm-code");
+      return !!code && code.hidden !== true && code.textContent === "graph TD; A-->B" &&
+        !!document.querySelector(".ss-mm-note");
+    }));
+    check("왜 못 그렸는지 콘솔로 말한다", mWarns.some((t) => t.indexOf("머메이드를 못 그렸") >= 0), mWarns.slice(-2));
+    page.off("console", onMW);
+  }
+
   /* ============ 폰 폭에서 툴바가 접힌다 (#94) ============
      툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다 — 폰에서는
      문서 모드에 들어갈 수조차 없었다. 좁은 폭: 폭 시뮬레이터 숨김 + 도구는 ⋯ 로. */

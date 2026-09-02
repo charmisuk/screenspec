@@ -660,6 +660,9 @@
   .ss-pr-in-tbl{border-collapse:collapse;margin:3px 0;font-size:10.5px;width:100%}
   .ss-pr-in-tbl th,.ss-pr-in-tbl td{border:1px solid #D3D1CB;padding:2px 5px;text-align:left;vertical-align:top}
   .ss-pr-in-tbl th{background:#F4F4F2;font-weight:800}
+  .ss-pr-mm svg{max-width:100%;height:auto}
+  .ss-pr-mm-code{margin:3px 0;padding:6px 8px;background:#F7F7F5;border:1px solid #D3D1CB;border-radius:6px;
+    font-family:var(--ss-mono);font-size:9.5px;line-height:1.5;white-space:pre;overflow:hidden}
   .ss-prdlg-hr{border:0;border-top:1px solid var(--ss-line);margin:12px 0 4px}
   /* 기능 설명 표 — 「기능 설명 포함」을 켰을 때만 그림에 함께 굽는다 */
   .ss-pr-table .ss-pr-no{font-family:var(--ss-mono);font-weight:700;white-space:nowrap;width:44px}
@@ -759,6 +762,12 @@
      (이미 있는 「전부 삭제」 규칙과 같다) */
   .ss-blkmenu button{color:var(--ss-ink2)}
   .ss-blkmenu button:hover{background:color-mix(in srgb,#E0522F 8%,#fff);color:#E0522F}
+  .ss-mm{margin:2px 0 4px;max-width:100%}
+  .ss-mm-code{margin:0;padding:8px 10px;background:#FAFAF9;border:1px solid var(--ss-line);border-radius:7px;
+    font-family:var(--ss-mono);font-size:11px;line-height:1.55;color:var(--ss-ink2);overflow-x:auto;white-space:pre}
+  .ss-mm-note{font-size:10.5px;color:var(--ss-ink3);margin-top:3px}
+  .ss-mm-svg{overflow-x:auto}
+  .ss-mm-svg svg{max-width:100%;height:auto}
   .ss-tbl-wrap{overflow-x:auto;max-width:100%;margin:2px 0 4px}
   .ss-tbl{border-collapse:collapse;font-size:12px;min-width:100%}
   .ss-tbl th,.ss-tbl td{border:1px solid var(--ss-line2);padding:5px 8px;text-align:left;vertical-align:top}
@@ -1074,7 +1083,7 @@ ${HL_CSS}
        subs 중첩  → indent(들여쓰기 깊이)를 가진 형제 블록
        why 속성   → 바로 뒤에 오는 화살표 블록
      한 가지 표현만 남으면 편집·드래그·저장이 전부 같은 규칙으로 돈다. */
-  const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why", B_TABLE = "table";
+  const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why", B_TABLE = "table", B_MERMAID = "mermaid";
   /* 표 (#97, 실사용 2026-09-02) — 조건·결과 짝이 줄 나열로는 안 읽힌다.
      «한 블록» 이다: 행을 자식(c)으로 두지 않는다. 그래야 「모든 블록은 줄이고 깊이를 갖는다」 는
      전제가 살고 위계 규칙(272자리)이 그대로 간다. 표는 맨 위 층에만 온다 —
@@ -1083,6 +1092,14 @@ ${HL_CSS}
      머리행은 지금 «항상» 있다. head 를 rows 와 따로 둔 덕에, 나중에 «머리행 없음» 을
      더하는 것은 순수 추가가 된다 (옛 문서는 그대로) */
   const isTable = (d) => !!d && d.kind === B_TABLE;
+  /* 머메이드 (#98, PM 2026-09-02) — 조건 분기가 많은 항목은 줄로 못 읽는다. 순서도 «코드» 를
+     블록으로 담는다: 원본이 하나이고 목적지마다 그쪽 뷰어가 그린다 (노션은 코드 블록으로 그대로 그린다).
+     표(#97)와 같은 규칙: 한 블록 · 맨 위 층 · 셀·코드는 글자 데이터(RICH_OK 를 안 넓힌다) · ⠿ 로 지운다.
+     그리기는 mermaid.js 를 CDN 에서 «그 블록이 있는 문서에서만» 지연 로드한다 — 코어는 여전히 의존성 0 이고,
+     로드가 실패하면(폐쇄망 등) 코드 블록이 바닥이다. PM 결정: 이 하나는 직접 구현하지 않고 의존성으로 간다 */
+  const isMermaid = (d) => !!d && d.kind === B_MERMAID;
+  /* 글자 블록이 아닌 것 — «비워서 지운다» 규칙의 예외들 */
+  const isAtomBlk = (d) => isTable(d) || isMermaid(d);
   const tblSize = (d) => ({ cols: Math.max(1, (d.head || []).length), rows: (d.rows || []).length });
   function tblNorm(d) {
     const head = (d.head || []).map((x) => String(x == null ? "" : x));
@@ -1113,6 +1130,7 @@ ${HL_CSS}
       const t = tblNorm(d);
       return { kind: B_TABLE, t: "", head: t.head, rows: t.rows };
     }
+    if (d && d.kind === B_MERMAID) return { kind: B_MERMAID, t: "", code: String(d.code || "") };
     const b = { t: (d && d.t) || "" };
     if (d.kind) b.kind = d.kind;
     if (d.layer) b.layer = d.layer;
@@ -1200,6 +1218,14 @@ ${HL_CSS}
     const d = n.b, kind = blkKind(d);
     const ind = Math.max(0, Math.min(2, n.depth));
     const cls = "ss-b ss-blk ss-b-" + kind + (ind ? " ss-in" + ind : "") + (d.layer === "dev" ? " ss-b-dev" : "");
+    if (kind === B_MERMAID) {
+      /* 그림은 나중에(비동기) 온다 — 먼저 코드가 서고, 그려지면 코드 자리가 그림이 된다.
+         코드는 읽기 전용이다(v1): 에이전트가 설정에 쓰고 사람은 본다. 지우기는 ⠿ */
+      return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
+        edGut("b", di) +
+        '<div class="ss-mm"><pre class="ss-mm-code">' + esc(d.code || "") + "</pre>" +
+        '<div class="ss-mm-svg" hidden></div></div></div>';
+    }
     if (kind === B_TABLE) {
       return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
         edGut("b", di) + tableHTML(d, di) + "</div>";
@@ -1452,7 +1478,68 @@ ${HL_CSS}
         markerEls[it.key] = el;
       });
       watchMissing(current);
+      mmRenderAll();
       ctx.afterRender();
+    }
+    /* ---- 머메이드 그리기 (#98) ----
+       mermaid.js 는 «이 문서에 머메이드 블록이 있을 때만» CDN 에서 한 번 불러온다.
+       없으면 아무것도 안 불러온다 — 코어의 «의존성 0» 은 그대로다.
+       실패하면(폐쇄망·문법 오류) 코드 블록이 그대로 남는다 — 코드가 바닥이다 */
+    const MM_CDN = "https:\/\/cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+    let mmLoadP = null, mmSeq = 0;
+    const MM_SVG = new WeakMap(); /* 블록 → 그린 svg. PNG 내보내기가 재사용한다 */
+    function mmLoad() {
+      if (window.mermaid) return Promise.resolve(window.mermaid);
+      if (mmLoadP) return mmLoadP;
+      mmLoadP = new Promise((res, rej) => {
+        const tag = document.createElement("script");
+        tag.src = MM_CDN;
+        tag.onload = () => (window.mermaid ? res(window.mermaid) : rej(new Error("로드됐지만 비어 있다")));
+        tag.onerror = () => rej(new Error("불러오지 못했다"));
+        document.head.appendChild(tag);
+      });
+      return mmLoadP;
+    }
+    function mmRenderAll() {
+      const boxes = [...ctx.listEl.querySelectorAll('.ss-b[data-kind="mermaid"]')];
+      if (!boxes.length) return; /* 안 쓰는 문서는 비용 0 */
+      const run = ++mmSeq; /* 다시 그려지면 옛 판의 비동기 결과는 버린다 */
+      mmLoad().then((mm) => {
+        try { if (!mm.__ssInit) { mm.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" }); mm.__ssInit = true; } } catch (e) { /* 이미 초기화 */ }
+        boxes.forEach((box, i) => {
+          if (run !== mmSeq || !box.isConnected) return;
+          const p = box.dataset.path;
+          const it = itemOf(edKeyOf(box));
+          const spot = it && atPath(it.spec.defs || [], (p || "").split(".").map(Number));
+          const d = spot && spot.owner[spot.idx];
+          if (!isMermaid(d)) return;
+          const done = MM_SVG.get(d);
+          const put = (svg) => {
+            const slot = box.querySelector(".ss-mm-svg"), code = box.querySelector(".ss-mm-code");
+            if (!slot) return;
+            slot.innerHTML = svg;
+            slot.hidden = false;
+            if (code) code.hidden = true;
+          };
+          if (done && done.code === d.code) { put(done.svg); return; }
+          Promise.resolve(mm.render("ss-mm-" + run + "-" + i, String(d.code || ""))).then((r) => {
+            if (run !== mmSeq) return;
+            MM_SVG.set(d, { code: d.code, svg: r.svg });
+            put(r.svg);
+          }).catch((e) => {
+            /* 문법 오류 등 — 코드가 그대로 남고, 왜인지 한 줄 붙인다 */
+            if (run !== mmSeq || !box.isConnected) return;
+            if (!box.querySelector(".ss-mm-note")) {
+              const note = h("div", { class: "ss-mm-note" }, "그림으로 못 그렸습니다 · 코드를 그대로 둡니다");
+              box.querySelector(".ss-mm").appendChild(note);
+            }
+            console.warn("[ScreenSpec] 머메이드를 못 그렸습니다: " + ((e && e.message) || e));
+          });
+        });
+      }).catch((e) => {
+        /* CDN 이 안 열리는 환경(폐쇄망·오프라인) — 코드 블록이 바닥이다. 한 번만 말한다 */
+        if (!mmLoad.__told) { mmLoad.__told = true; console.info("[ScreenSpec] mermaid.js 를 불러오지 못해 순서도를 코드로 보여줍니다: " + ((e && e.message) || e)); }
+      });
     }
     /* 누락 경고 — 시간이 아니라 "앱이 다 그려졌는가" 로 판정 (#23)
        목차·flow 로 옮기면 정의서가 앱보다 먼저 그려지고, 비동기 조회 화면은 스켈레톤 → 본문 교체가 한참 뒤다.
@@ -2040,6 +2127,14 @@ ${HL_CSS}
       const d = n.b, kind = blkKind(d), ind = Math.max(0, Math.min(2, n.depth));
       const cls = "ss-pr-b" + (ind ? " ss-pr-in" + ind : "") + (kind === B_WHY ? " ss-pr-why" : "") +
         (kind === B_TEXT ? " ss-pr-text" : "");
+      /* 머메이드 (#98) — 뷰어가 그려 둔 svg 가 있으면 그대로, 없으면(못 그렸으면) 코드가 바닥 */
+      if (kind === B_MERMAID) {
+        const got = MM_SVG.get(d);
+        const body = got && got.code === d.code
+          ? '<div class="ss-pr-mm">' + got.svg + "</div>"
+          : '<pre class="ss-pr-mm-code">' + esc(d.code || "") + "</pre>";
+        return '<li class="' + cls + ' ss-pr-tbl-li">' + body + "</li>";
+      }
       /* 표는 그림에서도 표다 (#97). 안 그리면 그 내용이 그림에서만 조용히 사라진다 —
          이 도구에서 제일 나쁜 실패다. 표 안 표라 폭이 좁으므로 규격을 따로 잡는다 */
       if (kind === B_TABLE) {
@@ -3758,8 +3853,8 @@ ${HL_CSS}
           }
         });
         if (sp.defs) {
-          /* 표는 글자가 아니라 «표» 다 — t 가 비어 있다고 빈 줄로 보면 안 된다 (#97) */
-          edCut(sp.defs, (d) => isTable(d) || String(d.t || "").trim() || (d.subs && d.subs.length));
+          /* 표·머메이드는 글자가 아니다 — t 가 비어 있다고 빈 줄로 보면 안 된다 (#97·#98) */
+          edCut(sp.defs, (d) => isAtomBlk(d) || String(d.t || "").trim() || (d.subs && d.subs.length));
           if (!sp.defs.length) delete sp.defs;
         }
       };
