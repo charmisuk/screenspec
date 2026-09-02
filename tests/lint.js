@@ -24,6 +24,7 @@
  * 20) 내부 계획 문서(로드맵·백로그·사이클 기록)가 git 에 추적되면 FAIL — public repository 는 지금 판만 설명한다 (2026-08-28)
  * 21) 사용자 문구에 em dash 금지 — 구분은 콜론(:), 나열은 가운뎃점(·) (PM 룰 2026-08-30)
  * 23) 문서가 말하는 «e2e 섹션 N개» = 실제 섹션 수 — 판마다 늘어서 사람이 세면 어긋난다 (2026-09-01)
+ * 24) README 헌장 — 분량·행 예산과 금지어(로드맵·예정·서버 계획·TODO). 예산 초과 = 현행화 신호 (#95)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
  */
 const fs = require("fs");
@@ -421,6 +422,34 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   /* 음성 테스트 — 추출기가 진짜로 세는지 */
   check("(자체검사) 섹션 추출기가 sec( 를 센다",
     ('if (sec("[a] x")) {} if (sec("[b] y")) {}'.match(/\bsec\(\s*["'`]/g) || []).length === 2);
+}
+
+/* 24) README 헌장 (#95) — «행만 붙는» 문서 부패를 기계가 잡는다.
+       판정은 사람이 하되(거짓이 된 절은 다시 쓴다 — AGENTS.md 「README 헌장」),
+       «언제 싹 현행화할지» 는 예산 숫자가 말한다. 배포가 lint 를 돌므로 판마다 자동 판정된다 */
+{
+  const readme = fs.readFileSync(path.join(REPO, "README.md"), "utf8");
+  const CAP_LINES = 420, CAP_ROWS = 16;
+  const lines = readme.split("\n").length;
+  check("README 분량 예산 (" + lines + "/" + CAP_LINES + "줄)", lines <= CAP_LINES,
+    "예산 초과 — 행을 붙이지 말고 절을 현행화하라 (AGENTS.md 「README 헌장」)");
+  const sect = (readme.split(/^## 자주 막히는 곳$/m)[1] || "").split(/^## /m)[0];
+  const rows = (sect.match(/^\|[^\n]+\|$/gm) || []).length - 2; /* 머리·구분선 2줄 */
+  check("「자주 막히는 곳」 행 예산 (" + rows + "/" + CAP_ROWS + "행)", rows > 0 && rows <= CAP_ROWS,
+    rows <= 0 ? "표를 못 찾았다 — 절 이름이 바뀌었으면 이 검사도 고쳐라"
+              : "예산 초과 — 오래된 행을 합치거나 본문·레퍼런스로 옮겨라");
+  const BAN = [["로드맵", /로드맵/], ["출시 예정", /출시 예정/], ["준비 중", /준비 중/],
+    ["곧 지원", /곧 지원/], ["서버 버전", /서버 버전/], ["TODO", /\bTODO\b/]];
+  const hits = [];
+  readme.split("\n").forEach((line, i) => {
+    BAN.forEach(([nm, re]) => { if (re.test(line)) hits.push(nm + " @" + (i + 1)); });
+  });
+  check("README 금지 내용 0건 (로드맵·예정·서버 계획·TODO)", hits.length === 0,
+    JSON.stringify(hits) + " — 계획은 이슈에, 이력은 CHANGELOG 에 (AGENTS.md 「README 헌장」)");
+  /* 음성 테스트 — 행 세기·금지어가 진짜로 잡는지 */
+  check("(자체검사) 행 세기가 표를 센다",
+    ("| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |".match(/^\|[^\n]+\|$/gm) || []).length - 2 === 2);
+  check("(자체검사) 금지어가 걸린다", /\bTODO\b/.test("이건 TODO 다"));
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));
