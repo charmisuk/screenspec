@@ -334,9 +334,6 @@
   function richIn(el) {
     const box = document.createElement("div");
     box.innerHTML = el.innerHTML;
-    /* 각주는 우리가 심은 «위젯» 이지 사람이 친 글이 아니다 (#100) — 저장 텍스트에 섞이면
-       고칠 때마다 번호가 글자로 눌러앉는다. 읽기 전에 걷어낸다 (노션의 인라인 멘션과 같은 수법) */
-    box.querySelectorAll(".ss-ref").forEach((n) => n.remove());
     box.querySelectorAll("b,strong,i,em,u,span,font,div,p,br").forEach((n) => {
       const t = n.tagName;
       if (t === "B" || t === "STRONG") { const w = document.createElement("strong"); w.innerHTML = n.innerHTML; n.replaceWith(w); return; }

@@ -1144,9 +1144,10 @@ function check(name, ok, detail) {
         a.querySelector(".ss-ref-l").textContent === "KPS 연동 정책";
     }));
     /* 클릭 상자는 손가락이 닿을 크기여야 한다 (PM 2026-09-02) */
-    check("클릭 상자가 손가락 크기다 (높이 ≥ 16px)", await page.evaluate(() => {
+    /* 실측: 여백을 주면 22px, 빼면 16px — 그 사이를 기준으로 잡아야 «여백을 뺀 것» 을 잡는다 */
+    check("클릭 상자가 손가락 크기다 (높이 ≥ 20px)", await page.evaluate(() => {
       const r = document.querySelector(".ss-ref").getBoundingClientRect();
-      return r.height >= 16 && r.width >= 24;
+      return r.height >= 20 && r.width >= 24;
     }), await page.evaluate(() => { const r = document.querySelector(".ss-ref").getBoundingClientRect(); return Math.round(r.width) + "×" + Math.round(r.height); }));
     /* 각주는 줄 «오른쪽 끝» 에 정렬된다 — 글자에 바로 붙으면 애매하다 (PM 2026-09-02) */
     check("각주가 줄 오른쪽 끝에 정렬된다", await page.evaluate(() => {
