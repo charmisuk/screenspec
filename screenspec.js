@@ -754,11 +754,11 @@
   .ss-in2{margin-left:calc(var(--ss-blk-mark) * 2)}
   /* 표 (#97) — 좁으면 «접기» 가 아니라 블록 안에서 가로로 굴린다. 정의서는 읽는 것이 목적이라
      기본을 숨김으로 두면 손해다 (노션도 같다) */
-  .ss-blkmenu{position:fixed;z-index:2147483090;background:#fff;border:1px solid var(--ss-line2);
-    border-radius:10px;box-shadow:0 12px 32px rgba(17,24,39,.18);padding:5px;min-width:132px}
-  .ss-blkmenu button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;
-    font:inherit;font-size:12.5px;color:var(--ss-ink);padding:7px 9px;border-radius:7px;cursor:pointer;text-align:left}
-  .ss-blkmenu button:hover{background:var(--ss-canvas)}
+  /* 블록 메뉴 (#97) — 규격은 위 한 벌에서 온다. 여기서 다른 것은 둘뿐이다:
+     항목이 하나라 아이콘 칸도 최소 폭도 없다 · 지우는 일이라 얹었을 때만 주황
+     (이미 있는 「전부 삭제」 규칙과 같다) */
+  .ss-blkmenu button{color:var(--ss-ink2)}
+  .ss-blkmenu button:hover{background:color-mix(in srgb,#E0522F 8%,#fff);color:#E0522F}
   .ss-tbl-wrap{overflow-x:auto;max-width:100%;margin:2px 0 4px}
   .ss-tbl{border-collapse:collapse;font-size:12px;min-width:100%}
   .ss-tbl th,.ss-tbl td{border:1px solid var(--ss-line2);padding:5px 8px;text-align:left;vertical-align:top}
@@ -773,15 +773,19 @@
   .ss-defs-list [data-ed].ss-ed-on:empty{min-width:120px;display:inline-block}
   .ss-defs-list [data-ed="title"]:empty::after{content:"영역 이름"}
   .ss-defs-list [data-ed="title"].ss-ed-on:empty::after{content:"영역 이름을 쓰세요"}
-  .ss-slash{position:fixed;z-index:2147483000;background:var(--ss-bg,#fff);border:1px solid var(--ss-line,#dcdce3);
-    border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column;min-width:132px}
-  .ss-slash{min-width:262px}
-  .ss-slash-g{font-size:10.5px;font-weight:800;color:var(--ss-ink3);letter-spacing:.04em;padding:7px 9px 5px}
-  .ss-slash button{all:unset;display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:7px;
-    cursor:pointer;font-size:13px;color:var(--ss-ink)}
+  /* 뜨는 메뉴 한 벌 (PM 2026-09-02) — 슬래시와 블록 메뉴가 같은 규격을 쓴다.
+     전에는 슬래시 쪽 여백이 커서 «항목 하나» 짜리 메뉴를 같은 규격으로 만들면 덩치가 남았다.
+     그래서 기준을 조인 쪽으로 옮겼다: 모서리 7 · 그림자 0 6 18 · 상자 여백 3 · 칸 5/9 · 글자 12.5 */
+  .ss-menu,.ss-slash,.ss-blkmenu{position:fixed;background:#fff;border:1px solid var(--ss-line2);
+    border-radius:7px;box-shadow:0 6px 18px rgba(17,24,39,.13);padding:3px;display:flex;flex-direction:column}
+  .ss-slash,.ss-blkmenu{z-index:2147483090}
+  .ss-slash{min-width:236px}
+  .ss-slash-g{font-size:10px;font-weight:800;color:var(--ss-ink3);letter-spacing:.04em;padding:5px 9px 3px}
+  .ss-slash button,.ss-blkmenu button{all:unset;display:flex;align-items:center;gap:9px;padding:5px 9px;
+    border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--ss-ink);white-space:nowrap}
   .ss-slash button:hover,.ss-slash button.on{background:var(--ss-accent-soft)}
-  .ss-sl-ico{width:24px;height:24px;border-radius:6px;background:var(--ss-canvas);border:1px solid var(--ss-line);
-    display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--ss-ink2);flex:none}
+  .ss-sl-ico{width:20px;height:20px;border-radius:5px;background:var(--ss-canvas);border:1px solid var(--ss-line);
+    display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--ss-ink2);flex:none}
   .ss-slash button.on .ss-sl-ico{background:#fff;border-color:var(--ss-accent);color:var(--ss-accent)}
   .ss-sl-nm{font-weight:600}
   .ss-sl-key{margin-left:auto;font-family:var(--ss-mono);font-size:11.5px;color:var(--ss-ink3)}
@@ -2960,13 +2964,18 @@ ${HL_CSS}
       edBlkClose();
       const box = grip.closest(".ss-b");
       if (!box) return;
+      /* 항목 하나짜리 메뉴다 — 아이콘도 넓은 상자도 두지 않는다 (PM 2026-09-02).
+         색은 이미 있는 「전부 삭제」 규칙을 따른다: 평소엔 수수하게, 얹으면 주황 */
       edBlkMenu = h("div", { class: "ss-blkmenu ss-ui" },
-        '<button type="button" data-bm="del"><span class="ss-sl-ico">🗑</span>' +
-        '<span class="ss-sl-nm">삭제</span></button>');
+        '<button type="button" data-bm="del">삭제</button>');
       document.body.appendChild(edBlkMenu);
-      const r = grip.getBoundingClientRect();
-      edBlkMenu.style.left = Math.round(Math.min(r.left, innerWidth - 150)) + "px";
-      edBlkMenu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - 60)) + "px";
+      /* 아래가 아니라 «손잡이 오른쪽» 에 붙인다 — 아래로 열면 방금 지우려는 그 줄을 가린다.
+         오른쪽이 좁으면 그때만 아래로 (PM 2026-09-02) */
+      const r = grip.getBoundingClientRect(), m = edBlkMenu.getBoundingClientRect();
+      const right = r.right + 5;
+      const fits = right + m.width + 8 <= innerWidth;
+      edBlkMenu.style.left = Math.round(fits ? right : Math.min(r.left, innerWidth - m.width - 8)) + "px";
+      edBlkMenu.style.top = Math.round(Math.min(fits ? r.top - 3 : r.bottom + 3, innerHeight - m.height - 8)) + "px";
       edBlkMenu.addEventListener("mousedown", (e) => {
         const b = e.target.closest("[data-bm]");
         if (!b) return;
