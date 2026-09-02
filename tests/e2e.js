@@ -929,6 +929,98 @@ function check(name, ok, detail) {
       await page.evaluate(() => window.__calls || 0));
   }
 
+  /* ============ 표 블록 (#97) ============
+     조건·결과 짝이 줄 나열로는 안 읽힌다. 표는 «한 블록» 이고 맨 위 층에만 온다.
+     그리는 곳이 셋(뷰어·PNG·컨플루언스)이라 하나라도 빠지면 그 경로에서 내용이 조용히 사라진다. */
+  if (sec("[표] 조건·결과를 표로 (#97)")) {
+    const TDOC = '<h1 id="t">홈</h1><button id="b" data-spec="1" style="margin:40px">초대</button>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-T',name:'홈'},specs:[{n:1,target:'1',title:'초대 버튼',defs:[" +
+      "{t:'버튼 문구로 현재 상태 표시'}," +
+      "{kind:'table',head:['상태','버튼 문구'],rows:[['정상','{N}명 초대하기'],['오류','오류 {N}건']]}" +
+      "]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(TDOC);
+    /* 조립 상자가 붙는 «순간» 을 붙잡는다 — PNG 캡처 뒤에는 치워진다 */
+    await page.evaluate(() => {
+      const orig = Element.prototype.appendChild;
+      Element.prototype.appendChild = function (n) {
+        /* 요소를 «들고» 있는다 — 붙는 순간에는 아직 비어 있고, 캡처 뒤 떼어져도 내용은 읽힌다 */
+        if (n && n.classList && n.classList.contains("ss-cap")) (window.__caps = window.__caps || []).push(n);
+        return orig.call(this, n);
+      };
+    });
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+
+    check("설정에 쓴 표가 뷰어에 표로 나온다", await page.evaluate(() => {
+      const t = document.querySelector(".ss-tbl");
+      if (!t) return false;
+      return [...t.querySelectorAll("th")].map((x) => x.textContent).join("|") === "상태|버튼 문구" &&
+        [...t.querySelectorAll("td")].map((x) => x.textContent).join("|") === "정상|{N}명 초대하기|오류|오류 {N}건";
+    }), await page.$$eval(".ss-tbl th,.ss-tbl td", (e) => e.map((x) => x.textContent)));
+    /* 이것이 위계 규칙(272자리)을 지키는 근거다 — 표가 쪼개지면 그 전제가 깨진다 */
+    check("표는 «한 블록» 이다", await page.evaluate(() =>
+      document.querySelectorAll('.ss-b[data-kind="table"]').length === 1));
+    check("좁으면 접지 않고 블록 안에서 가로로 굴린다", await page.evaluate(() =>
+      getComputedStyle(document.querySelector(".ss-tbl-wrap")).overflowX === "auto"));
+
+    await page.click('.ss-tcell[data-r="0"][data-c="1"]');
+    await page.keyboard.press(MOD + "+a");
+    await page.keyboard.type("고침");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    check("셀을 고치면 설정에 남는다 (t 가 비어도 안 지워진다)", await page.evaluate(() => {
+      const s = window.ScreenSpec.serialize();
+      return s.indexOf("고침") >= 0 && /kind:\s*"table"/.test(s);
+    }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 200));
+
+    await page.click('.ss-tcell[data-r="0"][data-c="0"]');
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(200);
+    check("Tab 으로 다음 칸으로 간다", await page.evaluate(() => {
+      const a = document.activeElement;
+      return !!a && a.dataset.ed === "cell" && a.dataset.r === "0" && a.dataset.c === "1";
+    }), await page.evaluate(() => { const a = document.activeElement; return a ? a.dataset.r + "/" + a.dataset.c : "none"; }));
+    await page.click('.ss-tcell[data-r="1"][data-c="1"]');
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(400);
+    check("마지막 칸에서 Enter 면 행이 는다", await page.evaluate(() =>
+      document.querySelectorAll(".ss-tbl tbody tr").length === 3));
+
+    /* PNG — 그리는 곳 둘째. 빠지면 그림에서만 내용이 사라진다 */
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    await page.evaluate(() => (document.querySelector("#ss-prTable").checked = true));
+    await page.click('[data-pr="go"]');
+    await page.waitForTimeout(1200);
+    const cap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
+    /* 앞에서 셀을 「고침」 으로 바꿔 놨다 — 옛 값이 아니라 지금 값으로 찾는다 */
+    check("PNG 조립물에도 표로 들어간다 (#97)",
+      cap.indexOf("ss-pr-in-tbl") >= 0 && cap.indexOf("고침") >= 0 && cap.indexOf("상태") >= 0,
+      "길이 " + cap.length + " · in-tbl " + (cap.indexOf("ss-pr-in-tbl") >= 0) + " · 고침 " + (cap.indexOf("고침") >= 0));
+    await page.click('[data-pr="cancel"]');
+    await page.waitForTimeout(200);
+
+    /* 슬래시로 만들기 */
+    await page.click('.ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    await page.keyboard.press("/");
+    await page.waitForTimeout(300);
+    check("슬래시 메뉴에 «표» 가 있다", (await page.locator('.ss-slash [data-sl="tbl"]').count()) === 1);
+    await page.click('.ss-slash [data-sl="tbl"]');
+    await page.waitForTimeout(500);
+    check("슬래시로 표가 생긴다", await page.evaluate(() =>
+      document.querySelectorAll('.ss-b[data-kind="table"]').length === 2));
+    check("만들면 첫 머리칸에 커서가 간다 — 만들자마자 쓴다", await page.evaluate(() => {
+      const a = document.activeElement;
+      return !!a && a.dataset.ed === "cell" && a.dataset.r === "-1";
+    }));
+  }
+
   /* ============ 폰 폭에서 툴바가 접힌다 (#94) ============
      툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다 — 폰에서는
      문서 모드에 들어갈 수조차 없었다. 좁은 폭: 폭 시뮬레이터 숨김 + 도구는 ⋯ 로. */

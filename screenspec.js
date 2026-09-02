@@ -331,7 +331,7 @@
   const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "style", "off", "readonly",
     "vocab", "prefixes", "endings", "idScheme", "notes",
     "screen", "screens", "id", "name", "path", "route", "root", "viewports", "covers", "skip",
-    "n", "target", "sel", "anno", "title", "optional", "t", "why", "subs", "layer", "defs", "dev", "parts",
+    "n", "target", "sel", "anno", "title", "optional", "t", "head", "rows", "why", "subs", "layer", "defs", "dev", "parts",
     "play", "preview", "flowTo", "arrowTo", "selector", "label", "w", "h", "specs"];
   function ssStr(s) {
     /* JSON.stringify 가 따옴표·역슬래시·줄바꿈을 맡고, 우리는 «스크립트 블록을 깨뜨리는» 것만 더 막는다.
@@ -656,6 +656,10 @@
   .ss-cap .ss-edge-r,.ss-cap .ss-edge-b{display:none}
   .ss-cap-msg{font-size:11.5px;color:var(--ss-ink2);line-height:1.6;margin-top:10px}
   .ss-cap-msg:empty{display:none}
+  .ss-pr-tbl-li{list-style:none;margin-left:-14px}
+  .ss-pr-in-tbl{border-collapse:collapse;margin:3px 0;font-size:10.5px;width:100%}
+  .ss-pr-in-tbl th,.ss-pr-in-tbl td{border:1px solid #D3D1CB;padding:2px 5px;text-align:left;vertical-align:top}
+  .ss-pr-in-tbl th{background:#F4F4F2;font-weight:800}
   .ss-prdlg-hr{border:0;border-top:1px solid var(--ss-line);margin:12px 0 4px}
   /* 기능 설명 표 — 「기능 설명 포함」을 켰을 때만 그림에 함께 굽는다 */
   .ss-pr-table .ss-pr-no{font-family:var(--ss-mono);font-weight:700;white-space:nowrap;width:44px}
@@ -748,6 +752,17 @@
   /* 들여쓰기 한 단 = 글머리칸. 안쪽 블록의 글머리가 바깥 블록의 글자 자리에 딱 선다 */
   .ss-in1{margin-left:var(--ss-blk-mark)}
   .ss-in2{margin-left:calc(var(--ss-blk-mark) * 2)}
+  /* 표 (#97) — 좁으면 «접기» 가 아니라 블록 안에서 가로로 굴린다. 정의서는 읽는 것이 목적이라
+     기본을 숨김으로 두면 손해다 (노션도 같다) */
+  .ss-tbl-wrap{overflow-x:auto;max-width:100%;margin:2px 0 4px}
+  .ss-tbl{border-collapse:collapse;font-size:12px;min-width:100%}
+  .ss-tbl th,.ss-tbl td{border:1px solid var(--ss-line2);padding:5px 8px;text-align:left;vertical-align:top}
+  .ss-tbl th{background:#FAFAF9;font-weight:800;color:var(--ss-ink2);white-space:nowrap}
+  .ss-tbl td:first-child{color:var(--ss-ink2)}
+  .ss-tbl .ss-tcell{display:block;min-width:36px;min-height:1.2em}
+  .ss-tbl .ss-tc-empty{color:var(--ss-ink3);font-size:11.5px;text-align:center;background:#FCFCFB}
+  .ss-b-table{display:block}
+  .ss-b-table > .ss-gut{position:absolute;left:calc(var(--ss-gut-w) * -1)}
   .ss-defs-list [data-ed]:empty::after{content:"내용";color:var(--ss-ink3)}
   .ss-defs-list [data-ed].ss-ed-on:empty::after{content:"내용 입력, / 로 넣기"}
   .ss-defs-list [data-ed].ss-ed-on:empty{min-width:120px;display:inline-block}
@@ -1046,7 +1061,23 @@ ${HL_CSS}
        subs 중첩  → indent(들여쓰기 깊이)를 가진 형제 블록
        why 속성   → 바로 뒤에 오는 화살표 블록
      한 가지 표현만 남으면 편집·드래그·저장이 전부 같은 규칙으로 돈다. */
-  const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why";
+  const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why", B_TABLE = "table";
+  /* 표 (#97, 실사용 2026-09-02) — 조건·결과 짝이 줄 나열로는 안 읽힌다.
+     «한 블록» 이다: 행을 자식(c)으로 두지 않는다. 그래야 「모든 블록은 줄이고 깊이를 갖는다」 는
+     전제가 살고 위계 규칙(272자리)이 그대로 간다. 표는 맨 위 층에만 온다 —
+     컨플루언스의 <li> 안 표, PNG 의 표 안 표를 둘 다 피한다.
+     셀은 «글자» 다. RICH_OK 를 넓히지 않고 우리가 데이터로 조립한다.
+     머리행은 지금 «항상» 있다. head 를 rows 와 따로 둔 덕에, 나중에 «머리행 없음» 을
+     더하는 것은 순수 추가가 된다 (옛 문서는 그대로) */
+  const isTable = (d) => !!d && d.kind === B_TABLE;
+  const tblSize = (d) => ({ cols: Math.max(1, (d.head || []).length), rows: (d.rows || []).length });
+  function tblNorm(d) {
+    const head = (d.head || []).map((x) => String(x == null ? "" : x));
+    if (!head.length) head.push("");
+    const rows = (d.rows || []).map((r) =>
+      Array.from({ length: head.length }, (_, i) => String(((r || [])[i]) == null ? "" : r[i])));
+    return { head: head, rows: rows };
+  }
   function blkKind(d) { return d && d.kind ? d.kind : B_BULLET; } /* 생략 = 불릿 (옛 문서 호환) */
   /* ---- 정의는 «트리» 다 (PM 2026-08-30) ----
      R0: 내가 옮긴 것 말고는 아무것도 안 바뀐다 — 남의 깊이도, 남의 소속도.
@@ -1064,6 +1095,11 @@ ${HL_CSS}
      그래서 그리기·자리 찾기 코드는 그대로 살고, «바꾸는» 곳만 트리를 만진다. */
   function normOne(d) {
     if (typeof d === "string") return { t: d };
+    if (d && d.kind === B_TABLE) {
+      /* 표는 쪼갤 수 없는 한 블록이다 — 자식(c)도 층도 갖지 않는다 */
+      const t = tblNorm(d);
+      return { kind: B_TABLE, t: "", head: t.head, rows: t.rows };
+    }
     const b = { t: (d && d.t) || "" };
     if (d.kind) b.kind = d.kind;
     if (d.layer) b.layer = d.layer;
@@ -1128,10 +1164,33 @@ ${HL_CSS}
   /* 블록 하나 — 종류와 들여쓰기가 화면을 정한다. 편집은 언제나 가능하다(#58) */
   /* di = «펼친 순번» (화면에서 몇 번째 줄인가) · data-path = 트리에서의 자리.
      화면은 순번으로 짚고, 모델은 자리 번호로 짚는다 — 둘을 갈라 두면 트리를 바꿔도 그리기가 안 흔들린다 */
+  /* 표 한 칸 — 고치는 자리이기도 하다. r = -1 이 머리행 */
+  function tblCell(r, c, txt, di) {
+    const tag = r < 0 ? "th" : "td";
+    return "<" + tag + ' class="ss-tc"><span class="ss-dt ss-tcell" data-ed="cell" data-di="' + di +
+      '" data-r="' + r + '" data-c="' + c + '">' + rich(txt) + "</span></" + tag + ">";
+  }
+  function tableHTML(d, di) {
+    const t = tblNorm(d);
+    let out = '<div class="ss-tbl-wrap"><table class="ss-tbl"><thead><tr>';
+    t.head.forEach((h, c) => (out += tblCell(-1, c, h, di)));
+    out += "</tr></thead><tbody>";
+    t.rows.forEach((row, r) => {
+      out += "<tr>";
+      row.forEach((v, c) => (out += tblCell(r, c, v, di)));
+      out += "</tr>";
+    });
+    if (!t.rows.length) out += '<tr><td class="ss-tc ss-tc-empty" colspan="' + t.head.length + '">빈 표 : Tab 으로 칸을 옮기고 Enter 로 행을 더합니다</td></tr>';
+    return out + "</tbody></table></div>";
+  }
   function blockHTML(n, di) {
     const d = n.b, kind = blkKind(d);
     const ind = Math.max(0, Math.min(2, n.depth));
     const cls = "ss-b ss-blk ss-b-" + kind + (ind ? " ss-in" + ind : "") + (d.layer === "dev" ? " ss-b-dev" : "");
+    if (kind === B_TABLE) {
+      return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
+        edGut("b", di) + tableHTML(d, di) + "</div>";
+    }
     return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
       edGut("b", di) +
       (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' : "") +
@@ -1934,6 +1993,15 @@ ${HL_CSS}
       const d = n.b, kind = blkKind(d), ind = Math.max(0, Math.min(2, n.depth));
       const cls = "ss-pr-b" + (ind ? " ss-pr-in" + ind : "") + (kind === B_WHY ? " ss-pr-why" : "") +
         (kind === B_TEXT ? " ss-pr-text" : "");
+      /* 표는 그림에서도 표다 (#97). 안 그리면 그 내용이 그림에서만 조용히 사라진다 —
+         이 도구에서 제일 나쁜 실패다. 표 안 표라 폭이 좁으므로 규격을 따로 잡는다 */
+      if (kind === B_TABLE) {
+        const t = tblNorm(d);
+        let inner = '<table class="ss-pr-in-tbl"><tr>' +
+          t.head.map((h) => "<th>" + rich(h) + "</th>").join("") + "</tr>";
+        t.rows.forEach((row) => { inner += "<tr>" + row.map((v) => "<td>" + rich(v) + "</td>").join("") + "</tr>"; });
+        return '<li class="' + cls + ' ss-pr-tbl-li">' + inner + "</table></li>";
+      }
       return '<li class="' + cls + '">' + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) + "</li>";
     }
     function prKeep(d, layer) {
@@ -2602,6 +2670,24 @@ ${HL_CSS}
     /* ---- 글자 고치기 — 자리를 안 옮기고 그 자리에서 (contenteditable) ---- */
     /* 그 편집 칸이 가리키는 트리 자리 — 화면 순번(di)이 아니라 자리 번호(data-path)로 쓴다.
        걸러 그린 화면(기획만·개발만)에서는 순번이 «걸러진 목록» 기준이라 그걸로 쓰면 남의 줄을 덮는다 */
+    /* 셀 하나를 모델에 옮긴다 (#97). 못 찾으면 false — 부르는 쪽이 화면을 되돌린다 */
+    function tblPut(el, sp, next) {
+      const d = tblOf(el, sp);
+      if (!d) return false;
+      const r = Number(el.dataset.r), c = Number(el.dataset.c);
+      if (r < 0) { if (!d.head[c] && d.head[c] !== "") return false; d.head[c] = next; }
+      else { if (!d.rows[r]) return false; d.rows[r][c] = next; }
+      return true;
+    }
+    /* 그 셀이 속한 표 블록 */
+    function tblOf(el, sp) {
+      const box = el.closest && el.closest(".ss-b");
+      const raw = box && box.dataset.path;
+      if (!raw) return null;
+      const spot = atPath(sp.defs || (sp.defs = []), raw.split(".").map(Number));
+      const d = spot && spot.owner[spot.idx];
+      return isTable(d) ? d : null;
+    }
     function spotOf(el, sp) {
       const box = el.closest && el.closest(".ss-b");
       const raw = box && box.dataset.path;
@@ -2655,7 +2741,8 @@ ${HL_CSS}
       const s = it.spec, f = el.dataset.ed, di = Number(el.dataset.di);
       let redraw = false;
       edSnapOnce();
-      if (f === "title") s.title = next;
+      if (f === "cell") { if (!tblPut(el, s, next)) { el.innerHTML = rich(edWas); return; } }
+      else if (f === "title") s.title = next;
       else if (f === "b") {
         const spot = spotOf(el, s);
         if (!spot || !spot.owner[spot.idx]) return;
@@ -2848,6 +2935,7 @@ ${HL_CSS}
       { k: "num", ico: "①", nm: "번호", key: "화면에서 찍기" },
       { k: "bul", ico: "•", nm: "불릿", key: "-" },
       { k: "why", ico: "↳", nm: "화살표", key: ">" },
+      { k: "tbl", ico: "▦", nm: "표", key: "2열" },
     ];
     /* «화면» 묶음 (#82, PM 2026-08-31) — 노션의 슬래시도 묶음으로 나뉘어 있다(기본 블록 · 고급).
        개요는 줄이 아니라 항목 수준이라 한 층 위지만, 만드는 손짓은 «빈 줄에서 슬래시» 하나로 통일한다:
@@ -2955,6 +3043,56 @@ ${HL_CSS}
       if (kind === "bul") { edSetKind(B_BULLET); return; }
       if (kind === "why") { edSetKind(B_WHY); return; }
       if (kind === "brief") { edKillLine(); edAddBrief(); return; } /* 슬래시를 친 빈 줄은 «자리 잡던 줄» 이라 치운다 (#82) */
+      if (kind === "tbl") { edAddTable(p); return; }
+    }
+
+    /* 슬래시로 표를 만든다 (#97) — 지금 줄을 표로 «바꾸는» 것이 아니라, 그 자리에 표를 놓는다.
+       표는 맨 위 층에만 오므로, 하위 줄에서 불렀으면 그 항목의 끝에 붙인다 */
+    function edAddTable(p) {
+      const sp = (p && p.s) || (edPos() || {}).s;
+      if (!sp) return;
+      const path = p && p.path;
+      edKillLine(); /* 슬래시를 치던 빈 줄은 «자리 잡던 줄» 이라 치운다 (#82 와 같은 규칙) */
+      edSnapOnce();
+      const defs = sp.defs || (sp.defs = []);
+      /* 표는 맨 위 층에만 온다 — 하위 줄에서 불렀으면 그 항목 끝에 붙인다 */
+      const at = path && path.length === 1 ? Math.min(path[0], defs.length) : defs.length;
+      defs.splice(at, 0, { kind: B_TABLE, t: "", head: ["", ""], rows: [["", ""]] });
+      edTouched();
+      render();
+      /* 만들자마자 그 자리에서 쓰게 한다 — 어디를 눌러야 하는지 찾게 두지 않는다 */
+      const cells = ctx.listEl.querySelectorAll('.ss-tcell[data-r="-1"][data-c="0"]');
+      const cell = cells[Math.min(at, cells.length - 1)] || cells[cells.length - 1];
+      if (cell) edBegin(cell);
+    }
+    /* 표 안에서의 손짓 (#97) — Tab 으로 다음 칸, 마지막 칸에서 Enter·Tab 이면 행을 더한다.
+       열 폭·행 삭제 같은 미세 조정은 지금 하지 않는다 (PM 2026-09-02) */
+    function tblStep(el, back) {
+      const box = el.closest(".ss-b");
+      const cells = [...box.querySelectorAll(".ss-tcell")];
+      const i = cells.indexOf(el);
+      if (i < 0) return false;
+      const to = cells[i + (back ? -1 : 1)];
+      if (to) { edFinish(true); edBegin(to); return true; }
+      if (back) return true; /* 첫 칸에서 Shift+Tab — 그대로 머문다 */
+      return tblAddRow(el);
+    }
+    function tblAddRow(el) {
+      const p = edPos();
+      const sp = p && p.s;
+      const d = sp && tblOf(el, sp);
+      if (!d) return false;
+      edFinish(true);
+      edSnapOnce();
+      d.rows.push(d.head.map(() => ""));
+      edTouched();
+      render();
+      const r = d.rows.length - 1;
+      setTimeout(() => {
+        const cell = ctx.listEl.querySelector('.ss-tcell[data-r="' + r + '"][data-c="0"]');
+        if (cell) edBegin(cell);
+      }, 0);
+      return true;
     }
 
     /* ---- 번호 찍기 (#43) ----
@@ -3501,7 +3639,8 @@ ${HL_CSS}
           }
         });
         if (sp.defs) {
-          edCut(sp.defs, (d) => String(d.t || "").trim() || (d.subs && d.subs.length));
+          /* 표는 글자가 아니라 «표» 다 — t 가 비어 있다고 빈 줄로 보면 안 된다 (#97) */
+          edCut(sp.defs, (d) => isTable(d) || String(d.t || "").trim() || (d.subs && d.subs.length));
           if (!sp.defs.length) delete sp.defs;
         }
       };
@@ -3525,7 +3664,8 @@ ${HL_CSS}
       if (!it) return;
       const f = el.dataset.ed, di = Number(el.dataset.di), sp = it.spec;
       edSnapOnce();
-      if (f === "title") sp.title = next;
+      if (f === "cell") { if (!tblPut(el, sp, next)) return; }
+      else if (f === "title") sp.title = next;
       else if (f === "b") {
         const spot = spotOf(el, sp);
         if (!spot || !spot.owner[spot.idx]) return;
@@ -3896,6 +4036,15 @@ ${HL_CSS}
         if (edMenu && edMenuKey(e)) { e.preventDefault(); e.stopPropagation(); return; }
         const k = e.key, empty = !edEl.textContent.trim();
         const eat = () => { e.preventDefault(); e.stopPropagation(); };
+        /* 표 안에서는 Tab 이 «다음 칸», Enter 가 «행 더하기» 다 (#97) —
+           바깥의 Tab(층)·Enter(새 줄)와 뜻이 다르므로 여기서 먼저 가른다 */
+        if (edEl.dataset.ed === "cell") {
+          if (k === "Tab") { eat(); tblStep(edEl, e.shiftKey); return; }
+          if (k === "Enter" && !e.shiftKey) { eat(); tblAddRow(edEl); return; }
+          if (k === "Enter") { eat(); edFinish(true); return; }
+          if (k === "Escape") { eat(); edFinish(true); return; }
+          if (k === "Backspace" && empty) return; /* 빈 칸은 지우지 않는다 — 칸은 표의 뼈대다 */
+        }
         if (k === "Enter" && !e.shiftKey) { eat(); edNewLine(); }
         else if (k === "Enter") { eat(); edFinish(true); } /* Shift+Enter = 여기서 그만 */
         /* 치는 즉시 반영되는 이상 Esc 로 «없던 일» 을 만들 수 없다 (구글 문서와 같다).
