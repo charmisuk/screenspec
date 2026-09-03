@@ -148,6 +148,10 @@ async function main() {
     g.issues.sort((a, b) => a.number - b.number);
 
     g.done = g.issues.filter(isDone).length;
+    /* 쓰는 쪽(msChecklist)도 «끝났나» 는 이 판단 하나를 쓴다 — 술어가 둘이면 반영이 겉돈다:
+       판정은 「고침(검수)도 끝」 인데 쓰기는 「닫힘만 끝」 이라, 검수 이슈가 영영 안 체크되고
+       재검증이 매번 어긋났다 (2026-09-03 실측: #48 푸시 직후) */
+    g.doneSet = new Set(g.issues.filter(isDone).map((i) => i.number));
     g.desc = "진행 " + g.done + "/" + g.issues.length;
     const c = msCards.get(g.no);
     if (!c) { drift.push({ kind: "묶음 카드 없음", group: g, msg: g.title + " (세부 " + g.issues.length + "건)" }); continue; }
@@ -200,7 +204,7 @@ async function msChecklist(pageId, g) {
   for (const b of old.results || []) {
     try { await nApi("DELETE", "/blocks/" + b.id); } catch { /* 이미 지워졌으면 통과 */ }
   }
-  const done = (i) => i.state === "closed" || (g.closing && g.closing.has(i.number));
+  const done = (i) => (g.doneSet ? g.doneSet.has(i.number) : i.state === "closed");
   const rows = g.issues.map((i) => ({
     object: "block", type: "to_do",
     to_do: {
