@@ -12,8 +12,8 @@ ScreenSpec의 API는 전역 객체 `window.SCREENSPEC` 하나다. 이 문서가 
 window.SCREENSPEC = {
   mode?:    "wrap" | "overlay" | "frame",  // 생략 = 자동 판별 (React·Next 감지 시 overlay). frame 은 명시 전용
   accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple", "#7C3AED" 또는 "var(--brand)". 기본 blue
-  baseViewport?: "mobile" | "pc" | "auto",  // wrap·frame 시작 폭 = 이 문서가 서술하는 기준 폭. 기본 mobile
-  devices?: { mobile?: Device, pc?: Device },  // wrap·frame. 기기 프리셋 덮어쓰기 (auto 는 창을 따라감)
+  baseViewport?: "mobile" | "pc",           // wrap·frame 시작 폭 = 이 문서가 서술하는 기준 폭. 기본 mobile
+  devices?: { mobile?: Device, pc?: Device },  // wrap·frame. 기기 프리셋 덮어쓰기
   checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
   style?:   Style,                // 이 프로젝트의 «쓰는 법» — AI 가 읽는 계약. 라이브러리 렌더는 바뀌지 않는다
   off?:     boolean,              // true = 완전 정지. 원본 프로토타입 그대로 (주소에 ?screenspec=1 이면 켜진다)
@@ -70,7 +70,7 @@ type Device = { w: number, h: number }
 |---|---|---|---|
 | `mode` | `"wrap"` \| `"overlay"` \| `"frame"` | 자동 판별 | 단일 HTML은 wrap, React·Next 등 프레임워크는 overlay. 자동 판별이 틀릴 때만 명시. `"frame"`은 자동 판별되지 않는다 — 아래 참조 |
 | `accent` | 프리셋명 \| hex \| `var(--x)` | `"blue"` (#2952E3) | 마커·하이라이트·재생 버튼·드래그 그립·목차 활성이 묶음으로 바뀐다. `"var(--color-accent)"`처럼 CSS 변수를 가리키면 제품 토큰을 복사하지 않고 따라간다(색 하드코딩 lint·다크 모드 대응). 인식 불가 값이면 콘솔 경고 후 기본값 |
-| `baseViewport` | `"mobile"` \| `"pc"` \| `"auto"` | `"mobile"` | wrap·frame 의 시작 폭 = 이 문서가 서술하는 기준 폭. PC 앞에서 쓰는 어드민은 `"pc"`, 앱은 기본값. 반응형 차이는 화면을 늘리지 말고 같은 화면의 `anno:"state"` 항목으로 적는다 |
+| `baseViewport` | `"mobile"` \| `"pc"` | `"mobile"` | wrap·frame 의 시작 폭 = 이 문서가 서술하는 기준 폭. PC 앞에서 쓰는 어드민은 `"pc"`, 앱은 기본값. 반응형 차이는 화면을 늘리지 말고 같은 화면의 `anno:"state"` 항목으로 적는다 |
 | `devices` | `{ mobile, pc }` | 아래 참조 | wrap·frame 전용. 기기 프리셋 크기 덮어쓰기 |
 | `checklist` | `(string \| {name, common})[]` | — | 프로젝트가 정한 상태 축. 있으면 화면마다 `covers`/`skip` 로 커버리지를 표시한다. `{ name, common }` 으로 적으면 **화면마다 안 적어도 되는 축**이 된다. 형식이 어긋나면 기능이 꺼지고 콘솔 경고. 아래 [상태 커버리지](#상태-커버리지) 참조 |
 | `style` | `Style` | — | 이 프로젝트의 문구·ID 체계를 적어 두는 자리. **AI 가 읽는 계약이며 라이브러리 동작은 바뀌지 않는다** — 정의서 렌더·마커·경고 어디에도 영향이 없다. [SKILL §0 적용 전 인터뷰](../SKILL.md)의 답이 여기 남아, 다음에 AI 가 다시 쓸 때도 같은 톤이 유지된다. 형식이 어긋나면 해당 항목만 무시하고 콘솔 경고 1회. 아래 [쓰는 법 고정](#쓰는-법-고정-style) 참조 |
@@ -224,7 +224,7 @@ window.SCREENSPEC = {
 
 **accent 프리셋**: `blue` #2952E3 · `red` #E5484D · `orange` #F76B15 · `green` #18794E · `purple` #8E4EC6
 
-**devices 기본값**: `mobile` 360×800 · `pc` 1920×1080 · `auto` 창을 따라감
+**devices 기본값**: `mobile` 360×800 · `pc` 1920×1080. 그 사이 크기는 프레임 가장자리를 끌어 만든다
 
 ```js
 devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
@@ -232,11 +232,13 @@ devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다
 
 > `widths: { mobile, pc }`는 v0.2 호환용으로 아직 동작하지만 폭만 바꾼다. 신규 작성은 `devices` 사용.
 
-**「맞춤」(배율)은 `auto`와 다른 축이다.** `auto`는 프레임 *크기*를 바꿔 앱의 미디어쿼리가 달라지고, 「맞춤」은 크기를 그대로 둔 채 **보이는 배율만** 줄인다(1920인 채로 64%). DevTools가 `Responsive`와 `Zoom`을 나눠 둔 그 자리다. 화면정의서 모드는 읽는 자리라 늘 맞춰지고 **가로·세로를 함께** 본다 — 폭만 보면 긴 시트가 한 화면에 안 들어온다. 프로토타입 모드는 만지는 자리라 기본이 실물 크기이고, 「맞춤」을 눌렀을 때만 줄인다.
+**창에 안 들어가면 저절로 줄인다.** 고정 프리셋이 창보다 크면 앱의 뷰포트가 창 밖으로 나가서, **앱이 `position:fixed`로 붙인 패널·버튼이 창 밖에 놓인다** — 밀면 보이지만 `focus()`·`scrollIntoView`·폼 검증의 「첫 오류로 이동」은 그리로 가지 못한다(고정 요소는 액자 밖 스크롤러를 움직일 수 없다). 그래서 넘치는 만큼 **보이는 배율만** 줄인다. 시트 크기는 그대로라 **앱의 미디어쿼리는 달라지지 않는다** — `1920×1080 · 73%`는 「1920짜리 화면을 73%로 보고 있다」는 뜻이지 「1400짜리 화면」이 아니다.
 
-`auto`는 프레임을 지금 창에 맞춘다. 고정 프리셋이 창보다 크면 앱의 뷰포트가 창 밖으로 나가서, **앱이 `position:fixed`로 붙인 패널·버튼이 창 밖에 놓인다** — 밀면 보이지만 `focus()`·`scrollIntoView`·폼 검증의 「첫 오류로 이동」은 그리로 가지 못한다(고정 요소는 액자 밖 스크롤러를 움직일 수 없다). `auto`는 넘치지 않게 해서 그 상황 자체를 없앤다.
+**가로·세로를 함께** 본다(폭만 보면 긴 시트가 한 화면에 안 들어온다). 다만 좁은 폭에서 무대가 흐름 배치로 바뀌면 높이는 안 본다 — 높이가 내용을 따라가는 자리라 기준으로 삼으면 배율이 제 꼬리를 문다.
 
-손잡이를 끌면 따라가기가 꺼져 그 크기를 지키고, 「자동」을 다시 누르면 창에 맞춘다. 화면정의서 모드에서는 따라가지 않는다 — 거기서 폭이 창을 따라가면 「16열이 다 보인다」 같은 서술이 검증할 기준을 잃는다.
+**프로토타입 모드와 화면정의서 모드가 같은 규칙**을 쓰고, **버튼은 없다.** v0.30 에는 「자동」(프레임을 창 크기로 바꿈)과 「맞춤」(배율 줄이기) 두 버튼이 있었는데 v0.30.1 에서 걷어냈다 — 둘 다 같은 호소에 대한 답이었고, 줄여서 잃는 정보가 없으니 사람이 고를 일이 아니었다. `baseViewport: "auto"`도 같이 없어졌다(모르는 값이라 `mobile`로 떨어지며 경고한다).
+
+그 사이 크기가 필요하면 **프레임 가장자리를 끈다.** 끈 크기는 창을 줄여도 지켜지고(줄어드는 것은 배율이다), 프리셋을 누르면 돌아온다.
 
 ### 저장을 호스트에 (save)
 
@@ -610,7 +612,7 @@ body.ss-wrap .ss-sheet { padding: 0; }   /* 앱형(전면) 프로토타입: 시�
 | flowTo "X" 화면이 screens에 없습니다 | 존재하지 않는 화면으로 이동 지정 |
 | accent "X" 인식 불가 | 프리셋명·hex·`var(--x)` 어느 것도 아님 |
 | off — 프로토타입 원본 그대로입니다 | `off: true`(또는 `?screenspec=0`). `console.info`이며 화면에는 아무것도 뜨지 않는다. 켜는 방법을 같이 안내한다 |
-| baseViewport "X" 인식 불가 | `mobile`·`pc`·`auto`(또는 `devices`에 추가한 이름)가 아님 |
+| baseViewport "X" 인식 불가 | `mobile`·`pc`(또는 `devices`에 추가한 이름)가 아님. v0.30 의 `auto`는 v0.30.1 에서 걷어냈다 |
 | panel 설정은 v0.15 에서 폐기 | v0.14 의 `panel:"left"`가 남아 있음. 지우고, 겹치면 `mode:"frame"` |
 | checklist 는 문자열 또는 { name, common } 의 배열이어야 합니다 — 무시 | `checklist`가 빈 배열이거나, 문자열도 `{ name }` 객체도 아닌 값을 포함 |
 | checklist "축": common 에 사유(문자열)를 적어야 합니다 — 보통 축으로 봅니다 | `common: true` 처럼 사유 없이 선언. 「왜 화면별로 안 적는가」가 이 선언의 값이다 |

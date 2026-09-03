@@ -71,7 +71,12 @@ function check(name, ok, detail) {
     }));
     await page.click('#ss-seg button[data-w="mobile"]');
     await page.waitForTimeout(300);
-    check("모바일 복귀 360×800", await page.evaluate(() => document.querySelector(".ss-wpx").textContent === "360×800"));
+    /* 표시에는 배율이 따라붙을 수 있다 (창이 낮으면 «360×800 · 88%») — 여기서 재는 것은 «크기» 다 */
+    check("모바일 복귀 360×800", await page.evaluate(() => {
+      const s = document.querySelector(".ss-sheet");
+      return s.style.width === "360px" && s.style.height === "800px" &&
+             document.querySelector(".ss-wpx").textContent.indexOf("360\u00D7800") === 0;
+    }));
     check("배지 표기", await page.evaluate(() => (document.querySelector(".ss-badge") || {}).textContent?.includes("ScreenSpec")));
     check("화면 ID 칩: 12px 셰브론", await page.evaluate(() => {
       const svg = document.querySelector(".ss-toc-btn .ss-toc-caret svg");
@@ -1655,25 +1660,24 @@ function check(name, ok, detail) {
     await page.setViewportSize({ width: 1440, height: 900 });
   }
 
-  /* ============ 창에 맞춰 축소해서 본다 (#104) ============
-     #102 의 「자동」 과 «다른 축» 이다. 자동은 프레임 «크기» 를 창에 맞춰 1232 로 만들고 —
-     그러면 앱의 미디어쿼리가 1232 짜리로 달라진다. 여기 「맞춤」 은 1920 인 채로 0.64배로 «보기만» 한다.
-     PC 화면을 노트북에서 검수할 때 필요한 쪽이고, DevTools 가 Responsive 와 Zoom 을 나눠 둔 그 자리다.
-     정의서 모드는 «읽는 자리» 라 늘 맞추고, 이제 세로도 같이 본다. */
-  if (sec("[배율] 창에 맞춰 축소해서 본다 (#104)")) {
+  /* ============ 창에 안 들어가면 줄인다 (#104·#105) ============
+     한때 이건 「맞춤」 이라는 버튼이었고, 그 옆에 「자동」 이라는 또 다른 버튼이 있었다.
+     둘 다 «프로토타입이 창을 넘는다» 는 같은 호소에 두 판에 걸쳐 붙인 답이었다.
+     이제 규칙 하나다 (#105): 넘칠 때만 줄인다 — 두 모드가 같이. 줄여도 잃는 정보가 없으니
+     판단이 아니고, 판단이 아니면 버튼일 이유가 없다. 시트 크기는 그대로라 앱의 미디어쿼리도 안 달라진다. */
+  if (sec("[배율] 창에 안 들어가면 줄인다 (#104·#105)")) {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
     await page.waitForTimeout(900);
     const zs = () => page.evaluate(() => {
       const f = document.querySelector(".ss-frame"), sh = document.querySelector(".ss-sheet");
       const w = document.querySelector(".ss-proto-wrap"), st = document.querySelector(".ss-stage");
-      const zb = document.getElementById("ss-zoom");
       const box = document.body.classList.contains("ss-mode-doc") ? st : w;
       const m = (f.style.transform || "").match(/scale\(([\d.]+)\)/);
       const r = f.getBoundingClientRect();
       return { scale: m ? Number(m[1]) : 1, wpx: document.getElementById("ss-wpx").textContent,
-        seen: Math.round(r.width) + "×" + Math.round(r.height),
-        label: zb.textContent, on: zb.getAttribute("aria-pressed") === "true", off: zb.disabled,
+        seen: Math.round(r.width) + "×" + Math.round(r.height), sheet: sh.offsetWidth + "×" + sh.offsetHeight,
+        knobs: document.querySelectorAll(".ss-seg button").length + (document.getElementById("ss-zoom") ? 1 : 0),
         scrollX: box.scrollWidth - box.clientWidth, scrollY: box.scrollHeight - box.clientHeight };
     });
     /* 마커와 그 대상의 «거리» 를 시트 좌표(=화면 거리 ÷ 배율)로 잰다.
@@ -1695,25 +1699,21 @@ function check(name, ok, detail) {
     await page.click('.ss-seg button[data-w="pc"]');
     await page.waitForTimeout(400);
     let z = await zs();
-    check("프로토타입 기본은 실물 크기다 (만지는 자리라 안 줄인다)", z.scale === 1 && z.label === "맞춤", JSON.stringify(z));
-    check("PC 프리셋이 창을 넘으면 밀 것이 남는다", z.scrollX > 0, JSON.stringify(z));
-
-    await page.click("#ss-zoom");
-    await page.waitForTimeout(400);
-    z = await zs();
-    check("「맞춤」: 창에 들어오게 줄인다", z.scale < 1 && z.on === true, JSON.stringify(z));
-    check("「맞춤」: 밀 것이 남지 않는다", z.scrollX === 0 && z.scrollY === 0, JSON.stringify(z));
-    check("「맞춤」: 시트 크기는 그대로다 — 앱의 미디어쿼리가 안 달라진다 (자동과 다른 축)",
-      z.wpx === "1920×1080", z.wpx);
-    check("「맞춤」: 지금 배율을 숫자로 말한다", /^\d+%$/.test(z.label), z.label);
+    /* 버튼이 없다는 것 자체가 이 판의 고침이다 — 프리셋 둘, 배율 버튼 0 (#105) */
+    check("크기를 정하는 자리가 둘뿐이다 (자동·맞춤 버튼이 없다)", z.knobs === 2, JSON.stringify(z));
+    check("PC 프리셋이 창을 넘으면 «저절로» 줄인다 — 누를 것이 없다", z.scale < 1, JSON.stringify(z));
+    check("밀 것이 남지 않는다", z.scrollX === 0 && z.scrollY === 0, JSON.stringify(z));
+    check("시트 크기는 그대로다 — 앱의 미디어쿼리가 안 달라진다 (크기가 아니라 배율을 줄인 것)",
+      z.sheet === "1920×1080", z.sheet);
+    check("크기와 배율을 한 줄로 말한다", z.wpx === "1920×1080 · " + Math.round(z.scale * 100) + "%", JSON.stringify(z));
     /* 자리를 줄이면서 프레임까지 같이 누르면 시트가 삐져나오고 폭 조절 손잡이가 엉뚱한 자리로 간다 */
-    check("「맞춤」: 프레임이 «시트 크기 × 배율» 그대로다 (눌리지 않는다)", await page.evaluate(() => {
+    check("프레임이 «시트 크기 × 배율» 그대로다 (눌리지 않는다)", await page.evaluate(() => {
       const f = document.querySelector(".ss-frame"), sh = document.querySelector(".ss-sheet");
       const m = (f.style.transform || "").match(/scale\(([\d.]+)\)/);
       const sc = m ? Number(m[1]) : 1, r = f.getBoundingClientRect();
       return Math.abs(r.width - sh.offsetWidth * sc) < 2 && Math.abs(r.height - sh.offsetHeight * sc) < 2;
     }));
-    check("「맞춤」: 폭 조절 손잡이가 시트 오른쪽 끝에 그대로 붙어 있다", await page.evaluate(() => {
+    check("폭 조절 손잡이가 시트 오른쪽 끝에 그대로 붙어 있다", await page.evaluate(() => {
       const sh = document.querySelector(".ss-sheet").getBoundingClientRect();
       const e = document.querySelector(".ss-edge-r").getBoundingClientRect();
       return e.left >= sh.right - 4 && e.left <= sh.right + 24;
@@ -1728,10 +1728,15 @@ function check(name, ok, detail) {
     await page.waitForTimeout(500);
     z = await zs();
     check("창을 줄이면 배율이 따라온다", z.scale < was && z.scrollX === 0, JSON.stringify({ was: was, now: z }));
-    await page.click("#ss-zoom");
+    /* 넉넉한 창에서는 아무것도 안 한다 — «넘칠 때만» 이 규칙의 전부다 */
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.click('.ss-seg button[data-w="mobile"]');
     await page.waitForTimeout(400);
     z = await zs();
-    check("「맞춤」을 끄면 실물 크기로 돌아온다", z.scale === 1 && z.on === false && z.label === "맞춤", JSON.stringify(z));
+    check("들어가는 크기는 안 줄인다 (모바일 시트는 실물 크기)", z.scale === 1, JSON.stringify(z));
+    check("안 줄었으면 배율을 말하지 않는다", z.wpx === "360×800", z.wpx);
+    await page.click('.ss-seg button[data-w="pc"]');
+    await page.waitForTimeout(400);
 
     /* ── 정의서 모드 ── */
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1739,7 +1744,7 @@ function check(name, ok, detail) {
     await page.click("#ss-mDoc");
     await page.waitForTimeout(700);
     z = await zs();
-    check("정의서는 늘 맞춘다 — 끄고 켜는 것이 아니다", z.scale < 1 && z.off === true, JSON.stringify(z));
+    check("정의서도 같은 규칙이다 — 두 모드가 갈리지 않는다", z.scale < 1, JSON.stringify(z));
     check("정의서: 축소한 만큼만 자리를 먹는다 (빈 곳으로 스크롤되지 않는다)",
       z.scrollX === 0 && z.scrollY === 0, JSON.stringify(z));
     /* 배율 1 인 창 → 축소된 창. 마커–대상 거리가 시트 좌표로 같아야 한다.
@@ -1793,9 +1798,10 @@ function check(name, ok, detail) {
      앱이 화면에 고정한 패널(position:fixed; right:0)은 프레임이 창보다 크면 창 밖으로 나간다.
      그리고 그건 스크롤로 못 고친다 — 고정 요소는 액자 «밖» 의 스크롤러를 움직이지 못해서
      scrollIntoView·focus·폼 검증의 «첫 오류로 이동» 이 전부 닿지 못한다 (2026-09-02 실측).
-     그래서 고침은 «자동» 프리셋이다: 프레임을 창에 맞춰 애초에 넘지 않게 한다.
+     처음 고침은 «자동» 프리셋이었지만 (#102), 그건 프레임 «크기» 를 바꿔 앱을 다른 화면으로 만드는 일이라
+     사람이 눌러야 했다. 지금 고침은 규칙이다 (#105): 넘치면 배율로 줄여 애초에 창을 안 넘는다.
      같이 통일한 것 — 여백을 두 모드가 한 토큰에서 쓰고, 스크롤은 상자 하나가 두 축을 맡는다. */
-  if (sec("[무대] 프레임이 창을 넘지 않는다 (#102)")) {
+  if (sec("[무대] 프레임이 창을 넘지 않는다 (#102·#105)")) {
     const APP = `<meta charset="utf-8"><title>고정 패널</title>
       <style>body{margin:0;font:14px system-ui}
         .p{position:fixed;right:0;top:0;bottom:0;width:420px;background:#eee}
@@ -1806,7 +1812,9 @@ function check(name, ok, detail) {
       <script src="/screenspec.js"><\/script>`;
     const sP = http.createServer((req, res) => {
       if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
-      res.setHeader("content-type", "text/html"); res.end(APP);
+      res.setHeader("content-type", "text/html");
+      /* 걷어낸 값을 아직 쓰고 있는 문서 — 인식 못 하면 기본으로 떨어져야 한다 (#105) */
+      res.end(req.url.indexOf("auto") >= 0 ? APP.replace('baseViewport:"pc"', 'baseViewport:"auto"') : APP);
     });
     await new Promise((r) => sP.listen(P(4210), r));
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1821,15 +1829,16 @@ function check(name, ok, detail) {
         docY: document.documentElement.scrollHeight - innerHeight,
         docX: document.documentElement.scrollWidth - innerWidth,
         padTop: cs.paddingTop, padRight: pad(w), stagePad: pad(st),
-        size: document.getElementById("ss-wpx").textContent,
+        size: (() => { const sh = document.querySelector(".ss-sheet"); return sh.offsetWidth + "\u00D7" + sh.offsetHeight; })(),
+        label: document.getElementById("ss-wpx").textContent,
         edgeR: document.querySelector(".ss-edge-r").getBoundingClientRect().right
       };
     });
 
-    /* ① 스크롤러는 하나 — 가로는 이 상자, 세로는 문서로 갈라 두지 않는다 */
+    /* ① PC 기준 문서를 노트북 창에서 열었다 — 여기가 이 이슈의 출발점이다 */
     let m = await box();
-    check("PC 프리셋: 프레임이 창보다 커서 두 축 다 밀린다", m.wrapX > 0 && m.wrapY > 0, m);
-    check("그 두 축이 «같은 상자» 다 (문서는 안 민다)", m.docY <= 1 && m.docX <= 1, m);
+    check("PC 기준 문서가 창 안에 들어온다 (밀 것이 남지 않는다)", m.wrapX === 0 && m.wrapY === 0, m);
+    check("스크롤러는 하나 — 가로·세로를 상자와 문서로 갈라 두지 않는다", m.docY <= 1 && m.docX <= 1, m);
 
     /* ② 여백은 두 모드가 한 값에서 — 74px 과 24px 로 갈라져 있던 것을 하나로 */
     check("프로토타입·정의서의 여백이 같다", m.padRight === m.stagePad, [m.padRight, m.stagePad]);
@@ -1840,22 +1849,18 @@ function check(name, ok, detail) {
     check("폭 조절 손잡이가 여백 안에 들어온다 (0 으로 줄이면 잘린다)",
       parseFloat(m.padRight) >= 20, m.padRight);
 
-    /* ④ 자동 = 창에 맞춘다. 이게 실제 고침이다 */
-    await page.click('.ss-seg button[data-w="auto"]');
-    await page.waitForTimeout(400);
-    m = await box();
-    check("자동: 프레임이 창을 넘지 않는다 (밀 것이 남지 않는다)", m.wrapX === 0 && m.wrapY === 0, m);
+    /* ④ 이 이슈가 실제로 호소한 것 — 앱이 화면에 고정한 버튼에 닿을 수 있는가 */
     const pin = await page.frameLocator("iframe[data-ss-frame]").locator("#pin").boundingBox();
-    check("자동: 앱이 화면에 고정한 버튼이 창 안에 있다",
+    check("앱이 화면에 고정한 버튼이 창 안에 있다",
       !!pin && pin.x >= 0 && pin.x + pin.width <= 1280 && pin.y >= 0 && pin.y + pin.height <= 800, pin);
-    check("자동: 손잡이도 창 안에 남는다", m.edgeR <= 1280, m.edgeR);
+    check("손잡이도 창 안에 남는다", m.edgeR <= 1280, m.edgeR);
 
-    /* ⑤ 문법: 자동은 창을 따라가고, 손으로 끌면 그 크기를 지킨다 (버튼은 «복귀» 자리로 눌린 채) */
+    /* ⑤ 문법: 크기는 프리셋과 손잡이만 바꾼다 — 창 크기 변경은 «배율» 만 건드린다 (#105) */
     const was = m.size;
     await page.setViewportSize({ width: 1100, height: 700 });
     await page.waitForTimeout(400);
-    const followed = (await box()).size;
-    check("자동: 창이 줄면 따라 준다", followed !== was, [was, followed]);
+    check("창을 줄여도 시트 크기는 그대로다 (줄어드는 것은 배율이다)", (await box()).size === was, [was, (await box()).size]);
+    check("그래도 창 안에 들어온다", (await box()).wrapX === 0 && (await box()).wrapY === 0, await box());
     const er = await page.locator(".ss-edge-r").boundingBox();
     await page.mouse.move(er.x + 5, er.y + er.height / 2);
     await page.mouse.down();
@@ -1863,30 +1868,37 @@ function check(name, ok, detail) {
     await page.mouse.up();
     await page.waitForTimeout(250);
     const dragged = (await box()).size;
+    check("손잡이로 끈 크기가 남는다", dragged !== was, [was, dragged]);
     await page.setViewportSize({ width: 1320, height: 840 });
     await page.waitForTimeout(400);
     check("끌어서 정한 크기는 다음 창 크기 변경에 지워지지 않는다",
       (await box()).size === dragged, [dragged, (await box()).size]);
-    check("그래도 «자동» 은 눌린 채 — 누르면 돌아갈 자리다",
-      (await page.getAttribute('.ss-seg button[data-w="auto"]', "aria-pressed")) === "true");
-    await page.click('.ss-seg button[data-w="auto"]');
+    check("프리셋은 «누르면 돌아갈 자리» 로 남는다",
+      (await page.getAttribute('.ss-seg button[data-w="pc"]', "aria-pressed")) === "true");
+    await page.click('.ss-seg button[data-w="pc"]');
     await page.waitForTimeout(350);
-    check("다시 누르면 창에 맞춘다", (await box()).wrapX === 0);
+    check("다시 누르면 기준 폭으로 돌아온다", (await box()).size === "1920×1080", (await box()).size);
 
     /* ⑥ 정의서는 기준 폭을 지킨다 — 여기서 폭이 창을 따라가면 «16열이 다 보인다» 가 검증할 대상을 잃는다 */
     const beforeDoc = (await box()).size;
     await page.click("#ss-mDoc");
     await page.waitForTimeout(500);
-    check("정의서 모드로 가도 기준 폭은 그대로다",
-      (await page.textContent("#ss-wpx")) === beforeDoc, [beforeDoc, await page.textContent("#ss-wpx")]);
+    check("정의서 모드로 가도 기준 폭은 그대로다", (await box()).size === beforeDoc, [beforeDoc, (await box()).size]);
     await page.setViewportSize({ width: 1100, height: 700 });
     await page.waitForTimeout(400);
-    check("정의서에서는 창을 줄여도 기준 폭이 안 따라간다",
-      (await page.textContent("#ss-wpx")) === beforeDoc, await page.textContent("#ss-wpx"));
+    check("정의서에서는 창을 줄여도 기준 폭이 안 따라간다", (await box()).size === beforeDoc, await box());
 
-    /* ⑦ 기본값은 안 바뀐다 */
-    check("자동은 프리셋을 «하나 더» 둔 것 — 기본은 그대로",
-      (await page.evaluate(() => document.querySelectorAll(".ss-seg button").length)) === 3);
+    /* ⑦ 프리셋은 둘뿐이다 — 그 사이는 손잡이로 끈다 (#105) */
+    check("프리셋은 둘뿐이다 (자동을 걷어냈다)",
+      (await page.evaluate(() => document.querySelectorAll(".ss-seg button").length)) === 2);
+    /* ⑧ 걷어낸 baseViewport:"auto" 를 쓰던 문서 — 조용히 깨지지 않고 기본으로 떨어진다 */
+    const warns = [];
+    page.on("console", (c) => { if (c.type() === "warning") warns.push(c.text()); });
+    await page.goto("http://localhost:" + P(4210) + "/auto.html");
+    await page.waitForTimeout(900);
+    check("걷어낸 baseViewport \"auto\" 는 mobile 로 떨어진다", (await box()).size === "360×800", await box());
+    check("떨어질 때는 말을 남긴다 (조용히 깨지지 않는다)",
+      warns.some((w) => w.indexOf("baseViewport") >= 0), warns);
     check("JS 에러 0건", errors.length === 0, errors);
     sP.close();
     await page.setViewportSize({ width: 1440, height: 900 });

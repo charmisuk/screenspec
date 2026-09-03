@@ -98,15 +98,12 @@
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
     : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
-  /* 프리셋 = 가장 대중화된 실기기 사이즈 (statcounter 최다) */
+  /* 프리셋 = 가장 대중화된 실기기 사이즈 (statcounter 최다). 둘뿐인 이유 — 그 사이는 손잡이로 끈다.
+     한때 「자동」(창에 맞춘 크기) 을 하나 더 뒀다가 걷었다 (#105): 끌기로 이미 되는 일이었고,
+     «내 창 크기» 는 사용자 화면이 아니라 기준이 될 수 없었다 */
   const DEVICES = {
     mobile: { w: 360, h: 800 },   /* 갤럭시 표준 해상도 */
-    pc:     { w: 1920, h: 1080 }, /* FHD 데스크톱 */
-    /* 창을 따라간다 (#102) — 「pc 1920×1080」 은 통계적 최다이지 «내 모니터» 가 아니어서,
-       노트북에서 열면 매번 넘쳤다. 프리셋을 대체하는 게 아니라 하나 더 두는 것이다:
-       화면정의서는 기준 폭이 있어야 «16열이 다 보인다» 같은 서술이 검증되므로 기본값은 그대로다.
-       DevTools 가 Responsive 를 프리셋 목록에 같이 두는 것과 같은 자리 */
-    auto:   { fit: true }
+    pc:     { w: 1920, h: 1080 }  /* FHD 데스크톱 */
   };
   if (RAW.devices) for (const k in RAW.devices) DEVICES[k] = Object.assign({}, DEVICES[k], RAW.devices[k]);
   else if (RAW.widths) { /* v0.2 호환 */
@@ -508,12 +505,9 @@
   .ss-widthsim .ss-seg{display:flex;border:1px solid var(--ss-line2);border-radius:8px;padding:2px;gap:2px;background:#FAFAF9}
   .ss-widthsim .ss-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
   .ss-widthsim .ss-seg button[aria-pressed="true"]{background:#fff;color:var(--ss-ink);box-shadow:0 1px 2px rgba(17,24,39,.12)}
-  .ss-wpx{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);min-width:52px;text-align:right}
-  /* 배율 (#104) — 「자동」 과 다른 축이다. 자동은 «프레임 크기» 를 바꾸고(앱의 미디어쿼리가 달라진다),
-     이건 크기를 둔 채 «보이는 배율» 만 줄인다. DevTools 가 Responsive 와 Zoom 을 나눠 둔 그 자리 */
-  .ss-zoom{border:1px solid var(--ss-line2);background:#FAFAF9;color:var(--ss-ink2);border-radius:8px;
-    padding:4px 10px;font-size:12px;font-weight:700;flex-shrink:0}
-  .ss-zoom[aria-pressed="true"]{background:var(--ss-ink);border-color:var(--ss-ink);color:#fff}
+  /* 크기 · 배율을 한 줄로 읽는다 (#105) — 배율은 «넘칠 때만» 붙으므로 자리를 미리 비워 두지 않는다 */
+  .ss-wpx{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);min-width:52px;text-align:right;white-space:nowrap}
+  .ss-wpx .ss-sc{color:var(--ss-ink2);font-weight:700}
   .ss-tools{display:flex;align-items:center;gap:14px}
   .ss-more{display:none;position:relative;width:34px;height:32px;flex-shrink:0;margin-left:auto;
     border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);border-radius:8px;
@@ -4968,11 +4962,8 @@ ${HL_CSS}
         <div class="ss-seg" id="ss-seg">
           <button data-w="mobile" aria-pressed="true">모바일</button>
           <button data-w="pc" aria-pressed="false">PC</button>
-          <button data-w="auto" aria-pressed="false" title="지금 창에 맞춘다">자동</button>
         </div>
-        <span class="ss-wpx" id="ss-wpx"></span>
-        <button type="button" class="ss-zoom" id="ss-zoom" aria-pressed="false"
-          title="창에 맞춰 축소해서 본다 (크기는 그대로)">맞춤</button>
+        <span class="ss-wpx" id="ss-wpx" title="시트 크기 · 창에 안 들어갈 때는 줄인 배율"></span>
       </div>`);
 
     /* ---- 화면정의서 모드 ---- */
@@ -5006,8 +4997,6 @@ ${HL_CSS}
     let sheetW = DEVICES.mobile.w;
     let sheetH = DEVICES.mobile.h;
     let scale = 1;
-    let fitOn = false; /* 창을 따라가는 중인가 — 눌린 버튼과는 다르다 (아래 usePreset 참고) */
-    let zoomOn = false; /* 프로토타입 모드에서 «축소해서» 보는 중인가 (#104). 크기는 그대로다 */
     const wpx = document.getElementById("ss-wpx");
     function applySize(w, hgt) {
       /* 터치 기기: 시트가 화면보다 넓으면 핸들이 화면 밖으로 나가 조작 불가 → 뷰포트에 맞게 클램프 */
@@ -5019,8 +5008,7 @@ ${HL_CSS}
       sheet.style.height = sheetH + "px";
       sheet.classList.toggle("ss-pc", sheetW >= 1100);
       sheet.classList.toggle("ss-narrow", sheetW <= 520);
-      wpx.textContent = sheetW + "×" + sheetH;
-      requestAnimationFrame(layout);
+      requestAnimationFrame(layout); /* 크기 표시는 layout 이 쓴다 — 배율까지 한 줄로 말해야 해서 */
     }
     /* 상자의 «안쪽» 크기. 여백을 CSS 한 곳(--ss-stage-pad)에서만 정하게 하려고 값을 베끼지 않고 읽는다 */
     function inner(el) {
@@ -5028,37 +5016,21 @@ ${HL_CSS}
       return { w: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
                h: el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
     }
-    /* 자동 = 프로토타입 무대를 꽉 채운다. 정의서 모드는 채우지 않는다 —
-       거기서 폭이 창을 따라가면 «16열이 다 보인다» 같은 서술이 검증할 기준을 잃는다 (#102) */
-    function fitToStage() {
-      if (document.body.classList.contains("ss-mode-doc")) return;
-      const b = inner(protoWrap);
-      if (b.w > 0 && b.h > 0) applySize(b.w, b.h);
-    }
     const seg = document.getElementById("ss-seg");
-    /* 눌린 버튼 = «누르면 돌아갈 자리», fitOn = «지금 창을 따라가는 중».
-       둘을 나눈 이유: 자동에서 손잡이를 끌면 그 크기를 지켜야 하는데, 따라가기가 켜진 채면
-       다음 창 크기 변경이 방금 끈 것을 지운다. 그래서 끌기는 따라가기만 끄고 버튼은 눌린 채 둔다 */
+    /* 프리셋 = «누르면 돌아갈 자리». 그 사이 크기는 손잡이로 끈다 */
     function usePreset(k) {
       const d = DEVICES[k] || DEVICES.mobile;
       seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.w === k)));
-      fitOn = !!d.fit;
-      if (fitOn) fitToStage(); else applySize(d.w, d.h);
+      applySize(d.w, d.h);
     }
     seg.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
       if (btn) usePreset(btn.dataset.w);
     });
-    /* 「맞춤」 — 크기는 그대로 두고 보이는 배율만 줄인다. 「자동」 과 다른 축이다 (#104):
-       자동은 프레임을 1232 로 «작게 만들어» 앱의 미디어쿼리가 달라지고,
-       이건 1920 인 채로 0.65배로 «보기만» 한다. PC 화면을 노트북에서 검수할 때 필요한 쪽이다 */
-    const zoomBtn = document.getElementById("ss-zoom");
-    if (zoomBtn) zoomBtn.addEventListener("click", () => { zoomOn = !zoomOn; layout(); core.placeMarkers(); });
     let drag = null;
     function makeDrag(el, useW, useH) {
       el.addEventListener("pointerdown", (e) => {
         drag = { x: e.clientX, y: e.clientY, w: sheetW, h: sheetH, s: scale };
-        fitOn = false; /* 손으로 정한 크기가 다음 창 크기 변경에 지워지지 않게 */
         el.classList.add("ss-dragging");
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* 일부 환경(합성 이벤트 등) 방어 */ }
         e.preventDefault();
@@ -5092,7 +5064,7 @@ ${HL_CSS}
       else { protoHolder.appendChild(frame); frame.style.transform = ""; }
       if (back) appFrame.src = back;
       core.soloRoots(m === "doc"); /* 정의서 모드에서는 설명하는 화면만 (#75) */
-      requestAnimationFrame(() => { if (fitOn) fitToStage(); layout(); });
+      requestAnimationFrame(layout);
     }
     mProto.onclick = () => setMode("proto");
     mDoc.onclick = () => setMode("doc");
@@ -5112,9 +5084,11 @@ ${HL_CSS}
     }
     function layout() {
       const doc = document.body.classList.contains("ss-mode-doc");
-      /* 정의서는 «읽는 자리» 라 늘 맞춘다. 프로토타입은 «만지는 자리» 라 기본이 실물 크기(1)고,
-         축소는 사람이 「맞춤」 을 눌렀을 때만 — 줄이면 글자가 흐려지고 손가락 크기 감각이 달라진다 */
-      scale = doc ? fitScale(stage) : (zoomOn ? fitScale(protoWrap) : 1);
+      /* 두 모드가 «한 규칙» 을 쓴다 (#105): 넘칠 때만 줄인다.
+         한때 프로토타입만 실물 크기를 고집하고 축소를 「맞춤」 버튼으로 두었는데,
+         PC 1920 은 노트북에서 거의 늘 넘쳐 기본이 «스크롤해서 반쪽 보기» 가 됐다.
+         줄여도 잃는 정보가 없으니 판단이 아니라 규칙이고, 규칙은 버튼일 이유가 없다 */
+      scale = fitScale(doc ? stage : protoWrap);
       if (scale !== 1) {
         frame.style.transformOrigin = "top left";
         frame.style.transform = "scale(" + scale + ")";
@@ -5136,12 +5110,9 @@ ${HL_CSS}
         holder.style.width = scale === 1 ? "" : Math.ceil(sheetW * scale) + "px";
         holder.style.height = scale === 1 ? "" : Math.ceil(sheetH * scale) + "px";
       }
-      const zb = document.getElementById("ss-zoom");
-      if (zb) {
-        zb.setAttribute("aria-pressed", String(!doc && zoomOn));
-        zb.textContent = doc ? Math.round(scale * 100) + "%" : zoomOn ? Math.round(scale * 100) + "%" : "맞춤";
-        zb.disabled = doc; /* 정의서는 늘 맞춘다 — 끌 수 있는 것이 아니다 */
-      }
+      /* «지금 무슨 일이 벌어지고 있나» 를 한 줄로. 배율은 1 이 아닐 때만 — 안 줄었으면 할 말이 없다 */
+      wpx.innerHTML = sheetW + "\u00D7" + sheetH + /* 셋 다 숫자다 — 넣을 수 있는 문자열이 없다 */
+        (scale < 0.995 ? ' <span class="ss-sc">\u00B7 ' + Math.round(scale * 100) + "%</span>" : "");
       /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 (터치 기기는 더 크게·시트에 걸치게) */
       const coarse = window.matchMedia && matchMedia("(pointer:coarse)").matches;
       const hs = coarse ? 28 : 20, ho = coarse ? 10 : 20;
@@ -5317,7 +5288,7 @@ ${HL_CSS}
     }
 
     /* ---- 재배치 트리거 ---- */
-    window.addEventListener("resize", () => { if (fitOn) fitToStage(); layout(); core.placeMarkers(); });
+    window.addEventListener("resize", () => { layout(); core.placeMarkers(); });
     document.querySelectorAll("img").forEach((im) => im.addEventListener("load", layout));
     document.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => requestAnimationFrame(layout)));
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
@@ -5407,8 +5378,9 @@ ${HL_CSS}
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
-    /* 시작 폭 = 이 문서가 서술하는 기준 폭. baseViewport: "mobile"(기본) | "pc" | "auto" — 어드민은 PC, 앱은 모바일 (#17).
-       기본을 auto 로 바꾸지 않는 이유: 기준 폭이 없으면 정의서의 서술이 검증할 대상을 잃는다 (#102) */
+    /* 시작 폭 = 이 문서가 서술하는 기준 폭. baseViewport: "mobile"(기본) | "pc" — 어드민은 PC, 앱은 모바일 (#17).
+       «창에 맞춘 폭» 을 기준으로 삼을 수 없는 이유: 기준 폭이 사람마다 달라지면
+       «16열이 다 보인다» 같은 서술이 검증할 대상을 잃는다. 안 들어가면 배율로 줄인다 (#105) */
     const base = DEVICES[RAW.baseViewport] ? RAW.baseViewport : "mobile";
     if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가: mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
     usePreset(base);
