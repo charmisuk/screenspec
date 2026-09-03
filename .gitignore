@@ -8,3 +8,4 @@ _*.png
 _private
 _qa/
 .claude/settings.local.json
+_mut/

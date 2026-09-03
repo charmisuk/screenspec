@@ -22,7 +22,7 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { execFileSync, spawnSync } = require("child_process");
+const { execFileSync, spawn } = require("child_process");
 
 const REPO = path.resolve(__dirname, "..");
 const LIB = path.join(REPO, "screenspec.js");
@@ -269,37 +269,99 @@ if (!list.length) { console.error("✗ 그런 돌연변이가 없다: " + only +
 const original = fs.readFileSync(LIB, "utf8");
 let caught = 0, missed = 0, broken = 0;
 
-process.on("exit", () => { try { fs.writeFileSync(LIB, original); } catch (e) { /* 이미 되돌렸다 */ } });
+/* ---- 나란히 돌린다 ----
+   판마다 node + 크롬을 통째로 띄우고, 그 섹션의 기다림(debounce·파일감시)을 고스란히 치른다.
+   그래서 하나에 12~51초고 전부 돌리면 25분이었다. 「그럼 덜 돌리자」는 답이 아니다 —
+   #91 이 정확히 «사람이 기억해서 돌리는 검사» 라서 다섯 판 동안 빨갰다.
+   덜 돌릴 게 아니라 «자동으로 돌 만큼» 빨라야 한다.
 
-for (const m of list) {
-  process.stdout.write("· " + m.id.padEnd(18) + m.why + " … ");
-  if (original.indexOf(m.find) < 0) {
-    console.log("건너뜀 (심을 자리를 못 찾았다 — 코드가 바뀌었으면 돌연변이도 고쳐야 한다)");
-    broken++;
-    continue;
+   워커마다 «레포 사본» 을 준다. 사본이 필요한 이유: examples/*.html 은 file:// 로 열려
+   ../screenspec.js 를 자기 옆에서 읽는다 — 한 파일을 여럿이 갈아 끼우면 서로의 돌연변이를 본다.
+   포트도 워커마다 옮긴다 (SS_PORT_BASE) — 안 옮기면 남의 서버에 붙는다. */
+/* 몇 판을 나란히? — «지금 CPU 로드» 로 조절하지 않는다. 두 가지 이유다:
+   ① 이 일은 CPU 가 아니라 «기다림» 이 지배한다 (8판에서 CPU 58%). CPU 여유는 천장이 아니다
+   ② loadavg 는 1분 평균이라 3분짜리 작업에는 반응이 늦다 — 제어 루프가 헛돈다
+   진짜 천장은 «크롬 하나당 메모리» 다. 그래서 코어 수와 «남은 메모리» 로 정하고,
+   8에서 자른다 — 그 위로는 이득이 얇아지고 남의 기계를 다 먹는다.
+   실측 (8코어 맥, 73개): 1판 25분 · 4판 6분 57초 · 8판 3분 33초 */
+const os = require("os");
+const AUTO = Math.min(os.cpus().length, Math.floor(os.freemem() / (400 * 1024 * 1024)), 8);
+const JOBS = Math.max(1, Number(process.env.SS_JOBS || (list.length > 2 ? Math.max(2, AUTO) : 1)));
+const WORK = path.join(REPO, "_mut");
+const SKIP = new Set([".git", "node_modules", "_qa", "_mut", "_private"]);
+
+function mirror(dst) {
+  fs.rmSync(dst, { recursive: true, force: true });
+  fs.mkdirSync(dst, { recursive: true });
+  for (const name of fs.readdirSync(REPO)) {
+    if (SKIP.has(name)) continue;
+    fs.cpSync(path.join(REPO, name), path.join(dst, name), { recursive: true });
   }
-  fs.writeFileSync(LIB, original.replace(m.find, m.to));
-  /* [grid] 는 플래그 뒤에 숨어 있다 — 안 켜면 «검사 0건» 이라 무엇을 심어도 초록이 된다 (#91) */
-  const args = [E2E, "--only", m.only].concat(m.only.indexOf("[grid]") === 0 ? ["--grid"] : []);
-  const r = spawnSync(process.execPath, args, { cwd: process.cwd(), encoding: "utf8" });
-  fs.writeFileSync(LIB, original);
-  const out = (r.stdout || "") + (r.stderr || "");
-  /* 종료코드로 본다 — FAIL 이 나도, 시험이 아예 «멈춰 버려도»(기다리던 것이 안 나타나 타임아웃)
-     그 결함을 잡은 것이다. 결과 줄만 보면 크래시를 «놓침» 으로 오판한다 (2026-08-31 실측) */
-  const hit = r.status !== 0;
-  const crashed = hit && !/결과: PASS/.test(out);
-  if (hit) { console.log(crashed ? "잡음 ✓ (시험이 멈췄다 — 그것도 잡은 것이다)" : "잡음 ✓"); caught++; }
-  else {
+}
+
+function runOne(m, dir, portBase) {
+  return new Promise((done) => {
+    if (original.indexOf(m.find) < 0) return done({ m: m, kind: "broken" });
+    const lib = path.join(dir, "screenspec.js");
+    const e2e = path.join(dir, "tests", "e2e.js");
+    fs.writeFileSync(lib, original.replace(m.find, m.to));
+    /* [grid] 는 플래그 뒤에 숨어 있다 — 안 켜면 «검사 0건» 이라 무엇을 심어도 초록이 된다 (#91) */
+    const grid = m.only.indexOf("[grid]") === 0;
+    const args = [e2e, "--only", m.only].concat(grid ? ["--grid"] : []);
+    /* 전수(272자리)는 --grid 가 따로 돈다. 여기서는 «무는가» 만 보면 되므로 판 셋으로 줄인다 */
+    const env = Object.assign({}, process.env, { SS_PORT_BASE: String(portBase) },
+      grid ? { SS_GRID_FAST: "1" } : {});
+    const ps = spawn(process.execPath, args, { cwd: process.cwd(), env: env });
+    let out = "";
+    ps.stdout.on("data", (d) => (out += d));
+    ps.stderr.on("data", (d) => (out += d));
+    ps.on("close", (code) => {
+      /* 종료코드로 본다 — FAIL 이 나도, 시험이 아예 «멈춰 버려도»(기다리던 것이 안 나타나 타임아웃)
+         그 결함을 잡은 것이다. 결과 줄만 보면 크래시를 «놓침» 으로 오판한다 (2026-08-31 실측) */
+      const hit = code !== 0;
+      done({ m: m, kind: hit ? "caught" : "missed", crashed: hit && !/결과: PASS/.test(out),
+        line: out.split("\n").find((l) => l.indexOf("결과:") === 0) });
+    });
+  });
+}
+
+(async () => {
+  const dirs = [];
+  for (let i = 0; i < JOBS; i++) {
+    const d = path.join(WORK, "w" + i);
+    mirror(d);
+    dirs.push(d);
+  }
+  process.on("exit", () => { try { fs.rmSync(WORK, { recursive: true, force: true }); } catch (e) { /* 이미 지웠다 */ } });
+  if (JOBS > 1) console.log("나란히 " + JOBS + "판 (코어 " + os.cpus().length +
+    " · 남은 메모리 " + Math.round(os.freemem() / 1073741824 * 10) / 10 + "GB · 레포 사본 · 포트 분리)\n");
+
+  let next = 0;
+  const say = (r) => {
+    process.stdout.write("· " + r.m.id.padEnd(20) + r.m.why + " … ");
+    if (r.kind === "broken") { console.log("건너뜀 (심을 자리를 못 찾았다 — 코드가 바뀌었으면 돌연변이도 고쳐야 한다)"); broken++; return; }
+    if (r.kind === "caught") { console.log(r.crashed ? "잡음 ✓ (시험이 멈췄다 — 그것도 잡은 것이다)" : "잡음 ✓"); caught++; return; }
     console.log("놓침 ✗  ← 이 검사는 가짜다");
     missed++;
-    const line = out.split("\n").find((l) => l.indexOf("결과:") === 0);
-    if (line) console.log("    " + line);
-  }
-}
+    if (r.line) console.log("    " + r.line);
+  };
+  /* 끝난 순서가 아니라 «등록한 순서» 로 찍는다 — 목록과 나란히 읽혀야 한다 */
+  const slot = new Array(list.length).fill(null);
+  let shown = 0;
+  const flush = () => { while (shown < slot.length && slot[shown]) { say(slot[shown]); shown++; } };
+  await Promise.all(dirs.map(async (dir, w) => {
+    for (;;) {
+      const i = next++;
+      if (i >= list.length) return;
+      slot[i] = await runOne(list[i], dir, 100 * (w + 1));
+      flush();
+    }
+  }));
 
-console.log("\n돌연변이 " + list.length + "개 · 잡음 " + caught + " · 놓침 " + missed +
-  (broken ? " · 자리 없음 " + broken : ""));
-if (missed || broken) {
-  console.log("놓친 것이 있으면 그 e2e 검사가 무엇을 재는지 다시 써라 — 초록불이 «고쳐졌다» 를 뜻하지 않는다.");
-  process.exit(1);
-}
+  console.log("\n돌연변이 " + list.length + "개 · 잡음 " + caught + " · 놓침 " + missed +
+    (broken ? " · 자리 없음 " + broken : ""));
+  if (missed || broken) {
+    console.log("놓친 것이 있으면 그 e2e 검사가 무엇을 재는지 다시 써라 — 초록불이 «고쳐졌다» 를 뜻하지 않는다.");
+    process.exit(1);
+  }
+})();

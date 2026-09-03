@@ -13,6 +13,10 @@ const REPO = path.resolve(__dirname, "..");
 /* 정의는 트리다. 시험은 «0A,1B» 표기로 읽는다 — 눈으로 읽기 쉽고, 깊이·순서가 한눈에 보인다 */
 const FLAT = "(function(l){var w=function(x,d){return (x||[]).reduce(function(o,b){" +
   "return o.concat([d+b.t], w(b.c,d+1));},[]);};return w(l,0).join(',');})";
+/* 여러 판을 나란히 돌릴 때 서버 포트가 겹치지 않게 — 워커마다 기준을 옮긴다 (돌연변이 병렬 실행).
+   안 옮기면 두 워커가 같은 포트를 잡아 한쪽이 조용히 남의 라이브러리를 받는다 */
+const PB = Number(process.env.SS_PORT_BASE || 0);
+const P = (n) => n + PB;
 const LIB = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
 const { chromium } = require(require.resolve("playwright", { paths: [process.cwd(), __dirname] }));
 const MOD = process.platform === "darwin" ? "Meta" : "Control"; /* 전체선택·undo 같은 네이티브 단축키는 macOS 크로미엄에서 Cmd 만 듣는다 */
@@ -292,12 +296,12 @@ function check(name, ok, detail) {
         .replace("../screenspec.js", "/screenspec.js")
         .replace("window.SCREENSPEC = {", 'window.SCREENSPEC = { accent: "#7C3AED",')); /* accent·panel 주입 (e2e 전용) */
     });
-    await new Promise((r) => srv.listen(4179, r));
+    await new Promise((r) => srv.listen(P(4179), r));
     const ovWarns = [];
     const onOvMsg = (msg) => { if (msg.type() === "warning") ovWarns.push(msg.text()); };
     page.on("console", onOvMsg);
     const bgBefore = "rgb(255, 255, 255)";
-    await page.goto("http://localhost:4179/screenspec/examples/overlay-spa.html");
+    await page.goto("http://localhost:" + P(4179) + "/screenspec/examples/overlay-spa.html");
     await page.waitForTimeout(800);
     check("suffix 매칭 초기 화면", await page.evaluate(() => window.ScreenSpec.current()) === "S-01");
     check("호스트 body 배경 보존", await page.evaluate(() => getComputedStyle(document.body).backgroundColor) === bgBefore);
@@ -425,7 +429,7 @@ function check(name, ok, detail) {
         .replace("../screenspec.js", "/screenspec.js")
         .replace('mode: "overlay"', 'mode: "frame"')); /* 모드 주입 (e2e 전용) */
     });
-    await new Promise((r) => srvF.listen(4180, r));
+    await new Promise((r) => srvF.listen(P(4180), r));
     const F = 'iframe[data-ss-frame]';
     const inFrame = () => page.frameLocator(F);
     const state = () => page.evaluate(() => {
@@ -436,7 +440,7 @@ function check(name, ok, detail) {
         inner: f.contentWindow.location.pathname
       };
     });
-    await page.goto("http://localhost:4180/screenspec/examples/overlay-spa.html");
+    await page.goto("http://localhost:" + P(4180) + "/screenspec/examples/overlay-spa.html");
     await page.waitForTimeout(1200);
     check("frame 부팅: 시트 안 액자 1개 + 툴바 + 바깥 앱 DOM 숨김", await page.evaluate(() => {
       const f = document.querySelectorAll(".ss-sheet iframe[data-ss-frame]");
@@ -1647,9 +1651,9 @@ function check(name, ok, detail) {
       if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
       res.setHeader("content-type", "text/html"); res.end(APP);
     });
-    await new Promise((r) => sP.listen(4210, r));
+    await new Promise((r) => sP.listen(P(4210), r));
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("http://localhost:4210/app.html");
+    await page.goto("http://localhost:" + P(4210) + "/app.html");
     await page.waitForTimeout(900);
 
     const box = () => page.evaluate(() => {
@@ -1744,11 +1748,11 @@ function check(name, ok, detail) {
     });
     /* ── frame: 액자는 우리가 소유한다 — 우리가 옮긴다 ── */
     const sF = mkSrv("frame");
-    await new Promise((r) => sF.listen(4197, r));
+    await new Promise((r) => sF.listen(P(4197), r));
     const infos = [];
     const onInfo = (m) => { if (m.type() === "info") infos.push(m.text()); };
     page.on("console", onInfo);
-    await page.goto("http://localhost:4197/screenspec/examples/overlay-spa.html");
+    await page.goto("http://localhost:" + P(4197) + "/screenspec/examples/overlay-spa.html");
     await page.waitForTimeout(1200);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(900);
@@ -1787,8 +1791,8 @@ function check(name, ok, detail) {
 
     /* ── overlay: 앱이 라우팅을 소유한다 — 소프트 시도 + 신호 ── */
     const sO = mkSrv("overlay");
-    await new Promise((r) => sO.listen(4196, r));
-    await page.goto("http://localhost:4196/screenspec/examples/overlay-spa.html");
+    await new Promise((r) => sO.listen(P(4196), r));
+    await page.goto("http://localhost:" + P(4196) + "/screenspec/examples/overlay-spa.html");
     await page.waitForTimeout(1000);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-09"));
     await page.waitForTimeout(700);
@@ -2340,16 +2344,16 @@ function check(name, ok, detail) {
       res.end("<!doctype html><body>" + BODY + "<script>" +
         (on ? CFG.replace("off:true,", "") : CFG) + "</script><script src=\"/screenspec.js\"></script></body>");
     });
-    await new Promise((r) => srv2.listen(4183, r));
-    await page.goto("http://localhost:4183/?screenspec=1");
+    await new Promise((r) => srv2.listen(P(4183), r));
+    await page.goto("http://localhost:" + P(4183) + "/?screenspec=1");
     await page.waitForTimeout(700);
     check("?screenspec=1 → off:true 를 이기고 정상 부팅", await page.evaluate(() =>
       !!document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "wrap"));
-    await page.goto("http://localhost:4183/cfgon?screenspec=0");
+    await page.goto("http://localhost:" + P(4183) + "/cfgon?screenspec=0");
     await page.waitForTimeout(700);
     check("?screenspec=0 → 설정이 켜져 있어도 off", await page.evaluate(() =>
       !document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "off"));
-    await page.goto("http://localhost:4183/#screenspec");
+    await page.goto("http://localhost:" + P(4183) + "/#screenspec");
     await page.waitForTimeout(700);
     check("#screenspec (해시·값 생략) → 켜짐", await page.evaluate(() =>
       !!document.querySelector(".ss-toolbar") && window.ScreenSpec.mode === "wrap"));
@@ -2407,9 +2411,9 @@ function check(name, ok, detail) {
       rs.writeHead(200, { "Content-Type": "text/html" });
       rs.end(PROTO);
     });
-    await new Promise((r) => srv.listen(4197, r));
+    await new Promise((r) => srv.listen(P(4197), r));
     const open = async (p) => {
-      await page.goto("http://localhost:4197" + (p || "/"));
+      await page.goto("http://localhost:" + P(4197) + "" + (p || "/"));
       await page.waitForTimeout(500);
       await page.click("#ss-mDoc");
       await page.waitForTimeout(300);
@@ -2590,8 +2594,8 @@ function check(name, ok, detail) {
       rs.writeHead(200, { "Content-Type": "text/html" });
       rs.end(outHtml);
     });
-    await new Promise((r) => srv2.listen(4196, r));
-    await page.goto("http://localhost:4196/");
+    await new Promise((r) => srv2.listen(P(4196), r));
+    await page.goto("http://localhost:" + P(4196) + "/");
     await page.waitForTimeout(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(300);
@@ -2709,8 +2713,8 @@ function check(name, ok, detail) {
       rs.writeHead(200, { "Content-Type": p.endsWith(".js") ? "text/javascript" : "text/html" });
       rs.end(fs.readFileSync(path.join(REPO, p)));
     });
-    await new Promise((r) => srvOv.listen(4192, r));
-    await page.goto("http://localhost:4192/");
+    await new Promise((r) => srvOv.listen(P(4192), r));
+    await page.goto("http://localhost:" + P(4192) + "/");
     await page.waitForTimeout(1000);
     await page.click("#ss-ovDoc");
     await page.waitForTimeout(500);
@@ -3827,7 +3831,11 @@ function check(name, ok, detail) {
       return { show: true, ind: want, par: par,
         after: rest.slice(0, at2).concat(cut, rest.slice(at2)).map((b) => b.d + b.t).join(",") };
     };
-    const FIX = [
+    /* 돌연변이 판이 쓰는 «빠른 한 벌» (#91) — 판 셋이면 두 규칙(부모·자식 사이 / 하위 데리고 들어가기)을
+       다 지난다. 「무는가」만 보는 자리라 전수는 필요 없고, 전수는 --grid 가 따로 돈다.
+       전체가 25분이면 아무도 안 돌린다 — 그게 #91 이 다섯 판 동안 빨갛던 이유다 */
+    const GFAST = process.env.SS_GRID_FAST === "1";
+    const FIX0 = [
       { l: [{ t: "A", d: 0 }, { t: "B", d: 1 }, { t: "C", d: 0 }, { t: "D", d: 1 }], from: 1 },
       { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "Q", d: 1 }, { t: "B", d: 0 }], from: 0 },
       { l: [{ t: "A", d: 0 }, { t: "B", d: 0 }, { t: "C", d: 0 }], from: 1 },
@@ -3838,6 +3846,8 @@ function check(name, ok, detail) {
       { l: [{ t: "A", d: 0 }, { t: "P", d: 1 }, { t: "Q", d: 2 }, { t: "R", d: 1 }, { t: "B", d: 0 }], from: 1 },
       { l: [{ t: "A", d: 0 }, { t: "B", d: 0 }], from: 0 },
     ];
+    /* 빠른 한 벌 = 0(형제+하위 섞임) · 5(부모와 자식 사이) · 7(하위 데리고 깊이) */
+    const FIX = GFAST ? [FIX0[0], FIX0[5], FIX0[7]] : FIX0;
     let cases = 0;
     const bad = [];
     for (const fx of FIX) {
