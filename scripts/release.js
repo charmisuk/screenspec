@@ -137,6 +137,9 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
       catch { no("lint 실패 — node tests/lint.js 먼저 통과시켜라"); }
     }
     console.log("    (e2e·smoke 는 브라우저가 필요해 여기서 돌리지 않는다 — AGENTS.md 절차대로 미리 돌려라)");
+    /* 「손댔을 때만」 으로 두었더니 20자리가 빨간 채로 다섯 판이 나갔다 (#91).
+       여기서 돌릴 수는 없지만(브라우저), 물어는 본다 — 안 물으면 또 아무도 안 돌린다 */
+    console.log("    · 전체 e2e · 전체 돌연변이 · node tests/e2e.js --grid  ← 이 셋을 돌렸나?");
   }
 
   /* ---- 1.5 판 번호를 코드로 옮긴다 (#86) ---- */

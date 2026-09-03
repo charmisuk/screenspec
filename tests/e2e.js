@@ -3798,17 +3798,30 @@ function check(name, ok, detail) {
       if (at > from && at < from + n) return { show: false };
       let p = at - 1;
       while (p >= from && p < from + n) p--;
-      const cap = p >= 0 ? Math.min(2, ind(l, p) + 1) : 0;
+      /* 딸린 하위가 «화면이 그리는 2단» 을 넘게 되면 그만큼 못 들어간다 (#91).
+         전에는 넘는 만큼 손자를 2로 깎았는데, 그러면 손자가 자식이 아니라 «형제» 가 된다 —
+         이 검사가 스스로 적어 둔 규칙 6(「딸린 하위가 통째로 따라오고 깊이 차이를 그대로 유지한다」)을
+         참조가 어긴 것이다. 깎을 게 아니라 애초에 그 깊이를 못 고르는 것이 맞다 */
+      const deep = Math.max(...l.slice(from, from + n).map((b) => b.d | 0)) - ind(l, from);
+      const cap = p >= 0 ? Math.min(2 - deep, ind(l, p) + 1) : 0;
       const want = Math.max(0, Math.min(cap, ind(l, from) + dx)); /* 원래 깊이 + 옆으로 간 칸수 */
-      const at2 = at > from ? at - n : at;
+      const cutN = l.slice(from, from + n);
+      const restL = l.slice(0, from).concat(l.slice(from + n));
+      const rind = (i) => (restL[i] ? (restL[i].d | 0) : 0);
+      let at2 = at > from ? at - n : at;
+      /* 남의 «부모와 그 하위 사이» 로는 못 들어간다 (#91). 들어가면 뒤따르던 하위가 조용히
+         내 밑으로 붙어, 이 검사가 지키려는 규칙 자체가 깨진다 —
+         「내가 옮긴 것 말고는 아무것도 안 바뀐다. 남의 깊이도 남의 소속도 그대로다」(README 2번).
+         그런 자리는 그 하위 뭉치 «뒤» 로 미끄러진다. 노션도 부모와 자식 사이에는 안 떨어뜨린다 */
+      while (at2 < restL.length && rind(at2) > want) at2++;
       if (at2 === from && want === ind(l, from)) return { show: false };
       let par = -1;
       if (want > 0) for (let i = at - 1; i >= 0; i--) {
         if (i >= from && i < from + n) continue;
         if (ind(l, i) === want - 1) { par = i; break; }
       }
-      const cut = l.slice(from, from + n).map((b) => ({ t: b.t, d: b.d | 0 }));
-      const rest = l.slice(0, from).concat(l.slice(from + n));
+      const cut = cutN.map((b) => ({ t: b.t, d: b.d | 0 }));
+      const rest = restL;
       const shift = want - cut[0].d;
       cut.forEach((b) => { b.d = Math.max(0, Math.min(2, b.d + shift)); });
       return { show: true, ind: want, par: par,
@@ -3883,7 +3896,9 @@ function check(name, ok, detail) {
         }
       }
     }
-    check("위계 전수: " + cases + "가지 자리에서 규칙과 실제가 같다", bad.length === 0, bad.slice(0, 6));
+    /* 어긋난 «개수» 를 제목에 적는다 — 앞의 몇 건만 보여주던 탓에 총계를 아무도 몰랐다 (#91) */
+    check("위계 전수: " + cases + "가지 자리에서 규칙과 실제가 같다 (어긋남 " + bad.length + ")",
+      bad.length === 0, bad.slice(0, 8));
   } else if (!ONLY && !LIST) console.log("[grid] 위계 전수 검증 — 건너뜀 (규칙을 손댔으면 --grid 로 돌린다)");
 
   /* ============ 자동저장 ============

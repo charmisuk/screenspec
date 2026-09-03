@@ -207,6 +207,12 @@ const MUTS = [
   { id: "sheet-not-bottom", only: "[내보내기]", why: "폰에서 바닥 시트가 아니라 가운데 상자로 뜬다 (#96)",
     find: "    .ss-prdlg{max-width:100%;width:100%;margin:auto auto 0;border-radius:16px 16px 0 0;padding:18px 18px 16px}",
     to:   "    .ss-prdlg{padding:18px 18px 16px}" },
+  { id: "drag-steals-kids", only: "[grid]", why: "앞 줄의 «조상» 이 아니라 앞 줄 자체의 다음 형제로 넣는다 — 남의 자식 자리로 파고든다 (#91)",
+    find: "        const anc = prev.path.slice(0, ind + 1);",
+    to:   "        const anc = prev.path;" },
+  { id: "drag-cap-ignores-sub", only: "[grid]", why: "데려가는 하위를 안 세고 더 들어간다 — 손자가 3단이 된다 (#91 참조가 정답으로 여겼던 그 동작)",
+    find: "      const room = 2 - deepOf(me.b, 0);",
+    to:   "      const room = 2;" },
   { id: "flow-hop-off", only: "[흐름]", why: "화살표가 줄 사이를 못 건넌다 — #48 이전으로 (#48)",
     find: "    function edHop(dir, x) {\n      const cur = edEl;\n      if (!cur) return false;",
     to:   "    function edHop(dir, x) {\n      const cur = edEl;\n      if (cur || !cur) return false;" },
@@ -273,7 +279,9 @@ for (const m of list) {
     continue;
   }
   fs.writeFileSync(LIB, original.replace(m.find, m.to));
-  const r = spawnSync(process.execPath, [E2E, "--only", m.only], { cwd: process.cwd(), encoding: "utf8" });
+  /* [grid] 는 플래그 뒤에 숨어 있다 — 안 켜면 «검사 0건» 이라 무엇을 심어도 초록이 된다 (#91) */
+  const args = [E2E, "--only", m.only].concat(m.only.indexOf("[grid]") === 0 ? ["--grid"] : []);
+  const r = spawnSync(process.execPath, args, { cwd: process.cwd(), encoding: "utf8" });
   fs.writeFileSync(LIB, original);
   const out = (r.stdout || "") + (r.stderr || "");
   /* 종료코드로 본다 — FAIL 이 나도, 시험이 아예 «멈춰 버려도»(기다리던 것이 안 나타나 타임아웃)
