@@ -489,6 +489,11 @@
        폭 조절 손잡이가 시트 «밖» 20px 에 살아서, 여백이 그보다 좁으면 손잡이가 잘린다 */
     --ss-stage-pad:24px}
   body.ss-wrap{margin:0;background:var(--ss-canvas)}
+  /* 액자 모드: 앱은 액자 «안» 에 산다. 바깥 문서에 남은 앱 DOM 은 전부 감춘다 (#103).
+     부팅 때 한 번 훑어 인라인 style 을 걸던 것을 규칙으로 바꾼 이유: 프레임워크가 라우팅하며
+     최상위 노드를 갈아끼우면 새 노드에는 그 인라인이 없어 «앱이 두 번 보였다».
+     규칙은 노드가 새로 생겨도 저절로 따라온다. !important 인 이유는 앱의 #id 규칙이 이겨선 안 되기 때문이다 */
+  body.ss-framed > *:not(.ss-ui):not(.ss-toolbar):not(.ss-proto-wrap):not(.ss-docmode):not(.ss-tip):not(.ss-toc):not(.ss-nav-toast):not([data-ss-ignore]):not(script):not(style){display:none!important}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
   /* 프로토타입의 CSS 가 우리 UI 를 흔들면 안 된다 (2026-08-29 실측: 프로토타입의 button{flex:1} 때문에
@@ -4895,13 +4900,10 @@ ${HL_CSS}
   /* frame 모드: 바깥 창에 남은 앱 DOM 을 숨긴다 — 프레임워크 앱은 옮길 수 없으므로(리액트가 다시 붙인다)
      감싸는 대신 숨기고, 같은 주소를 액자(iframe)로 다시 연다. 우리 UI 는 전부 .ss-ui 지만 방어적으로 전부 적는다 */
   const SS_OWN_SEL = ".ss-ui,.ss-toolbar,.ss-proto-wrap,.ss-docmode,.ss-tip,.ss-toc,.ss-nav-toast";
-  function hideAppDom() {
-    Array.from(document.body.children).forEach((n) => {
-      if (n.tagName === "SCRIPT" || n.tagName === "STYLE") return;
-      if (n.matches && n.matches(SS_OWN_SEL)) return;
-      n.style.display = "none";
-    });
-  }
+  /* 표시만 건다 — 실제로 감추는 것은 위의 규칙이다 (#103).
+     예전에는 여기서 body.children 을 훑어 인라인 style 을 걸었는데, 그건 «부팅 그 순간» 의 목록이라
+     프레임워크가 뒤에 갈아끼운 노드를 놓쳤다. 두 번 불러도 해가 없다 */
+  function hideAppDom() { document.body.classList.add("ss-framed"); }
 
   /* ============================================================
      wrap 모드 — 단일 HTML: 본문을 기기 뷰포트 시트로 감싼다

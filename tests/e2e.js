@@ -513,6 +513,29 @@ function check(name, ok, detail) {
       const t = d.querySelector(".ss-hl");
       return !!t && t.getAttribute("data-spec") === "3" && !!d.getElementById("ss-frame-css");
     }));
+    /* 부팅 «뒤» 에 생긴 body 직속 노드도 감춰져야 한다 (#103).
+       프레임워크가 라우팅하며 최상위 노드를 갈아끼우면 앱이 액자 옆에 겹쳐 보였다 —
+       부팅 그 순간의 목록에 인라인 style 을 걸던 탓이다. 규칙으로 감추면 새 노드도 따라온다 */
+    const late = await page.evaluate(() => {
+      const d = document.createElement("div");
+      d.id = "ss-late-probe";
+      d.textContent = "부팅 뒤에 생긴 앱 뿌리";
+      document.body.appendChild(d);
+      const cs = getComputedStyle(d);
+      /* 툴바는 늘 보여야 하고, 무대는 «지금 모드의 것» 하나가 보이면 된다
+         (정의서 모드에서 .ss-proto-wrap 이 숨는 것은 원래 그렇다) */
+      const seen = (q) => { const e = document.querySelector(q); return !!e && getComputedStyle(e).display !== "none"; };
+      const ui = "툴바:" + (seen(".ss-toolbar") ? "보임" : "숨김") +
+        " 무대:" + (seen(".ss-proto-wrap") || seen(".ss-docmode") ? "보임" : "둘 다 숨김");
+      const w = Math.round(d.getBoundingClientRect().width);
+      const cls = document.body.className, disp = cs.display, par = d.parentNode === document.body;
+      d.remove();
+      return { hidden: disp === "none", disp: disp, w: w, cls: cls, par: par, ui: ui };
+    });
+    check("액자: 부팅 뒤에 생긴 body 직속 노드도 감춰진다 (앱이 두 번 안 보인다) (#103)",
+      late.hidden === true && late.w === 0, JSON.stringify(late));
+    check("액자: 그 규칙이 우리 뷰어 UI 는 안 건드린다",
+      late.ui === "툴바:보임 무대:보임" && /\bss-framed\b/.test(late.cls), JSON.stringify(late));
     srvF.close();
   }
 
