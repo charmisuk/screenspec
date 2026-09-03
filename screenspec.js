@@ -509,6 +509,11 @@
   .ss-widthsim .ss-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
   .ss-widthsim .ss-seg button[aria-pressed="true"]{background:#fff;color:var(--ss-ink);box-shadow:0 1px 2px rgba(17,24,39,.12)}
   .ss-wpx{font-family:var(--ss-mono);font-size:11px;color:var(--ss-ink3);min-width:52px;text-align:right}
+  /* 배율 (#104) — 「자동」 과 다른 축이다. 자동은 «프레임 크기» 를 바꾸고(앱의 미디어쿼리가 달라진다),
+     이건 크기를 둔 채 «보이는 배율» 만 줄인다. DevTools 가 Responsive 와 Zoom 을 나눠 둔 그 자리 */
+  .ss-zoom{border:1px solid var(--ss-line2);background:#FAFAF9;color:var(--ss-ink2);border-radius:8px;
+    padding:4px 10px;font-size:12px;font-weight:700;flex-shrink:0}
+  .ss-zoom[aria-pressed="true"]{background:var(--ss-ink);border-color:var(--ss-ink);color:#fff}
   .ss-tools{display:flex;align-items:center;gap:14px}
   .ss-more{display:none;position:relative;width:34px;height:32px;flex-shrink:0;margin-left:auto;
     border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);border-radius:8px;
@@ -1939,7 +1944,12 @@ ${HL_CSS}
         const pos = ctx.posOf(t);
         /* 값이 그대로면 쓰지 않는다 — 스타일 쓰기는 그 자체로 DOM 변경 신호라 감시자들을 깨운다.
            그리고 «움직였는가» 판정의 근거가 된다 (#8) */
-        const L_ = pos.left + "px", T_ = pos.top + "px";
+        /* 소수점을 자르고 쓴다. 안 자르면 «움직였는가» 판정이 영원히 참이 된다 —
+           축소 배율로 나눈 값은 14.000000000000002 같은 긴 실수가 되는데, 브라우저는 그걸
+           «14px» 로 줄여 담는다. 다음 프레임에 둘을 견주면 늘 다르다 → 추적 루프가 안 멎는다.
+           (배율이 딱 1 인 문서에서는 나눗셈이 없어 안 드러났다 — 세로 축소를 넣자 드러났다 #104) */
+        const px = (v) => Math.round(v * 100) / 100 + "px";
+        const L_ = px(pos.left), T_ = px(pos.top);
         if (m.style.left !== L_) { m.style.left = L_; moved = true; }
         if (m.style.top !== T_) { m.style.top = T_; moved = true; }
         if (m.style.transform !== pos.transform) m.style.transform = pos.transform;
@@ -4961,6 +4971,8 @@ ${HL_CSS}
           <button data-w="auto" aria-pressed="false" title="지금 창에 맞춘다">자동</button>
         </div>
         <span class="ss-wpx" id="ss-wpx"></span>
+        <button type="button" class="ss-zoom" id="ss-zoom" aria-pressed="false"
+          title="창에 맞춰 축소해서 본다 (크기는 그대로)">맞춤</button>
       </div>`);
 
     /* ---- 화면정의서 모드 ---- */
@@ -4995,6 +5007,7 @@ ${HL_CSS}
     let sheetH = DEVICES.mobile.h;
     let scale = 1;
     let fitOn = false; /* 창을 따라가는 중인가 — 눌린 버튼과는 다르다 (아래 usePreset 참고) */
+    let zoomOn = false; /* 프로토타입 모드에서 «축소해서» 보는 중인가 (#104). 크기는 그대로다 */
     const wpx = document.getElementById("ss-wpx");
     function applySize(w, hgt) {
       /* 터치 기기: 시트가 화면보다 넓으면 핸들이 화면 밖으로 나가 조작 불가 → 뷰포트에 맞게 클램프 */
@@ -5036,6 +5049,11 @@ ${HL_CSS}
       const btn = e.target.closest("button");
       if (btn) usePreset(btn.dataset.w);
     });
+    /* 「맞춤」 — 크기는 그대로 두고 보이는 배율만 줄인다. 「자동」 과 다른 축이다 (#104):
+       자동은 프레임을 1232 로 «작게 만들어» 앱의 미디어쿼리가 달라지고,
+       이건 1920 인 채로 0.65배로 «보기만» 한다. PC 화면을 노트북에서 검수할 때 필요한 쪽이다 */
+    const zoomBtn = document.getElementById("ss-zoom");
+    if (zoomBtn) zoomBtn.addEventListener("click", () => { zoomOn = !zoomOn; layout(); core.placeMarkers(); });
     let drag = null;
     function makeDrag(el, useW, useH) {
       el.addEventListener("pointerdown", (e) => {
@@ -5080,18 +5098,49 @@ ${HL_CSS}
     mDoc.onclick = () => setMode("doc");
 
     /* ---- 축소 배치 ---- */
+    /* 배율 — 두 모드가 같은 한 가지 계산을 쓴다 (#104).
+       세로도 같이 본다: 폭만 보면 1080 짜리 시트가 700px 창에서 여전히 스크롤이라
+       「한 화면에 다 보이게」가 안 됐다. 축소는 넘칠 때만 한다 (1을 안 넘긴다) */
+    function fitScale(host) {
+      const b = inner(host);
+      if (b.w < 1) return 1;
+      /* 높이는 «상자가 높이를 가둘 때» 만 본다. 좁은 폭에서는 무대가 흐름 배치라
+         높이가 내용을 따라가는데, 그걸 기준으로 삼으면 배율이 제 꼬리를 문다 (자기 참조).
+         가두는가 = 스크롤 상자인가. 그때만 「한 화면에 다 보이게」가 뜻이 있다 */
+      const bound = getComputedStyle(host).overflowY !== "visible" && b.h > 0;
+      return Math.max(0.2, Math.min(1, b.w / sheetW, bound ? b.h / sheetH : 1));
+    }
     function layout() {
-      if (document.body.classList.contains("ss-mode-doc")) {
-        const avail = inner(stage).w;
-        scale = Math.min(1, avail / sheetW);
+      const doc = document.body.classList.contains("ss-mode-doc");
+      /* 정의서는 «읽는 자리» 라 늘 맞춘다. 프로토타입은 «만지는 자리» 라 기본이 실물 크기(1)고,
+         축소는 사람이 「맞춤」 을 눌렀을 때만 — 줄이면 글자가 흐려지고 손가락 크기 감각이 달라진다 */
+      scale = doc ? fitScale(stage) : (zoomOn ? fitScale(protoWrap) : 1);
+      if (scale !== 1) {
         frame.style.transformOrigin = "top left";
         frame.style.transform = "scale(" + scale + ")";
         fit.style.width = sheetW * scale + "px";
         fit.style.height = sheetH * scale + "px";
       } else {
-        scale = 1;
         frame.style.transform = "";
         fit.style.width = ""; fit.style.height = "";
+      }
+      /* 홀더는 width:max-content 라 축소해도 «원래 크기» 만큼 자리를 차지한다.
+         축소한 프레임 자체는 줄어든 만큼만 자리를 먹는데(변형된 상자가 기준), 홀더는 안 줄어
+         그만큼 빈 곳으로 스크롤되는 가짜 여백이 남았다 — 정의서 모드에서 가로 1224px 이었다 (#104).
+         프레임을 지금 담고 있는 홀더의 자리를 줄인다 (두 모드가 같은 처리) */
+      /* 프레임 폭을 시트에 못박는다 — 안 그러면 블록이라 홀더를 따라 눌린다.
+         눌리면 시트가 삐져나오고, 프레임 기준으로 붙은 폭 조절 손잡이가 엉뚱한 자리로 간다 */
+      frame.style.width = sheetW + "px";
+      const holder = frame.parentNode;
+      if (holder && holder.classList && holder.classList.contains("ss-holder")) {
+        holder.style.width = scale === 1 ? "" : Math.ceil(sheetW * scale) + "px";
+        holder.style.height = scale === 1 ? "" : Math.ceil(sheetH * scale) + "px";
+      }
+      const zb = document.getElementById("ss-zoom");
+      if (zb) {
+        zb.setAttribute("aria-pressed", String(!doc && zoomOn));
+        zb.textContent = doc ? Math.round(scale * 100) + "%" : zoomOn ? Math.round(scale * 100) + "%" : "맞춤";
+        zb.disabled = doc; /* 정의서는 늘 맞춘다 — 끌 수 있는 것이 아니다 */
       }
       /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 (터치 기기는 더 크게·시트에 걸치게) */
       const coarse = window.matchMedia && matchMedia("(pointer:coarse)").matches;
@@ -5268,7 +5317,7 @@ ${HL_CSS}
     }
 
     /* ---- 재배치 트리거 ---- */
-    window.addEventListener("resize", () => { if (fitOn) fitToStage(); layout(); });
+    window.addEventListener("resize", () => { if (fitOn) fitToStage(); layout(); core.placeMarkers(); });
     document.querySelectorAll("img").forEach((im) => im.addEventListener("load", layout));
     document.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => requestAnimationFrame(layout)));
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);

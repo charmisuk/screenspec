@@ -122,7 +122,7 @@
 
 ```bash
 node tests/lint.js                 # 의존성 없음, 0초
-node tests/e2e.js --only <섹션>     # 건드린 섹션만. 목록은 --list (46개)
+node tests/e2e.js --only <섹션>     # 건드린 섹션만. 목록은 --list (47개)
 node scripts/mutate.js <id>        # 새 기능·수정을 넣었으면 그 돌연변이 하나
 ```
 
