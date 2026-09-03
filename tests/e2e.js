@@ -992,7 +992,7 @@ function check(name, ok, detail) {
     /* PNG — 그리는 곳 둘째. 빠지면 그림에서만 내용이 사라진다 */
     await page.click(".ss-prbtn");
     await page.waitForTimeout(300);
-    await page.evaluate(() => (document.querySelector("#ss-prTable").checked = true));
+    await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(1200);
     const cap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
@@ -1192,7 +1192,7 @@ function check(name, ok, detail) {
     /* PNG — 번호와 출처 절이 그림에 같이 실린다 */
     await page.click(".ss-prbtn");
     await page.waitForTimeout(300);
-    await page.evaluate(() => (document.querySelector("#ss-prTable").checked = true));
+    await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(1200);
     const rcap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
@@ -1241,7 +1241,7 @@ function check(name, ok, detail) {
     /* PNG — 뷰어가 그려 둔 svg 를 재사용한다 */
     await page.click(".ss-prbtn");
     await page.waitForTimeout(300);
-    await page.evaluate(() => (document.querySelector("#ss-prTable").checked = true));
+    await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(1200);
     const mcap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
@@ -1431,6 +1431,201 @@ function check(name, ok, detail) {
       (await page.locator(line).textContent()) === "첫 줄/" &&
       (await page.locator(".ss-pickbar, .ss-picking").count()) === 0,
       await page.locator(line).textContent());
+  }
+
+  /* ============ 내보내기 대화상자 (#96) ============
+     평평한 체크 셋 + 종속 select 하나였다. 「머리말 표시: 화면 ID · 화면명 · 경로 · 일시」 는
+     넷을 나열만 하고 개별 제어가 없었고 — 일시는 아예 그림에 없었다(문구만 약속하고 있었다).
+     여기서 재는 것: 뎁스 체크 · 실제 캡처에서 조각이 빠지는가 · 색이 문서를 안 건드리는가 ·
+     기억(사람 취향이라 파일이 아니라 localStorage) · 폰 시트. */
+  if (sec("[내보내기] 뎁스·색·기억 (#96)")) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
+    await page.waitForTimeout(900);
+    /* 조립 상자를 가로채 «실제로 무엇이 구워졌는가» 를 본다 — 대화상자 상태가 아니라 결과를 잰다 */
+    await page.evaluate(() => {
+      window.__caps = [];
+      const orig = document.body.appendChild.bind(document.body);
+      document.body.appendChild = function (n) {
+        const r = orig(n);
+        if (n.classList && n.classList.contains("ss-cap")) window.__caps.push(n);
+        return r;
+      };
+    });
+    const dlg = () => page.evaluate(() => {
+      const d = document.querySelector(".ss-prdlg");
+      const el = (k) => d.querySelector('[data-pr-c="' + k + '"]');
+      const st = (k) => { const e = el(k); return !e ? "-없음-" : e.indeterminate ? "-" : e.checked ? "v" : "x"; };
+      /* hidden 속성이 아니라 «정말 안 보이는가» 를 잰다 — display 를 가진 조각에서는 [hidden] 이 진다 */
+      const vis = (s) => { const e = d.querySelector(s); return !!e && getComputedStyle(e).display !== "none"; };
+      return { head: st("head"), id: st("id"), name: st("name"), path: st("path"), when: st("when"),
+        mark: st("mark"), table: st("table"), dev: st("dev"),
+        headKidsOff: d.querySelector('[data-pr-k="head"]').classList.contains("ss-off"),
+        devBox: !!d.querySelector('[data-pr-k="table"]'),
+        pvPath: vis(".ss-pr-p-path"), pvMk: vis(".ss-pr-p-mk"), pvTbl: vis(".ss-pr-p-tbl"),
+        fname: d.querySelector(".ss-pr-fname").textContent, accent: d.style.getPropertyValue("--ss-accent") };
+    });
+    const baked = () => page.evaluate(() => {
+      const n = window.__caps[window.__caps.length - 1];
+      if (!n) return null;
+      const q = (s) => !!n.querySelector(s);
+      return { id: q(".ss-cap-id"), name: q(".ss-cap-name"), path: q(".ss-cap-path"), when: q(".ss-cap-when"),
+        whenText: (n.querySelector(".ss-cap-when") || {}).textContent || "", table: q(".ss-pr-table"),
+        accent: n.style.getPropertyValue("--ss-accent"),
+        docAccent: getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim() };
+    });
+    const go = async () => { await page.click('[data-pr="go"]'); await page.waitForTimeout(2200); };
+
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    let d = await dlg();
+    check("UX 라이팅: 제목이 확장자가 아니라 사람의 말이다",
+      (await page.textContent(".ss-prdlg h3")) === "그림으로 내보내기");
+    check("무엇이 만들어지는지 이름으로 말한다 (.png 는 여기서 보인다)", /\.png$/.test(d.fname), d.fname);
+    check("취소 — 이 자리에서 하는 일은 «그만두기» 다",
+      (await page.textContent('.ss-prdlg [data-pr="cancel"]')) === "취소");
+    check("기본값: 화면 ID·화면명·경로 켬 · 일시 끔 · 번호 켬 · 표 끔",
+      d.head === "v" && d.id === "v" && d.name === "v" && d.path === "v" &&
+      d.when === "x" && d.mark === "v" && d.table === "x", JSON.stringify(d));
+    check("기본 한 벌은 «일부» 가 아니다 — 부모가 중간 상태로 안 보인다", d.head === "v", d.head);
+    check("스케치에 번호가 서 있다", d.pvMk === true);
+    await page.uncheck('[data-pr-c="mark"]');
+    await page.waitForTimeout(150);
+    check("«화면 위 번호» 를 끄면 스케치에서 번호가 «정말» 사라진다", (await dlg()).pvMk === false);
+    await page.check('[data-pr-c="mark"]');
+    await page.waitForTimeout(150);
+    check("머리말이 켜져 있으면 그 자식은 흐리지 않다", d.headKidsOff === false);
+    /* 이 문서에는 개발 정의가 없다 — 아무 일도 안 하는 선택지는 아예 만들지 않는다 (옛 「레이어」 와 같은 규칙) */
+    check("개발 정의가 없는 문서에는 «개발 정의 포함» 을 안 만든다", d.devBox === false, JSON.stringify(d));
+
+    /* ── 뎁스 ── */
+    await page.uncheck('[data-pr-c="path"]');
+    await page.waitForTimeout(150);
+    d = await dlg();
+    check("자식 하나를 빼면 부모가 중간 상태", d.head === "-" && d.path === "x", JSON.stringify(d));
+    check("미리보기가 설정을 따라간다 (경로가 스케치에서 사라진다)", d.pvPath === false);
+    await page.click('[data-pr-c="head"]');
+    await page.waitForTimeout(150);
+    d = await dlg();
+    check("부모를 누르면 자식 전부 꺼진다", d.head === "x" && d.id === "x" && d.headKidsOff === true, JSON.stringify(d));
+    await page.click('[data-pr-c="head"]');
+    await page.waitForTimeout(150);
+    d = await dlg();
+    check("다시 누르면 «기본 한 벌» 이 켜진다 — 안 쓰던 일시가 따라오지 않는다",
+      d.id === "v" && d.name === "v" && d.path === "v" && d.when === "x", JSON.stringify(d));
+    await page.check('[data-pr-c="when"]');
+    await page.waitForTimeout(150);
+    check("일시는 손으로 켠다", (await dlg()).when === "v");
+    await page.check('[data-pr-c="table"]');
+    await page.waitForTimeout(150);
+    check("표를 켜면 미리보기에도 표가 선다", (await dlg()).pvTbl === true);
+    await page.uncheck('[data-pr-c="table"]');
+    await page.waitForTimeout(150);
+    check("표를 끄면 미리보기에서도 사라진다", (await dlg()).pvTbl === false);
+
+    /* ── 실제 캡처로 검증 ── */
+    await go();
+    let b = await baked();
+    check("일시를 켜면 그림에 실제로 들어간다 (전에는 문구만 약속했다)",
+      b.when === true && /^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(b.whenText), JSON.stringify(b));
+    await page.uncheck('[data-pr-c="path"]');
+    await page.uncheck('[data-pr-c="when"]');
+    await go();
+    b = await baked();
+    check("머리말 네 조각이 각각 그림에서 빠진다",
+      b.id === true && b.name === true && b.path === false && b.when === false, JSON.stringify(b));
+
+    /* ── 색: 이 그림에만 ── */
+    await page.click(".ss-pr-more summary");
+    await page.waitForTimeout(150);
+    await page.click('[data-pr-color="#E5484D"]');
+    await page.waitForTimeout(150);
+    check("색은 accent 프리셋을 그대로 쓴다 (베끼지 않는다)",
+      (await page.evaluate(() => document.querySelectorAll(".ss-pr-sw button").length)) === 5);
+    await go();
+    b = await baked();
+    check("고른 색이 그 그림에 적용된다", b.accent === "#E5484D", JSON.stringify(b));
+    check("문서의 accent 는 그대로다 — 내보내기가 문서를 고치면 안 된다",
+      b.docAccent === "#2952E3", b.docAccent);
+    await page.click('[data-pr-color="#E5484D"]');
+    await page.waitForTimeout(120);
+    check("같은 색을 다시 누르면 문서 색으로 돌아간다", (await dlg()).accent === "");
+    await page.fill(".ss-pr-hex", "#00AA88");
+    await page.waitForTimeout(150);
+    check("hex 직접 입력도 받는다", (await dlg()).accent === "#00AA88");
+    await page.fill(".ss-pr-hex", "빨강");
+    await page.waitForTimeout(150);
+    check("hex 가 아니면 무시한다 (깨진 값이 그림까지 안 간다)", (await dlg()).accent === "#00AA88");
+
+    /* ── 기억: 사람 취향이라 파일이 아니라 localStorage ── */
+    /* 한 번도 안 뽑은 색으로 재야 «지금 저장됐나» 를 앞 단계와 구분할 수 있다 */
+    await page.fill(".ss-pr-hex", "#00AA88");
+    await page.waitForTimeout(120);
+    check("열어 보기만 한 것은 아직 취향이 아니다 (저장은 «내보내기» 때)", await page.evaluate(() => {
+      const raw = localStorage.getItem("screenspec:export");
+      return !raw || JSON.parse(raw).color !== "#00AA88";
+    }));
+    await go();
+    check("내보낸 뒤에는 남는다", await page.evaluate(() => {
+      const o = JSON.parse(localStorage.getItem("screenspec:export") || "{}");
+      return o.color === "#00AA88" && o.path === false && o.when === false;
+    }));
+    check("문서가 아니라 사람에게 붙는다 (설정 블록은 안 건드린다)",
+      await page.evaluate(() => !("export" in (window.SCREENSPEC || {}))));
+    await page.reload();
+    await page.waitForTimeout(900);
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    d = await dlg();
+    check("다시 열면 지난 설정 그대로", d.path === "x" && d.when === "x" && d.accent === "#00AA88", JSON.stringify(d));
+    const reopen = async (raw) => {
+      await page.evaluate((v) => localStorage.setItem("screenspec:export", v), raw);
+      await page.reload();
+      await page.waitForTimeout(900);
+      await page.click(".ss-prbtn");
+      await page.waitForTimeout(300);
+      return dlg();
+    };
+    d = await reopen("{망가진");
+    check("JSON 이 깨졌으면 조용히 기본값으로", d.path === "v" && d.when === "x" && d.accent === "", JSON.stringify(d));
+    /* 성한 JSON 인데 타입이 틀린 쪽이 더 위험하다 — 파싱은 통과해 그대로 흘러든다 */
+    d = await reopen('{"mark":"","table":"yes","path":0,"color":123}');
+    check("성한 JSON 이라도 타입이 틀린 값은 안 믿는다",
+      d.mark === "v" && d.table === "x" && d.path === "v" && d.accent === "", JSON.stringify(d));
+    await page.evaluate(() => localStorage.removeItem("screenspec:export"));
+
+    /* ── 폰: 바닥 시트 ── */
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.waitForTimeout(900);
+    await page.click(".ss-more");
+    await page.waitForTimeout(250);
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(400);
+    const m = await page.evaluate(() => {
+      const d = document.querySelector(".ss-prdlg"), r = d.getBoundingClientRect();
+      const bt = [...d.querySelectorAll(".ss-prdlg-btns button")].map((x) => {
+        const q = x.getBoundingClientRect();
+        return { t: x.textContent, w: Math.round(q.width), y: Math.round(q.top) };
+      });
+      return { w: Math.round(r.width), gap: Math.round(innerHeight - r.bottom),
+        col: getComputedStyle(d.querySelector(".ss-pr-pane")).flexDirection,
+        folded: !d.querySelector(".ss-pr-prev").open, bt: bt,
+        fits: [...d.querySelectorAll("*")].every((el) => {
+          if (!el.getClientRects().length) return true;
+          const q = el.getBoundingClientRect();
+          return q.right <= innerWidth + 1 && q.left >= -1;
+        }) };
+    });
+    check("폰: 바닥에서 올라오는 시트 (폭 전체 · 바닥에 붙음)", m.w === 390 && m.gap === 0, JSON.stringify(m));
+    check("폰: 1단으로 접힌다", m.col === "column");
+    check("폰: 미리보기는 접어 둔다 (세로 공간이 없다)", m.folded === true);
+    check("폰: 단추가 가로 전폭이고 «내보내기» 가 아래 (엄지에 가깝다)",
+      m.bt.length === 2 && m.bt[0].t === "취소" && m.bt[1].t === "내보내기" &&
+      m.bt[1].y > m.bt[0].y && m.bt[1].w > 300, JSON.stringify(m.bt));
+    check("폰: 아무것도 잘리지 않는다", m.fits === true);
+    check("JS 에러 0건", errors.length === 0, errors);
+    await page.setViewportSize({ width: 1440, height: 900 });
   }
 
   /* ============ 무대가 창을 못 채운다 (#102) ============
@@ -2460,16 +2655,16 @@ function check(name, ok, detail) {
       return !!b && !!b.closest(".ss-toolbar") && !b.closest(".ss-defs");
     }));
     check("내보내기: 이름이 「내보내기」", await page.evaluate(() => document.querySelector(".ss-prbtn").textContent.trim() === "내보내기"));
-    check("내보내기: 대화상자는 번호·머리말·기능 설명 세 가지만 (PDF 는 없다)", await page.evaluate(() => {
+    check("내보내기: 대화상자는 머리말·번호·기능 설명만 (PDF 는 없다)", await page.evaluate(() => {
       document.querySelector(".ss-prbtn").click();
       const d = document.querySelector(".ss-prdlg");
-      return !!d && d.open && !!d.querySelector("#ss-prMark") && !!d.querySelector("#ss-prHead") &&
-        !!d.querySelector("#ss-prTable") && !d.querySelector("#ss-prImg");
+      const c = (k) => d.querySelector('[data-pr-c="' + k + '"]');
+      return !!d && d.open && !!c("head") && !!c("mark") && !!c("table") && !d.querySelector("#ss-prImg");
     }));
     check("내보내기: 번호·머리말은 기본 켬 · 기능 설명은 기본 끔", await page.evaluate(() => {
       const d = document.querySelector(".ss-prdlg");
-      return d.querySelector("#ss-prMark").checked && d.querySelector("#ss-prHead").checked &&
-        !d.querySelector("#ss-prTable").checked;
+      const c = (k) => d.querySelector('[data-pr-c="' + k + '"]').checked;
+      return c("mark") && c("head") && !c("table");
     }));
     await page.evaluate(() => document.querySelector(".ss-prdlg").close());
 
@@ -2657,20 +2852,18 @@ function check(name, ok, detail) {
     check("레이어: 내보내기 「기획만」 이면 표에 개발 줄이 없다",
       tPlan && tPlan.includes("기획 한 줄") && !tPlan.includes("POST /api/items") && !tPlan.includes("Bearer"), tPlan);
 
-    /* 레이어는 «기능 설명 포함» 을 켜야 의미가 있다 — 표가 없으면 거를 것이 없다 */
-    check("레이어: 기능 설명을 안 넣으면 레이어 선택이 꺼져 있다", await page.evaluate(() => {
+    /* 「개발 정의 포함」 은 «기능 설명 표» 의 하위다 — 표가 없으면 거를 것이 없다 (#96) */
+    check("레이어: 기능 설명을 안 넣으면 「개발 정의 포함」이 흐리다", await page.evaluate(() => {
       document.querySelector(".ss-prbtn").click();
       const d = document.querySelector(".ss-prdlg");
-      const sel = d.querySelector("#ss-prLayer");
-      return sel.disabled === true && sel.closest("label").classList.contains("ss-off");
+      return d.querySelector('[data-pr-k="table"]').classList.contains("ss-off");
     }));
-    check("레이어: 기능 설명을 켜면 레이어 선택이 살아난다", await page.evaluate(() => {
+    await page.check('.ss-prdlg [data-pr-c="table"]');
+    await page.waitForTimeout(150);
+    check("레이어: 기능 설명을 켜면 「개발 정의 포함」이 살아난다", await page.evaluate(() => {
       const d = document.querySelector(".ss-prdlg");
-      const cb = d.querySelector("#ss-prTable");
-      cb.checked = true;
-      cb.dispatchEvent(new Event("change", { bubbles: true }));
-      const sel = d.querySelector("#ss-prLayer");
-      const ok = sel.disabled === false && !sel.closest("label").classList.contains("ss-off");
+      const ok = !d.querySelector('[data-pr-k="table"]').classList.contains("ss-off") &&
+        !!d.querySelector('[data-pr-c="dev"]');
       d.close();
       return ok;
     }));
@@ -2680,9 +2873,9 @@ function check(name, ok, detail) {
     check("레이어: 개발 정의가 없으면 칩을 만들지 않는다", (await page.locator(".ss-layerbar").count()) === 0);
     check("레이어: 개발 정의가 없으면 개발 블록도 0개", (await page.locator(".ss-dev").count()) === 0);
     check("레이어: 옛 문서는 정의서가 그대로 뜬다", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
-    check("레이어: 옛 문서의 내보내기 대화상자엔 레이어 선택이 없다", await page.evaluate(() => {
+    check("레이어: 옛 문서의 내보내기 대화상자엔 「개발 정의 포함」이 없다", await page.evaluate(() => {
       document.querySelector(".ss-prbtn").click();
-      const has = !!document.querySelector("#ss-prLayer");
+      const has = !!document.querySelector('.ss-prdlg [data-pr-c="dev"]');
       document.querySelector(".ss-prdlg").close();
       return !has;
     }));

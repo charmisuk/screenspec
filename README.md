@@ -324,7 +324,7 @@ node tests/smoke.js # 예제 전수 클릭 (playwright 필요 · 22초)
 고치는 동안에는 관련 섹션만 돌린다 — 한 건 고칠 때마다 2분 40초를 두 번 기다릴 이유가 없다.
 
 ```bash
-node tests/e2e.js --list          # 섹션 44개 목록
+node tests/e2e.js --list          # 섹션 45개 목록
 node tests/e2e.js --only 자동저장  # 그 섹션만 (수 초 ~ 20초)
 ```
 

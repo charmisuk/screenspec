@@ -679,23 +679,79 @@
     padding:3px 9px;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap}
   /* 인쇄 · 화면별 PDF (#34) — 브라우저의 「PDF 로 저장」이 곧 산출물이다.
      화면에서는 숨어 있다가 인쇄 미디어에서만 나타난다 — 그래야 누를 때 깜빡이지 않는다 */
-  .ss-prdlg{border:0;border-radius:14px;padding:20px 22px 18px;max-width:340px;color:var(--ss-ink);
-    box-shadow:0 18px 50px rgba(17,24,39,.22);font:13px/1.6 var(--ss-font)}
+  /* 내보내기 대화상자 (#96) — 왼쪽에 «무엇이 나오는지» 스케치, 오른쪽에 설정.
+     켜고 끄면서 결과를 상상하지 않게 하는 것이 이 배치의 목적이다 */
+  .ss-prdlg{border:0;border-radius:14px;padding:20px 22px 18px;max-width:452px;color:var(--ss-ink);
+    box-shadow:0 18px 50px rgba(17,24,39,.22);font-size:13px;line-height:1.6}
   .ss-prdlg::backdrop{background:rgba(17,24,39,.35)}
-  .ss-prdlg h3{margin:0 0 6px;font-size:14px;font-weight:800}
-  .ss-prdlg .ss-prdlg-sub{margin:0 0 14px;font-size:11.5px;color:var(--ss-ink3);line-height:1.6}
-  .ss-prdlg label{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:7px 0;cursor:pointer}
+  .ss-prdlg h3{margin:0 0 3px;font-size:14px;font-weight:800}
+  .ss-prdlg .ss-prdlg-sub{margin:0 0 15px;font-size:11.5px;color:var(--ss-ink3);line-height:1.6}
+  .ss-prdlg .ss-prdlg-sub b{color:var(--ss-ink2);font-family:var(--ss-mono);font-weight:700}
+  .ss-prdlg label{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:7px 0;cursor:pointer;user-select:none}
+  .ss-prdlg input[type=checkbox]{accent-color:var(--ss-accent);width:14px;height:14px;margin:0;cursor:pointer;flex:none}
   .ss-prdlg .ss-prdlg-btns{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
   .ss-prdlg button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);font-size:12px;
     font-weight:700;padding:6px 13px;border-radius:8px;cursor:pointer;font-family:inherit}
   .ss-prdlg .ss-prdlg-go{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
+  .ss-pr-pane{display:flex;gap:20px}
+  .ss-pr-set{flex:1;min-width:0}
+  /* 상위·하위는 2단까지만. 3단은 이 대화상자에 필요 없다 (미니멀이 디폴트) */
+  .ss-pr-kids{margin:2px 0 10px 22px;padding-left:11px;border-left:1px solid var(--ss-line)}
+  .ss-pr-kids label{margin:5px 0;font-size:12px;color:var(--ss-ink2)}
+  .ss-pr-kids.ss-off{opacity:.38;pointer-events:none}
+  /* 미리보기 — 실제 캡처가 아니라 «구조 스케치» 다. 진짜를 그리려면 뽑는 것과 같은 비용이 든다 */
+  /* 스케치 조각 중 display 를 가진 것(번호=grid · 표 행=flex)은 [hidden] 이 UA 규칙이라 진다.
+     그러면 «화면 위 번호» 를 꺼도 스케치는 그대로여서 «토글이 안 먹는다» 로 읽힌다 (2026-09-03 QA) */
+  .ss-prdlg [hidden]{display:none}
+  .ss-pr-prev{width:172px;flex-shrink:0}
+  .ss-pr-prev summary{font-size:11.5px;color:var(--ss-ink2);cursor:pointer;font-weight:700;
+    list-style:none;margin-bottom:8px}
+  .ss-pr-prev summary::-webkit-details-marker{display:none}
+  .ss-pr-prev summary::before{content:"▸ ";color:var(--ss-ink3)}
+  .ss-pr-prev[open] summary::before{content:"▾ "}
+  .ss-pr-sheet{background:#fff;border:1px solid var(--ss-line2);border-radius:9px;overflow:hidden}
+  .ss-pr-p-head{padding:7px 9px;border-bottom:1px solid var(--ss-line);background:#FAFAF9}
+  .ss-pr-p-head:empty{display:none}
+  .ss-pr-p-id{font-family:var(--ss-mono);font-size:8px;color:var(--ss-ink3)}
+  .ss-pr-p-name{font-size:10px;font-weight:800;margin-top:1px}
+  .ss-pr-p-path,.ss-pr-p-when{font-size:8px;color:var(--ss-ink3)}
+  .ss-pr-p-body{position:relative;height:96px;background:linear-gradient(180deg,#fff,#F7F7F6)}
+  .ss-pr-p-bar{position:absolute;left:9px;right:9px;height:9px;border-radius:3px;background:#EAEAE8}
+  .ss-pr-p-mk{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--ss-accent);color:#fff;
+    font-size:8px;font-weight:800;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .ss-pr-p-tbl{border-top:1px solid var(--ss-line);padding:6px 9px;background:#fff}
+  .ss-pr-p-tr{display:flex;gap:5px;align-items:center;margin:3px 0}
+  .ss-pr-p-tn{width:10px;height:10px;border-radius:3px;background:var(--ss-accent);opacity:.85}
+  .ss-pr-p-tt{flex:1;height:5px;border-radius:2px;background:#E4E4E2}
+  .ss-pr-cap{font-size:10.5px;color:var(--ss-ink3);text-align:center;margin-top:7px}
+  /* 번호 색 — 이 그림에만 쓴다. 문서의 accent 는 안 건드린다 (내보내기가 문서를 고치면 안 된다) */
+  .ss-pr-more{margin-top:12px;border-top:1px solid var(--ss-line);padding-top:10px}
+  .ss-pr-more summary{font-size:11.5px;color:var(--ss-ink2);cursor:pointer;font-weight:700;list-style:none}
+  .ss-pr-more summary::-webkit-details-marker{display:none}
+  .ss-pr-more summary::before{content:"▸ ";color:var(--ss-ink3)}
+  .ss-pr-more[open] summary::before{content:"▾ "}
+  .ss-pr-sw{display:flex;gap:7px;align-items:center;margin-top:9px;flex-wrap:wrap}
+  .ss-prdlg .ss-pr-sw button{width:22px;height:22px;border-radius:50%;border:2px solid transparent;padding:0;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .ss-prdlg .ss-pr-sw button[aria-pressed="true"]{border-color:var(--ss-ink);outline:2px solid #fff;outline-offset:-4px}
+  .ss-pr-hex{font-family:var(--ss-mono);font-size:11px;width:78px;padding:4px 7px;border:1px solid var(--ss-line2);
+    border-radius:7px;color:var(--ss-ink2);background:#fff}
+  .ss-pr-note{font-size:10.5px;color:var(--ss-ink3);margin-top:8px;line-height:1.5}
+  /* 폰: 1단 + 바닥에서 올라오는 시트. 미리보기는 접어 둔다 — 세로 공간이 없다 (#94 와 같은 기준) */
+  @media(max-width:640px){
+    .ss-prdlg{max-width:100%;width:100%;margin:auto auto 0;border-radius:16px 16px 0 0;padding:18px 18px 16px}
+    .ss-pr-pane{flex-direction:column;gap:0}
+    .ss-pr-prev{width:100%;margin-bottom:12px}
+    .ss-prdlg .ss-prdlg-btns{flex-direction:column;gap:8px} /* 엄지에 가까운 아래가 «내보내기» */
+    .ss-prdlg .ss-prdlg-btns button{width:100%;padding:11px}
+  }
   /* 이미지 내보내기 (#40) — 화면 밖에 조립했다가 캡처 뒤 지운다. 화면에는 안 보인다 */
   .ss-cap{position:fixed;left:-99999px;top:0;background:#fff;z-index:-1}
   .ss-cap-head{padding:16px 30px 12px;border-bottom:2px solid var(--ss-ink)}
   .ss-cap-id{font-family:var(--ss-mono);font-size:12px;font-weight:800;color:var(--ss-ink)}
   .ss-cap-name{font-size:19px;font-weight:800;color:var(--ss-ink);margin:3px 0 3px}
   .ss-cap-path{font-size:12px;color:var(--ss-ink3)}
-  .ss-cap-foot{font-size:10px;color:var(--ss-ink3);padding:4px 12px 6px;text-align:right}
+  .ss-cap-when{font-size:11px;color:var(--ss-ink3);margin-top:3px}
   .ss-cap .ss-pr-table{margin:0 30px 24px;width:calc(100% - 60px);border-collapse:collapse;font-size:12px;color:var(--ss-ink)}
   .ss-cap .ss-pr-table th{background:#F1F1F0;border:1px solid var(--ss-line2);padding:6px 8px;text-align:left;font-weight:800;font-size:11px}
   .ss-cap .ss-pr-table td{border:1px solid var(--ss-line2);padding:6px 8px;vertical-align:top;line-height:1.55}
@@ -713,7 +769,6 @@
   .ss-pr-mm svg{max-width:100%;height:auto}
   .ss-pr-mm-code{margin:3px 0;padding:6px 8px;background:#F7F7F5;border:1px solid #D3D1CB;border-radius:6px;
     font-family:var(--ss-mono);font-size:9.5px;line-height:1.5;white-space:pre;overflow:hidden}
-  .ss-prdlg-hr{border:0;border-top:1px solid var(--ss-line);margin:12px 0 4px}
   /* 기능 설명 표 — 「기능 설명 포함」을 켰을 때만 그림에 함께 굽는다 */
   .ss-pr-table .ss-pr-no{font-family:var(--ss-mono);font-weight:700;white-space:nowrap;width:44px}
   .ss-pr-table .ss-pr-tag{white-space:nowrap;width:52px;color:var(--ss-ink3)}
@@ -732,8 +787,6 @@
   .ss-pr-table .ss-pr-devtag{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:#8E4EC6;
     border:1px solid #D9C3EE;border-radius:3px;padding:0 3px;margin-right:4px}
   /* 끌 수 없는 선택지는 «꺼져 있음» 이 보여야 한다 (기능 설명을 안 넣으면 레이어는 무의미) */
-  .ss-prdlg label.ss-off{opacity:.4}
-  .ss-prdlg label.ss-off select{cursor:not-allowed}
   .ss-defs-list{position:relative;flex:1;overflow-y:auto;padding:6px 8px 18px calc(var(--ss-gut-w) + 4px)}
   .ss-badge{border-top:1px solid var(--ss-line);padding:8px 18px;font-size:11px;color:var(--ss-ink3);background:#fff}
   .ss-badge a{color:var(--ss-ink3);font-weight:700;text-decoration:none}
@@ -2316,11 +2369,24 @@ ${HL_CSS}
     function capRemoteImgs(node) {
       return node.querySelectorAll('img[src^="http"],img[src^="//"]').length;
     }
-    function capHeadHTML(sc) {
+    /* 머리말 네 조각. head: false = 없음 · true·생략 = 넷 다 · {id,name,path,when} = 고른 것만 (#96).
+       일시는 이전까지 대화상자 문구가 약속하고도 그림에 없었다 — 여기서 생긴다 */
+    function capWhen() {
+      const d = new Date(), p2 = (n) => (n < 10 ? "0" : "") + n;
+      return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) +
+        " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+    }
+    function capHeadHTML(sc, head) {
+      if (head === false) return "";
+      const o = head && typeof head === "object" ? head : {};
+      const on = (k) => o[k] !== false;
       const path = (sc.path || []).map(esc).join(" › ");
-      return '<div class="ss-cap-head"><div class="ss-cap-id">' + esc(sc.id || "") + "</div>" +
-        '<div class="ss-cap-name">' + esc(sc.name || "") + "</div>" +
-        (path ? '<div class="ss-cap-path">' + path + "</div>" : "") + "</div>";
+      let html = "";
+      if (on("id") && sc.id) html += '<div class="ss-cap-id">' + esc(sc.id) + "</div>";
+      if (on("name") && sc.name) html += '<div class="ss-cap-name">' + esc(sc.name) + "</div>";
+      if (on("path") && path) html += '<div class="ss-cap-path">' + path + "</div>";
+      if (on("when")) html += '<div class="ss-cap-when">' + esc(capWhen()) + "</div>";
+      return html ? '<div class="ss-cap-head">' + html + "</div>" : "";
     }
     /* 우리 뷰어 UI — 그림에는 «문서» 만 남고 뷰어는 빠진다 */
     const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode,.ss-proto-wrap," +
@@ -2329,10 +2395,12 @@ ${HL_CSS}
 
     function capBox(opt) {
       const box = h("div", { class: "ss-cap ss-ui" },
-        (opt.head === false ? "" : capHeadHTML(current || {})) + '<div class="ss-cap-body"></div>' +
+        capHeadHTML(current || {}, opt.head) + '<div class="ss-cap-body"></div>' +
         (opt.table ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
           prRows(opt.layer || LAYER) + "</tbody></table>" + refFootPr() : "") +
         ""); /* 꼬리표는 DOM 이 아니라 캔버스에 직접 쓴다 — 밑단 잘라내기(아래) 뒤에 붙여야 간격이 안 벌어진다 */
+      /* 번호 색은 이 그림에만. 문서의 accent 를 바꾸면 내보내기가 문서를 고치는 셈이 된다 (#96) */
+      if (opt.accent) box.style.setProperty("--ss-accent", opt.accent);
       document.body.appendChild(box);
       return box;
     }
@@ -2531,46 +2599,167 @@ ${HL_CSS}
       const el = prDlg && prDlg.querySelector(".ss-cap-msg");
       if (el) el.textContent = msg || "";
     }
-    /* 레이어는 «기능 설명 포함» 을 켜야 의미가 있다 — 표가 없으면 거를 것이 없다 */
-    function prSyncLayer() {
+    /* ---- 내보내기 대화상자 (#96) ----
+       기억하는 것은 «사람의 취향» 이라 파일이 아니라 localStorage 에 산다 — 설정 블록에 쓰면
+       팀원끼리 내보내기 취향이 서로 덮인다. 문서별이 아니라 사람별인 이유도 같다 */
+    const PR_KEY = "screenspec:export";
+    /* 일시를 기본에서 빼는 이유: 그림마다 달라지는 값이라 «늘 넣을 것» 이 아니다. 필요하면 그때 켠다 (PM 2026-09-03) */
+    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, table: false, dev: false, color: "", pv: false };
+    const PR_HEAD = ["id", "name", "path", "when"];
+    /* 색은 accent 프리셋 그대로 — 여기서 베끼면 둘이 어긋난다 */
+    const PR_SW_NAME = { blue: "파랑", red: "빨강", orange: "주황", green: "초록", purple: "보라" };
+    const prHex = (v) => /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(v || "").trim());
+    const prNarrow = () => !!(window.matchMedia && matchMedia("(max-width:640px)").matches);
+    let prCfg = null;
+    function prLoad() {
+      const raw = edStore(() => localStorage.getItem(PR_KEY));
+      let o = null;
+      try { o = raw ? JSON.parse(raw) : null; } catch (e) { o = null; }
+      const out = Object.assign({}, PR_DEF);
+      /* 값이 깨졌거나 없으면 조용히 기본값으로 — 키마다 따로 보는 이유는 일부만 상한 파일도 살리기 위해서다 */
+      if (o && typeof o === "object") {
+        Object.keys(PR_DEF).forEach((k) => { if (typeof o[k] === typeof PR_DEF[k]) out[k] = o[k]; });
+      }
+      if (out.color && !prHex(out.color)) out.color = "";
+      return out;
+    }
+    /* 저장 시점은 «내보내기를 누른 순간» — 열어 보고 취소한 것은 취향이 아니다 */
+    function prSave() { edStore(() => localStorage.setItem(PR_KEY, JSON.stringify(prCfg))); }
+
+    function prFileName() {
+      return ((current || {}).id || "screen") + "-" + new Date().toISOString().slice(0, 10) + ".png";
+    }
+    /* 부모는 자식에서 나온다 — 넷 다 켜짐 = 켜짐 · 하나도 없음 = 꺼짐 · 그 사이 = 중간 상태 */
+    function prSync() {
       if (!prDlg) return;
-      const sel = prDlg.querySelector("#ss-prLayer");
-      if (!sel) return;
-      const on = prDlg.querySelector("#ss-prTable").checked;
-      sel.disabled = !on;
-      sel.closest("label").classList.toggle("ss-off", !on);
+      const q = (k) => prDlg.querySelector('[data-pr-c="' + k + '"]');
+      Object.keys(PR_DEF).forEach((k) => { const el = q(k); if (el) el.checked = !!prCfg[k]; });
+      const n = PR_HEAD.filter((k) => prCfg[k]).length;
+      const base = PR_HEAD.filter((k) => PR_DEF[k]).length;
+      const head = q("head");
+      head.checked = n > 0;
+      /* «일부» 의 기준은 넷이 아니라 기본 한 벌이다 — 안 그러면 기본 상태가 늘 중간 상태로 보인다 */
+      head.indeterminate = n > 0 && n < base;
+      prDlg.querySelector('[data-pr-k="head"]').classList.toggle("ss-off", n === 0);
+      const tk = prDlg.querySelector('[data-pr-k="table"]');
+      if (tk) tk.classList.toggle("ss-off", !prCfg.table);
+      /* 미리보기 — 스케치가 설정을 그대로 따라간다 */
+      PR_HEAD.forEach((k) => { prDlg.querySelector(".ss-pr-p-" + k).hidden = !prCfg[k]; });
+      prDlg.querySelectorAll(".ss-pr-p-mk").forEach((el) => { el.hidden = !prCfg.mark; });
+      prDlg.querySelector(".ss-pr-p-tbl").hidden = !prCfg.table;
+      prDlg.querySelector(".ss-pr-p-dev").hidden = !prCfg.dev;
+      prDlg.style.setProperty("--ss-accent", prCfg.color || "");
+      prDlg.querySelectorAll(".ss-pr-sw button").forEach((b) =>
+        b.setAttribute("aria-pressed", String(b.dataset.prColor === prCfg.color)));
+      const hex = prDlg.querySelector(".ss-pr-hex");
+      if (document.activeElement !== hex) hex.value = prCfg.color || "";
+      prDlg.querySelector(".ss-pr-fname").textContent = prFileName();
+    }
+    function prPreviewHTML() {
+      return '<details class="ss-pr-prev"><summary>미리보기</summary>' +
+        '<div class="ss-pr-sheet">' +
+          '<div class="ss-pr-p-head">' +
+            '<div class="ss-pr-p-id">' + esc((current || {}).id || "SCR-000") + "</div>" +
+            '<div class="ss-pr-p-name">' + esc((current || {}).name || "화면") + "</div>" +
+            '<div class="ss-pr-p-path">' + esc(((current || {}).path || []).join(" › ") || "경로") + "</div>" +
+            '<div class="ss-pr-p-when">' + esc(capWhen()) + "</div>" +
+          "</div>" +
+          '<div class="ss-pr-p-body">' +
+            '<div class="ss-pr-p-bar" style="top:12px"></div>' +
+            '<div class="ss-pr-p-bar" style="top:34px;height:38px"></div>' +
+            '<div class="ss-pr-p-bar" style="top:80px;right:74px"></div>' +
+            '<div class="ss-pr-p-mk" style="top:7px;left:14px">1</div>' +
+            '<div class="ss-pr-p-mk" style="top:44px;left:120px">2</div>' +
+            '<div class="ss-pr-p-mk" style="top:75px;left:22px">3</div>' +
+          "</div>" +
+          '<div class="ss-pr-p-tbl">' +
+            '<div class="ss-pr-p-tr"><span class="ss-pr-p-tn"></span><span class="ss-pr-p-tt"></span></div>' +
+            '<div class="ss-pr-p-tr"><span class="ss-pr-p-tn"></span><span class="ss-pr-p-tt"></span></div>' +
+            '<div class="ss-pr-p-tr ss-pr-p-dev"><span class="ss-pr-p-tn" style="opacity:.45"></span>' +
+              '<span class="ss-pr-p-tt" style="width:60%"></span></div>' +
+          "</div>" +
+        "</div><p class=\"ss-pr-cap\">미리보기</p></details>";
     }
     function printOpen() {
+      prCfg = prLoad();
       if (!prDlg) {
         prDlg = h("dialog", { class: "ss-prdlg ss-ui" },
-          "<h3>PNG 로 내보내기</h3>" +
-          '<label><input type="checkbox" id="ss-prMark" checked> 번호 표시</label>' +
-          '<label><input type="checkbox" id="ss-prHead" checked> 머리말 표시: 화면 ID · 화면명 · 경로 · 일시</label>' +
-          '<label><input type="checkbox" id="ss-prTable"> 기능 설명 포함</label>' +
-          (anyDev() ? '<label class="ss-prdlg-sub2 ss-off">레이어 <select id="ss-prLayer" disabled><option value="all">전체</option>' +
-            '<option value="plan">기획만</option><option value="dev">개발만</option></select></label>' : "") +
+          "<h3>그림으로 내보내기</h3>" +
+          '<p class="ss-prdlg-sub">화면 하나를 PNG 로 저장합니다 · <b class="ss-pr-fname"></b></p>' +
+          '<div class="ss-pr-pane">' + prPreviewHTML() +
+            '<div class="ss-pr-set">' +
+              '<label><input type="checkbox" data-pr-c="head"> 머리말</label>' +
+              '<div class="ss-pr-kids" data-pr-k="head">' +
+                '<label><input type="checkbox" data-pr-c="id"> 화면 ID</label>' +
+                '<label><input type="checkbox" data-pr-c="name"> 화면명</label>' +
+                '<label><input type="checkbox" data-pr-c="path"> 경로</label>' +
+                '<label><input type="checkbox" data-pr-c="when"> 일시</label>' +
+              "</div>" +
+              '<label><input type="checkbox" data-pr-c="mark"> 화면 위 번호</label>' +
+              '<label><input type="checkbox" data-pr-c="table"> 기능 설명 표</label>' +
+              /* 개발 정의가 없는 문서에 「개발 정의 포함」은 아무 일도 안 하는 선택지다 — 안 만든다 */
+              (anyDev() ? '<div class="ss-pr-kids" data-pr-k="table">' +
+                '<label><input type="checkbox" data-pr-c="dev"> 개발 정의 포함</label>' +
+              "</div>" : "") +
+              '<details class="ss-pr-more"><summary>번호 색</summary><div class="ss-pr-sw">' +
+                Object.keys(ACCENT_PRESETS).map((k) => '<button type="button" data-pr-color="' + ACCENT_PRESETS[k] +
+                  '" aria-pressed="false" style="background:' + ACCENT_PRESETS[k] + '" title="' +
+                  (PR_SW_NAME[k] || k) + '"></button>').join("") +
+                '<input class="ss-pr-hex" placeholder="문서 색" aria-label="번호 색 직접 입력">' +
+              '</div><p class="ss-pr-note">이 그림에만 쓰입니다. 문서의 색은 그대로입니다.</p></details>' +
+            "</div>" +
+          "</div>" +
           '<div class="ss-cap-msg"></div>' +
-          '<div class="ss-prdlg-btns"><button type="button" data-pr="cancel">닫기</button>' +
+          '<div class="ss-prdlg-btns"><button type="button" data-pr="cancel">취소</button>' +
           '<button type="button" data-pr="go" class="ss-prdlg-go">내보내기</button></div>');
         document.body.appendChild(prDlg);
-        prDlg.addEventListener("change", prSyncLayer);
+        prDlg.addEventListener("change", (e) => {
+          const k = e.target.dataset && e.target.dataset.prC;
+          if (!k) return;
+          /* 부모는 «머리말을 넣는가» 다 — 켜면 기본 한 벌, 끄면 전부. 「전부 켜기」가 아닌 이유는
+             일시가 기본에 없기 때문이다: 부모를 눌렀더니 안 쓰던 일시가 따라 켜지면 매번 도로 꺼야 한다 */
+          if (k === "head") {
+            const on = PR_HEAD.some((c) => prCfg[c]);
+            PR_HEAD.forEach((c) => (prCfg[c] = on ? false : PR_DEF[c]));
+          }
+          else prCfg[k] = e.target.checked;
+          if (k === "table" && !e.target.checked) prCfg.dev = false;
+          prSync();
+        });
+        prDlg.addEventListener("input", (e) => {
+          if (!e.target.classList.contains("ss-pr-hex")) return;
+          const v = e.target.value.trim();
+          if (!v || prHex(v)) { prCfg.color = v ? v : ""; prSync(); }
+        });
+        /* 접힘은 폰에서만 기억한다 — PC 는 늘 펴 두므로 여기서 받아 적으면 폰 기본값이 오염된다 */
+        prDlg.addEventListener("toggle", (e) => {
+          if (e.target.classList.contains("ss-pr-prev") && prNarrow()) prCfg.pv = e.target.open;
+        }, true);
         prDlg.addEventListener("click", (e) => {
+          const sw = e.target.closest("[data-pr-color]");
+          if (sw) { prCfg.color = sw.getAttribute("aria-pressed") === "true" ? "" : sw.dataset.prColor; prSync(); return; }
           const b = e.target.closest("[data-pr]");
           if (!b) return;
           if (b.dataset.pr !== "go") { prDlg.close(); return; }
-          const lySel = prDlg.querySelector("#ss-prLayer");
+          prSave();
           edSay2("만드는 중…");
           /* 대화상자를 열어 둔 채 결과를 알린다 — 빈칸 이미지 경고를 읽을 자리가 필요하다 */
+          const head = {};
+          PR_HEAD.forEach((k) => (head[k] = !!prCfg[k]));
           exportImage({
-            markers: prDlg.querySelector("#ss-prMark").checked,
-            head: prDlg.querySelector("#ss-prHead").checked,
-            table: prDlg.querySelector("#ss-prTable").checked,
-            layer: lySel && !lySel.disabled ? lySel.value : "all",
+            markers: !!prCfg.mark,
+            head: PR_HEAD.some((k) => prCfg[k]) ? head : false,
+            table: !!prCfg.table,
+            /* 「개발만」 은 없앴다 — 실제 선택은 «개발 것도 넣나» 하나였다 */
+            layer: prCfg.dev ? "all" : "plan",
+            accent: prCfg.color || "",
           });
         });
       }
       edSay2("");
-      prSyncLayer();
+      /* 폰은 세로 공간이 없어 접어 두고, PC 는 편다 — 접힘 여부는 사람 취향이라 같이 기억한다 */
+      prDlg.querySelector(".ss-pr-prev").open = prNarrow() ? !!prCfg.pv : true;
+      prSync();
       if (prDlg.showModal) prDlg.showModal();
     }
 

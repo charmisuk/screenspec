@@ -32,6 +32,12 @@
   .dim{position:fixed;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .22s;z-index:40}
   .dim.open{opacity:1;pointer-events:auto}
   .empty{color:var(--ink3);text-align:center;padding:34px 0;border:1px dashed var(--line2);border-radius:10px}
+  /* QA-11 (#102) — 앱이 «화면에 고정» 으로 붙인 패널. 액자 뷰포트가 곧 기준이다 */
+  .qapin{position:fixed;right:0;top:120px;width:200px;padding:12px 14px;background:#fff;
+    border:1px solid #D3D1CB;border-left-width:3px;border-radius:8px 0 0 8px;
+    box-shadow:-4px 0 16px rgba(17,24,39,.08);font-size:12px;z-index:5}
+  .qapin b{display:block;font-weight:800;margin-bottom:2px}
+  .qapin span{color:#9B9A97}
 </style>
 </head>
 <body>
@@ -134,6 +140,23 @@
   <h1 data-spec="95">순서도</h1>
   <p class="sub">이 화면은 <b>진짜 CDN</b> 에서 mermaid.js 를 불러와 그린다. e2e 는 가짜로 재고, 실물은 여기서 본다.</p>
   <div class="card" data-spec="96"><b>초대 버튼 상태 갈림</b><span>오른쪽 정의서에 순서도가 있다</span></div>
+</section>
+
+<!-- ══ QA-11 · 무대·자동 프리셋 (#102) ══ -->
+<section class="scr" id="qa11">
+  <span class="tag">QA-11</span>
+  <h1 data-spec="111">프레임이 창을 넘을 때</h1>
+  <p class="sub">이 화면에는 <b>오른쪽에 붙는 고정 패널</b>이 있다. 프레임을 창보다 크게 하면 창 밖으로 나간다.</p>
+  <div class="card" data-spec="112"><b>자동 프리셋</b><span>툴바의 「자동」이 프레임을 지금 창에 맞춘다</span></div>
+  <aside class="qapin" data-spec="113"><b>고정 패널</b><span>position:fixed · right:0</span></aside>
+</section>
+
+<!-- ══ QA-12 · 내보내기 대화상자 (#96) ══ -->
+<section class="scr" id="qa12">
+  <span class="tag">QA-12</span>
+  <h1 data-spec="121">내보내기</h1>
+  <p class="sub">왼쪽 스케치가 설정을 따라 바뀐다. 절차는 오른쪽에.</p>
+  <div class="card" data-spec="122"><b>머리말 네 조각</b><span>화면 ID · 화면명 · 경로 · 일시를 각각 켜고 끈다</span></div>
 </section>
 
 <script>
@@ -362,6 +385,71 @@ window.SCREENSPEC = {
         { kind: "mermaid", code: "flowchart TD\n  A[계약 확인] -->|막힘| B[초대 불가]\n  A -->|통과| C[오류 건수]\n  C -->|있음| D[고치면 초대 가능]\n  C -->|없음| E[한도 확인]\n  E -->|초과| F[한도 초과 안내]\n  E -->|여유| G[정상 : N명 초대하기]" },
         { t: "확인 : ⠿ 를 누르면 «삭제» 로 통째로 지워진다 (Ctrl+Z 로 되돌리기)" },
         { t: "「내보내기」 로 뽑으면 그림 속에도 이 순서도가 들어간다" }
+      ]}
+    ]},
+    { id: "QA-11-STAGE", name: "무대와 자동 프리셋", path: ["QA", "무대와 자동 프리셋"], specs: [
+      { n: 1, target: "111", anno: "box", title: "프레임이 창을 넘으면", defs: [
+        { t: "브라우저 창을 노트북 크기(1280 안팎)로 둔다" },
+        { t: "툴바에서 «PC» 를 누른다 (1920×1080)" },
+        { t: "확인 : 오른쪽 고정 패널이 창 밖으로 나가 안 보인다" },
+        { t: "가로로 밀면 보이기는 한다", c: [
+          { t: "«못 닿는다» 가 아니라 «자동으로는 못 닿는다» 였다 — focus()·scrollIntoView·폼 검증의 「첫 오류로 이동」이 전부 여기서 죽는다. position:fixed 요소는 액자 밖 스크롤러를 못 움직인다", kind: "why" }
+        ]}
+      ]},
+      { n: 2, target: "112", anno: "box", title: "자동", defs: [
+        { t: "툴바에서 «자동» 을 누른다" },
+        { t: "확인 : 프레임이 창에 딱 맞고 밀 것이 남지 않는다" },
+        { t: "확인 : 오른쪽 고정 패널이 창 안에 들어온다" },
+        { t: "창 크기를 바꿔 본다" },
+        { t: "확인 : 프레임이 따라온다" },
+        { t: "시트 오른쪽 손잡이를 잡아 끈다" },
+        { t: "확인 : 끈 크기가 유지되고, 창을 다시 바꿔도 안 지워진다", c: [
+          { t: "«자동» 버튼은 눌린 채 남는다 — 누르면 돌아갈 자리다 (프리셋 클릭 = 복귀와 같은 문법)", kind: "why" }
+        ]},
+        { t: "«자동» 을 다시 누른다" },
+        { t: "확인 : 창에 다시 맞춰진다" }
+      ]},
+      { n: 3, target: "113", anno: "box", title: "여백은 두 모드가 같다", defs: [
+        { t: "프로토타입 ↔ 화면정의서 를 오간다" },
+        { t: "확인 : 툴바와 시트 사이 여백이 두 모드에서 같아 보인다" },
+        { t: "확인 : 시트 오른쪽·아래 손잡이가 어느 모드에서도 안 잘린다", c: [
+          { t: "손잡이는 시트 «밖» 20px 에 산다 — 여백을 0 으로 두면 폭 조절을 아예 못 하게 된다", kind: "why" }
+        ]}
+      ]}
+    ]},
+    { id: "QA-12-EXPORT", name: "내보내기 대화상자", path: ["QA", "내보내기 대화상자"], specs: [
+      { n: 1, target: "121", anno: "box", title: "미리보기와 뎁스", defs: [
+        { t: "툴바의 «내보내기» 를 누른다" },
+        { t: "확인 : 왼쪽에 스케치, 오른쪽에 설정이 나온다. 제목 밑에 만들어질 파일 이름이 보인다" },
+        { t: "확인 : 기본은 화면 ID·화면명·경로 셋이고 «일시» 는 꺼져 있다", c: [
+          { t: "일시는 그림마다 달라지는 값이라 «늘 넣을 것» 이 아니다", kind: "why" }
+        ]},
+        { t: "«화면 위 번호» 를 끈다" },
+        { t: "확인 : 스케치의 동그란 번호가 사라진다 (다시 켜면 돌아온다)" },
+        { t: "«경로» 하나만 끈다" },
+        { t: "확인 : 부모 «머리말» 이 중간 상태(–)가 되고, 스케치에서 경로 줄이 사라진다" },
+        { t: "«머리말» 을 누른다" },
+        { t: "확인 : 넷이 전부 꺼지고 자식들이 흐려진다" },
+        { t: "«머리말» 을 한 번 더 누른다" },
+        { t: "확인 : 기본 한 벌(셋)이 켜지고 «일시» 는 안 따라 켜진다" }
+      ]},
+      { n: 2, target: "122", anno: "box", title: "색과 기억", defs: [
+        { t: "머리말을 다시 켜고 «경로» 를 끈다" },
+        { t: "«번호 색» 을 펴고 빨강을 고른다" },
+        { t: "확인 : 스케치의 번호가 빨개진다" },
+        { t: "«내보내기» 를 누른다" },
+        { t: "확인 : 받은 그림의 머리말에 경로·일시가 없고, 화면 위 번호가 빨갛다" },
+        { t: "확인 : 화면정의서의 번호 색은 그대로 파랗다", c: [
+          { t: "내보내기가 문서를 고치면 안 된다 — 이 색은 그 그림에만 쓴다", kind: "why" }
+        ]},
+        { t: "대화상자를 닫고 다시 연다" },
+        { t: "확인 : 방금 설정(경로 끔 · 빨강)이 그대로 있다", c: [
+          { t: "체크 상태는 문서의 내용이 아니라 사람의 취향이라 파일이 아니라 브라우저에 담긴다. 그래서 팀원끼리 안 덮인다", kind: "why" }
+        ]},
+        { t: "설정을 바꾸고 «취소» 로 닫은 뒤 다시 연다" },
+        { t: "확인 : 취소한 것은 기억하지 않는다 (직전에 «내보내기» 한 설정 그대로)" },
+        { t: "창을 500px 이하로 좁히고 ⋯ → 내보내기" },
+        { t: "확인 : 바닥에서 올라오는 시트로 뜨고, 미리보기는 접혀 있고, 단추가 가로 전폭이다" }
       ]}
     ]},
     { id: "QA-04-UNWIRED", name: "연결 안 된 화면", path: ["QA", "연결 안 된 화면"], specs: [
