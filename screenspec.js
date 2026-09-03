@@ -3370,6 +3370,162 @@ ${HL_CSS}
       if (!flat.length) { render(); return; }
       edGoPath(p.key, flat[at].b);
     }
+    /* ---- 커서가 줄 사이를 흐른다 (#48) ----
+       줄마다 입력칸이 따로라 커서가 칸 안에 갇혀 있었다 — 화살표로 아랫줄에 못 가고,
+       줄 맨 앞 Backspace 가 앞 줄과 못 합쳐졌다. 칸을 하나로 합치는 대신(편집 엔진 재건축이라
+       위계·드래그·슬래시·표·각주가 전부 흔들린다) «경계에서 옆 칸으로 건너간다».
+       마우스로 여러 줄에 걸친 글자 선택은 이 방식의 범위 밖이다 — 그건 칸이 하나여야 한다. */
+    function edStops() {
+      return [...ctx.listEl.querySelectorAll("[data-ed]")].filter((el) => el.getClientRects().length);
+    }
+    /* 칸 안에서 커서가 몇 글자째인가 — 경계(맨 앞·맨 뒤) 판정의 근거 */
+    function edCaretOff() {
+      const sel = getSelection();
+      if (!edEl || !sel.rangeCount) return null;
+      const r = sel.getRangeAt(0);
+      if (!edEl.contains(r.startContainer)) return null;
+      const pre = r.cloneRange();
+      pre.selectNodeContents(edEl);
+      pre.setEnd(r.startContainer, r.startOffset);
+      return { at: pre.toString().length, len: edEl.textContent.length, collapsed: r.collapsed };
+    }
+    /* 몇 글자째 자리로 커서를 놓는다 — 굵게(<strong>) 안이어도 글자 수로 걷는다 */
+    function edCaretTo(el, off) {
+      const sel = getSelection(), r = document.createRange();
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let n, left = off;
+      while ((n = w.nextNode())) {
+        if (left <= n.nodeValue.length) { r.setStart(n, left); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return; }
+        left -= n.nodeValue.length;
+      }
+      r.selectNodeContents(el);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    function edCaretRect() {
+      const sel = getSelection();
+      if (!sel.rangeCount) return null;
+      const r = sel.getRangeAt(0).cloneRange();
+      r.collapse(true);
+      return r.getClientRects()[0] || null;
+    }
+    function edCaretX() {
+      const rect = edCaretRect();
+      return rect ? rect.left : edEl ? edEl.getBoundingClientRect().left + 2 : 0;
+    }
+    /* 커서가 이 칸의 끝 시각줄에 있나 — 접힌(줄바꿈된) 긴 줄 안에서는 화살표를 브라우저에 둔다.
+       true=경계 · false=안쪽 · null=모름(커서 rect 가 없는 자리 — 비동기 «안 움직였나» 로 가른다) */
+    function edCaretEdge(dir) {
+      if (!edEl) return null;
+      if (!edEl.textContent) return true; /* 빈 줄은 그 자체가 한 줄이다 */
+      const rect = edCaretRect();
+      if (!rect) return null;
+      const er = edEl.getBoundingClientRect();
+      const lh = (parseFloat(getComputedStyle(edEl).lineHeight) || 20) * 0.9;
+      return dir > 0 ? rect.bottom > er.bottom - lh : rect.top < er.top + lh;
+    }
+    /* 화면 좌표로 커서 자리 찾기 — 크롬(caretRangeFromPoint)·파폭(caretPositionFromPoint) */
+    function edCaretAt(el, x, y) {
+      let node = null, off = 0;
+      if (document.caretRangeFromPoint) {
+        const r = document.caretRangeFromPoint(x, y);
+        if (r) { node = r.startContainer; off = r.startOffset; }
+      } else if (document.caretPositionFromPoint) {
+        const c = document.caretPositionFromPoint(x, y);
+        if (c) { node = c.offsetNode; off = c.offset; }
+      }
+      if (!node || !el.contains(node)) return false;
+      const r2 = document.createRange();
+      r2.setStart(node, off);
+      r2.collapse(true);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r2);
+      return true;
+    }
+    /* 옆 칸으로 들어간다. 빈 줄을 두고 떠나면 그 줄이 정리되며 다시 그려질 수 있다 —
+       그때 과녁이 떨어져 나가면 매달린 편집칸을 만들지 않고 접는다 */
+    function edEnter(el) {
+      edBegin(el);
+      if (edEl && !edEl.isConnected) { edEl = null; return false; }
+      return edEl === el;
+    }
+    /* 위·아래 «다음 줄» 은 DOM 순서가 아니라 화면 위치로 고른다 — 표에서는 같은 열의 칸으로
+       내려가야 하고, 개발 정의는 딴 상자에 그려져 DOM 순서가 눈과 다르다 */
+    function edHop(dir, x) {
+      const cur = edEl;
+      if (!cur) return false;
+      const cr = cur.getBoundingClientRect();
+      const edge = dir > 0 ? cr.bottom : cr.top;
+      const cands = [];
+      let minKey = Infinity;
+      edStops().forEach((el) => {
+        if (el === cur) return;
+        const r = el.getBoundingClientRect();
+        const key = dir > 0 ? r.top - edge : edge - r.bottom;
+        if (key < -2) return;
+        if (key < minKey) minKey = key;
+        cands.push({ el: el, r: r, key: key });
+      });
+      const row = cands.filter((c) => c.key <= minKey + 2);
+      if (!row.length) return false;
+      row.sort((a, b) => {
+        const dx = (c) => (x < c.r.left ? c.r.left - x : x > c.r.right ? x - c.r.right : 0);
+        return dx(a) - dx(b);
+      });
+      const to = row[0];
+      const key = edKeyOf(to.el);
+      if (key && key !== edKeyOf(cur)) activate(key, "panel"); /* 커서로 가는 것도 «고르는 것» 이다 */
+      /* 빈 줄 정리로 다시 그려질 수 있으니, 과녁 블록을 모델에서 미리 잡아 둔다 */
+      let blockRef = null;
+      const bbox = to.el.closest(".ss-b");
+      if (bbox && bbox.dataset.path) {
+        const it = itemOf(edKeyOf(to.el));
+        const spot = it && atPath(it.spec.defs || [], bbox.dataset.path.split(".").map(Number));
+        blockRef = spot && spot.owner[spot.idx];
+      }
+      if (!edEnter(to.el)) {
+        if (blockRef && key) { edGoPath(key, blockRef); if (edEl) edCaretTo(edEl, dir > 0 ? 0 : edEl.textContent.length); }
+        return true;
+      }
+      const cx = Math.max(to.r.left + 1, Math.min(to.r.right - 1, x));
+      const cy = dir > 0 ? Math.min(to.r.top + 8, to.r.bottom - 2) : Math.max(to.r.bottom - 8, to.r.top + 2);
+      if (!edCaretAt(to.el, cx, cy)) edCaretTo(to.el, dir > 0 ? 0 : to.el.textContent.length);
+      return true;
+    }
+    /* 줄 맨 앞 Backspace(-1)·줄 끝 Delete(+1) = 옆 «글 줄» 과 합친다 (#48).
+       옆이 표·머메이드면 멈춘다 — 통째 블록은 글자로 이을 수 없다.
+       사라지는 줄의 딸린 하위는 «있던 자리» 에 남는다 (빈 줄 Backspace 와 같은 규칙).
+       각주는 잃지 않는다 — 남는 줄에 자리가 비어 있으면 넘겨받는다 (한 줄에 하나 규칙은 그대로) */
+    function edMergeLine(dir) {
+      const p = edPos(), node = edNode(p);
+      if (!p || !node) return false;
+      const curBox = edEl.closest(".ss-b"), rowBox = edEl.closest("[data-defrow]");
+      if (!curBox || !rowBox) return false;
+      const boxes = [...rowBox.querySelectorAll(".ss-b")].filter((b) => b.getClientRects().length);
+      const nb = boxes[boxes.indexOf(curBox) + dir];
+      if (!nb || !nb.dataset.path) return false;
+      const ns = atPath(edLines(p), nb.dataset.path.split(".").map(Number));
+      const other = ns && ns.owner[ns.idx];
+      if (!other || isAtomBlk(other) || isAtomBlk(node.b)) return false;
+      const keep = dir < 0 ? other : node.b;              /* 남는 쪽 (앞 줄) */
+      const gone = dir < 0 ? node.b : other;              /* 흡수되는 쪽 (뒷줄) */
+      const goneSpot = dir < 0 ? node.spot : ns;
+      edSnap();
+      const box = document.createElement("span");
+      box.innerHTML = keep.t || "";
+      const joinAt = box.textContent.length;              /* 이음매 = 커서가 설 자리 */
+      keep.t = String(keep.t || "") + String(gone.t || "");
+      if (!keep.ref && gone.ref) keep.ref = gone.ref;
+      goneSpot.owner.splice(goneSpot.idx, 1, ...(gone.c || []));
+      edEl = null; /* 이 칸의 생은 끝났다 — 재렌더 후 edFinish 가 옛 자리를 저장하지 않게 */
+      edTouched();
+      edGoPath(p.key, keep);
+      if (edEl) edCaretTo(edEl, joinAt);
+      return true;
+    }
+
     /* 블록 종류 바꾸기 — 슬래시·＋ 메뉴와 «-» 단축키가 함께 쓴다 */
     function edSetKind(kind) {
       const p = edPos();
@@ -4585,7 +4741,48 @@ ${HL_CSS}
            Esc 는 그 칸에서 빠져나오는 것이고, 되돌리기는 Ctrl+Z 다 (PM 2026-08-29) */
         else if (k === "Escape") { eat(); edSlashClose(); edFinish(true); }
         else if (k === "Tab") { eat(); edIndent(!e.shiftKey); }
-        else if (k === "Backspace" && empty) { eat(); edKillLine(); }
+        /* 줄 맨 앞 Backspace = 앞 줄과 합친다. 합칠 데가 없는 빈 줄이면 지운다 (#48) */
+        else if (k === "Backspace" && !e.isComposing) {
+          const off = edCaretOff();
+          if (off && off.collapsed && off.at === 0 && edEl.dataset.ed === "b" && edMergeLine(-1)) eat();
+          else if (empty) { eat(); edKillLine(); }
+        }
+        else if (k === "Delete" && !e.isComposing && edEl.dataset.ed === "b") {
+          const off = edCaretOff();
+          if (off && off.collapsed && off.at >= off.len && edMergeLine(1)) eat();
+        }
+        /* 양끝의 ←·→ 는 옆 칸으로 — 칸 안에서는 브라우저가 하던 대로 */
+        else if ((k === "ArrowLeft" || k === "ArrowRight") && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing) {
+          const off = edCaretOff();
+          if (off && off.collapsed && (k === "ArrowLeft" ? off.at === 0 : off.at >= off.len)) {
+            const stops = edStops(), to = stops[stops.indexOf(edEl) + (k === "ArrowLeft" ? -1 : 1)];
+            if (to) {
+              eat();
+              const key = edKeyOf(to);
+              if (key && key !== edKeyOf(edEl)) activate(key, "panel");
+              if (edEnter(to)) edCaretTo(to, k === "ArrowLeft" ? to.textContent.length : 0);
+            }
+          }
+        }
+        /* ↑·↓ — 끝 시각줄에서만 옆 줄로 건너간다. 접힌 긴 줄 안에서는 브라우저 몫이다.
+           커서 rect 가 없는 자리(굵게 경계 등)는 기본 동작을 두고, 커서가 안 움직였으면 경계였던 것 */
+        else if ((k === "ArrowDown" || k === "ArrowUp") && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing) {
+          const dir = k === "ArrowDown" ? 1 : -1, x = edCaretX();
+          const edge = edCaretEdge(dir);
+          if (edge === true) { eat(); edHop(dir, x); }
+          else if (edge === null) {
+            const el = edEl, sel = getSelection();
+            const n0 = sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+            const o0 = sel.rangeCount ? sel.getRangeAt(0).startOffset : -1;
+            setTimeout(() => {
+              if (edEl !== el || !el.isConnected) return;
+              const s1 = getSelection();
+              if (!s1.rangeCount) return;
+              const r1 = s1.getRangeAt(0);
+              if (r1.startContainer === n0 && r1.startOffset === o0) edHop(dir, x);
+            }, 0);
+          }
+        }
         /* «/» 는 먹지 않는다 — 글자로 들어간 뒤에 그 자리에서 연다 (#85).
            여는 것은 «타이머» 가 아니라 바로 다음 input 이다. 타이머로 열었더니
            «POST /api/items» 처럼 슬래시가 낀 글을 빨리 칠 때 그 사이에 친 글자를 못 보고

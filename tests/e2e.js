@@ -2880,6 +2880,139 @@ function check(name, ok, detail) {
       return !has;
     }));
   }
+  /* ============ 커서가 줄 사이를 흐른다 (#48) ============
+     줄마다 입력칸이 따로라 커서가 칸 안에 갇혀 있었다 — 화살표로 아랫줄에 못 가고,
+     줄 맨 앞 Backspace 가 앞 줄과 못 합쳐졌다. 칸을 하나로 합치는 대신(편집 엔진 재건축)
+     경계에서 옆 칸으로 건너간다: ↑↓←→ 4방향 + 경계 Backspace/Delete 병합.
+     여기서 재는 것은 «실제 키» 다 — 손이 누르는 그 길로 잰다. */
+  if (sec("[흐름] 커서가 줄 사이를 흐른다 (#48)")) {
+    const HTMLF = '<div id="a" data-spec="1">본문</div>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-F',name:'f'}," +
+      "sources:{kps:{label:'KPS 정책',href:'https://example.com'}}," +
+      "specs:[{n:1,target:'1',anno:'box',title:'영역',defs:[" +
+      "{t:'가나다라마'}," +
+      "{t:'일이삼사오',ref:'kps',c:[{t:'하위 한 줄'}]}," +
+      "{kind:'table',head:['조건','결과'],rows:[['정상','통과'],['오류','반려']]}," +
+      "{t:'표 아래 줄'}]}," +
+      "{n:2,target:'1',anno:'box',title:'다음 영역',defs:[{t:'둘째 항목 줄'}]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(HTMLF);
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    const defs = () => page.evaluate(() => JSON.parse(JSON.stringify(window.SCREENSPEC.specs[0].defs)));
+    const caretIn = () => page.evaluate(() => {
+      const sel = getSelection();
+      if (!sel.anchorNode) return null;
+      const host = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement).closest("[data-ed]");
+      return host ? { ed: host.dataset.ed, text: host.textContent } : null;
+    });
+    const caretTo = (path, off) => page.evaluate(([pth, o]) => {
+      const el = document.querySelector('[data-defrow="1"] .ss-b[data-path="' + pth + '"] [data-ed]');
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true })); /* 진짜 손 순서: 누르고 → 커서 옮김 */
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let n, left = o;
+      const r = document.createRange();
+      while ((n = w.nextNode())) { if (left <= n.nodeValue.length) { r.setStart(n, left); break; } left -= n.nodeValue.length; }
+      if (!n) r.selectNodeContents(el);
+      r.collapse(true);
+      const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r);
+    }, [path, off]);
+
+    /* ── 화살표가 흐른다 ── */
+    await caretTo("0", 2);
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(120);
+    await page.keyboard.type("X");
+    await page.waitForTimeout(150);
+    check("↓ 는 아랫줄로 가고 가로 위치를 지킨다", (await caretIn()).text === "일이X삼사오", await caretIn());
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(120);
+    await page.keyboard.type("Z");
+    await page.waitForTimeout(150);
+    check("↑ 는 윗줄로 돌아간다 — X 를 친 «지금» 자리를 지킨다", (await caretIn()).text === "가나다Z라마", await caretIn());
+    await page.evaluate(() => { const s = getSelection(), el = document.querySelector('[data-defrow="1"] .ss-b[data-path="0"] [data-ed]');
+      const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); s.removeAllRanges(); s.addRange(r); });
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(120);
+    await page.keyboard.type("A");
+    await page.waitForTimeout(150);
+    check("줄 끝의 → 는 다음 줄 «처음» 으로", (await caretIn()).text === "A일이X삼사오", await caretIn());
+    await page.keyboard.press("Backspace"); /* A 지움 — 방금 그 자리라 커서 확인 겸 */
+    await caretTo("1", 0);
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForTimeout(120);
+    await page.keyboard.type("B");
+    await page.waitForTimeout(150);
+    check("줄 처음의 ← 는 앞 줄 «끝» 으로", (await caretIn()).text === "가나다Z라마B", await caretIn());
+    await page.keyboard.press("Backspace"); /* B 지움 */
+    await page.waitForTimeout(120);
+    await caretTo("0", 0);
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(120);
+    check("첫 줄의 ↑ 는 항목 이름으로", (await caretIn()).ed === "title", await caretIn());
+
+    /* ── 경계 병합 ── */
+    await caretTo("1", 0);
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(250);
+    await page.keyboard.type("Y");
+    await page.waitForTimeout(200);
+    check("줄 맨 앞 Backspace = 앞 줄과 합쳐지고 커서는 이음매에", (await caretIn()).text === "가나다Z라마Y일이X삼사오", await caretIn());
+    let d = await defs();
+    check("합친 결과가 설정에 남는다", d[0].t === "가나다Z라마Y일이X삼사오" && d.length === 4, d.map((b) => b.t || b.kind));
+    check("사라진 줄의 딸린 하위는 «있던 자리» 에 남는다", d[1] && d[1].t === "하위 한 줄", d[1]);
+    check("각주는 잃지 않는다 — 남는 줄이 넘겨받는다", d[0].ref === "kps", d[0].ref);
+    /* Delete 는 반대 방향 */
+    await page.evaluate(() => { const s = getSelection(), el = document.querySelector('[data-defrow="1"] .ss-b[data-path="0"] [data-ed]');
+      const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); s.removeAllRanges(); s.addRange(r); });
+    await page.keyboard.press("Delete");
+    await page.waitForTimeout(250);
+    d = await defs();
+    check("줄 끝 Delete = 뒷줄을 끌어 붙인다", d[0].t === "가나다Z라마Y일이X삼사오하위 한 줄" && d.length === 3, d.map((b) => b.t || b.kind));
+
+    /* ── 표는 통째 블록 — 병합은 멈추고, 화살표는 칸으로 들어간다 ── */
+    await caretTo("1", 0); /* 이제 1번 자리가 표 다음의 «표 아래 줄» ... 아니, 표가 1, 그 줄이 2 */
+    await caretTo("2", 0);
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(250);
+    d = await defs();
+    check("표 바로 아래 줄의 Backspace 는 표를 안 건드린다", d.length === 3 && d[1].kind === "table" && d[2].t === "표 아래 줄",
+      d.map((b) => b.t || b.kind));
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(150);
+    check("↑ 는 표의 «같은 열» 칸으로 들어간다", (await caretIn()).ed === "cell" && (await caretIn()).text === "오류", await caretIn());
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(150);
+    check("칸에서 ↑ 는 윗줄 같은 열로", (await caretIn()).text === "정상", await caretIn());
+
+    /* ── 항목 사이도 흐른다 ── */
+    await caretTo("2", 4); /* «표 아래 줄» 끝 */
+    await page.keyboard.press("End");
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(200);
+    const over = await caretIn();
+    check("마지막 줄의 ↓ 는 다음 항목으로 흐른다", !!over && over.text.indexOf("다음 영역") === 0, over);
+    check("커서로 넘어간 항목이 «고른 것» 으로 활성된다", await page.evaluate(() =>
+      document.querySelector('[data-defrow="2"]').classList.contains("ss-active") ||
+      document.querySelector('[data-defrow="2"] .ss-t') === document.activeElement ||
+      !!document.querySelector('[data-defrow="2"] .ss-ed-on')));
+
+    /* ── 빈 줄 Backspace 는 여전히 줄을 지우고, 이제 커서가 앞 줄 «끝» 에 선다 ── */
+    await caretTo("2", 4);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(250);
+    await page.keyboard.type("Q");
+    await page.waitForTimeout(150);
+    d = await defs();
+    check("빈 줄 Backspace: 줄이 지워지고 커서는 앞 줄 끝에", d.length === 3 && d[2].t === "표 아래 줄Q", d.map((b) => b.t || b.kind));
+    check("JS 에러 0건", errors.length === 0, errors);
+  }
+
   /* ============ 최소 에디터 — 글 쓰듯 고치기 (0-6) ============
      Enter 는 «새 줄», Tab 은 «한 단». 편집 엔진을 넣지 않고 우리 스키마 위에 직접 짰다.
      여기서 확인하는 것은 «키가 데이터 구조를 옳게 옮기는가» 다 — 화면이 아니라 설정이 근거다. */

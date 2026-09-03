@@ -151,6 +151,14 @@
   <aside class="qapin" data-spec="113"><b>고정 패널</b><span>position:fixed · right:0</span></aside>
 </section>
 
+<!-- ══ QA-13 · 커서 흐름 (#48) ══ -->
+<section class="scr" id="qa13">
+  <span class="tag">QA-13</span>
+  <h1 data-spec="131">커서 흐름</h1>
+  <p class="sub">오른쪽 정의서에서 글을 고치며 <b>화살표·Backspace·Delete</b> 를 눌러 본다. 절차는 오른쪽에.</p>
+  <div class="card" data-spec="132"><b>줄 합치기</b><span>줄 맨 앞 Backspace = 앞 줄과 하나로</span></div>
+</section>
+
 <!-- ══ QA-12 · 내보내기 대화상자 (#96) ══ -->
 <section class="scr" id="qa12">
   <span class="tag">QA-12</span>
@@ -415,6 +423,26 @@ window.SCREENSPEC = {
         { t: "확인 : 시트 오른쪽·아래 손잡이가 어느 모드에서도 안 잘린다", c: [
           { t: "손잡이는 시트 «밖» 20px 에 산다 — 여백을 0 으로 두면 폭 조절을 아예 못 하게 된다", kind: "why" }
         ]}
+      ]}
+    ]},
+    { id: "QA-13-FLOW", name: "커서 흐름", path: ["QA", "커서 흐름"], specs: [
+      { n: 1, target: "131", anno: "box", title: "화살표가 흐른다", defs: [
+        { t: "아무 줄이나 눌러 커서를 놓는다" },
+        { t: "확인 : ↓ ↑ 로 윗줄·아랫줄로 가고, 가로 위치가 유지된다" },
+        { t: "확인 : 줄 끝에서 → 는 다음 줄 처음으로, 줄 처음에서 ← 는 앞 줄 끝으로" },
+        { t: "확인 : 첫 줄에서 ↑ 는 항목 이름으로, 마지막 줄에서 ↓ 는 다음 항목으로" },
+        { t: "아래 표 위·아래 줄에서 ↓ ↑ 를 눌러 본다" },
+        { kind: "table", head: ["조건", "결과"], rows: [["정상", "통과"], ["오류", "반려"]] },
+        { t: "확인 : 표의 «같은 열» 칸으로 들어가고, 칸에서도 위아래로 흐른다" }
+      ]},
+      { n: 2, target: "132", anno: "box", title: "줄 합치기", defs: [
+        { t: "이 줄 맨 앞에 커서를 놓고 Backspace 를 누른다", c: [
+          { t: "딸린 하위는 있던 자리에 남는다 — 빈 줄 Backspace 와 같은 규칙", kind: "why" }
+        ]},
+        { t: "확인 : 윗줄과 한 줄이 되고 커서가 이음매에 선다 (Ctrl+Z 로 되돌린다)" },
+        { t: "확인 : 줄 끝에서 Delete 는 뒷줄을 끌어 붙인다" },
+        { t: "확인 : 표 바로 아래 줄에서 Backspace 를 눌러도 표는 안 붙는다 (멈춘다)" },
+        { t: "확인 : 각주 달린 줄을 위로 합치면 각주가 남는 줄로 넘어간다", ref: "kps" }
       ]}
     ]},
     { id: "QA-12-EXPORT", name: "내보내기 대화상자", path: ["QA", "내보내기 대화상자"], specs: [
