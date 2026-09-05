@@ -4837,7 +4837,7 @@ ${HL_CSS}
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
      이때 남의 페이지를 시트로 감싸면 "망가졌다"로 읽히므로, DOM은 그대로 두고 안내 카드만 띄운다. */
-  const DOCS_URL = "https://github.com/charmisuk/screenspec#빠른-시작-2분";
+  const DOCS_URL = "https://github.com/charmisuk/screenspec#직접-적용";
   function setupNotice() {
     console.warn("[ScreenSpec] 설정(window.SCREENSPEC)이 없어 화면정의서를 만들 수 없습니다. 복붙용 최소 예제: " + DOCS_URL);
     const card = h("div", { "data-ss-ignore": "" });

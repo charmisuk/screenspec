@@ -178,9 +178,13 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
 
   const annos = [...new Set([...lib.matchAll(/^ {4}(\w+): +\{ label:/gm)].map((m) => m[1]))];
   check("anno 레지스트리 6종 추출", annos.length === 6, JSON.stringify(annos));
+  /* 어긋남은 «설명한 곳» 에서만 생긴다 — 타입을 설명하지 않는 문서는 검사 대상이 아니다.
+     코드 예제 안의 anno:"box" 는 사용이지 설명이 아니므로 코드 블록을 걷어내고 본다 (2026-09-06) */
   [["README.md", readme], ["docs/config.md", ref]].forEach(([name, doc]) => {
-    const miss = annos.filter((a) => !doc.includes("`" + a + "`"));
-    check(name + " anno 표 정합", miss.length === 0, "누락: " + JSON.stringify(miss));
+    const prose = doc.replace(/```[\s\S]*?```/g, "");
+    const said = annos.filter((a) => prose.includes("`" + a + "`"));
+    const miss = said.length ? annos.filter((a) => !prose.includes("`" + a + "`")) : [];
+    check(name + " anno 표 정합" + (said.length ? "" : " (설명 없음)"), miss.length === 0, "누락: " + JSON.stringify(miss));
   });
 
   const attrs = [...new Set([...lib.matchAll(/data-ss-[a-z]+|data-spec/g)].map((m) => m[0]))];
@@ -433,9 +437,9 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   const lines = readme.split("\n").length;
   check("README 분량 예산 (" + lines + "/" + CAP_LINES + "줄)", lines <= CAP_LINES,
     "예산 초과 — 행을 붙이지 말고 절을 현행화하라 (AGENTS.md 「README 헌장」)");
-  const sect = (readme.split(/^## 자주 막히는 곳$/m)[1] || "").split(/^## /m)[0];
+  const sect = (readme.split(/^## 문제 해결$/m)[1] || "").split(/^## /m)[0];
   const rows = (sect.match(/^\|[^\n]+\|$/gm) || []).length - 2; /* 머리·구분선 2줄 */
-  check("「자주 막히는 곳」 행 예산 (" + rows + "/" + CAP_ROWS + "행)", rows > 0 && rows <= CAP_ROWS,
+  check("「문제 해결」 행 예산 (" + rows + "/" + CAP_ROWS + "행)", rows > 0 && rows <= CAP_ROWS,
     rows <= 0 ? "표를 못 찾았다 — 절 이름이 바뀌었으면 이 검사도 고쳐라"
               : "예산 초과 — 오래된 행을 합치거나 본문·레퍼런스로 옮겨라");
   const BAN = [["로드맵", /로드맵/], ["출시 예정", /출시 예정/], ["준비 중", /준비 중/],
