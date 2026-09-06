@@ -30,6 +30,12 @@ const E2E = path.join(REPO, "tests", "e2e.js");
 
 /* 돌연변이 목록 — find 를 replace 로 바꾸면 그 기능이 죽는다. only = 그것을 잡아야 할 e2e 섹션 */
 const MUTS = [
+  { id: "chip-always-saved", only: "[chip]", why: "저장 안 된 상태를 «저장됨» 으로 그린다 — 글이 날아가는 종류의 거짓말",
+    find: "                  : edDirty                 ? \"dirty\"",
+    to:   "                  : false                   ? \"dirty\"" },
+  { id: "chip-both-shown", only: "[chip]", why: "상태 글줄과 단추를 다시 둘 다 보여 준다 (합친 것이 풀린다)",
+    find: "      edStat.hidden = asBtn;",
+    to:   "      edStat.hidden = false;" },
   { id: "brand-hint-always", only: "[brand]", why: "첫 진입 강조가 «한 번» 이 아니라 매번 뜬다",
     find: "    if (!a || brandSeen()) return;",
     to:   "    if (!a) return;" },

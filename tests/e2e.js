@@ -914,8 +914,8 @@ function check(name, ok, detail) {
     await page.waitForTimeout(400);
     check("훅이 있으면 «자동저장 꺼짐» 이 아니다 — 이미 쓸 곳이 있다",
       (await stat()).indexOf("저장") === 0 && (await stat()).indexOf("꺼짐") < 0, await stat());
-    check("저장 단추가 «자동저장 켜기» 가 아니라 «저장» 이다",
-      (await page.locator(".ss-svbtn").textContent()) === "저장");
+    check("훅 경로 : 쓸 곳이 이미 있으므로 「자동저장 켜기」가 아니다",
+      (await page.locator(".ss-svbtn").textContent()) !== "자동저장 켜기");
     await page.click(row);
     await page.waitForTimeout(200);
     check("훅이 있으면 그 자리에서 바로 고쳐진다 (파일을 안 고른다)",
@@ -950,7 +950,10 @@ function check(name, ok, detail) {
     check("호스트가 실패하면 그 말을 그대로 전한다",
       (await page.locator(".ss-edmsg").textContent()).indexOf("개발 서버가 안 떠 있습니다") >= 0,
       await page.locator(".ss-edmsg").textContent());
-    check("실패하면 «저장됨» 이 되지 않는다", (await stat()).indexOf("저장됨") < 0, await stat());
+    check("실패하면 «저장됨» 이 되지 않는다 — 칩이 다시 「저장」 단추가 된다",
+      (await stat()).indexOf("저장됨") < 0 &&
+      (await page.locator(".ss-svbtn").isVisible()) === true,
+      await stat());
     check("«자동저장을 껐습니다» 라고 거짓말하지 않는다 — 훅은 그대로 살아 있다",
       (await page.locator(".ss-edmsg").textContent()).indexOf("껐습니다") < 0,
       await page.locator(".ss-edmsg").textContent());
@@ -4114,18 +4117,24 @@ function check(name, ok, detail) {
 
     const st = () => page.locator(".ss-savest").textContent();
     const writes = () => page.evaluate(() => window.__writes);
-    check("자동저장: 처음에는 꺼져 있다고 «오른쪽 위» 에 말한다", (await st()) === "자동저장 꺼짐" &&
-      (await page.locator(".ss-svbtn").textContent()) === "자동저장 켜기", await st());
+    check("자동저장: 처음에는 단추 하나로 말한다 (상태 글줄은 숨는다)",
+      (await page.locator(".ss-svbtn").textContent()) === "자동저장 켜기" &&
+      (await page.locator(".ss-savest").isVisible()) === false,
+      await page.locator(".ss-svbtn").textContent());
     await page.click(".ss-svbtn");
     await page.waitForTimeout(500);
-    check("자동저장: 파일을 한 번 고르면 켜진다", (await st()).indexOf("저장됨") === 0 &&
-      (await page.locator(".ss-svbtn").textContent()) === "저장" && (await writes()) === 1, await st());
+    check("자동저장: 파일을 한 번 고르면 켜진다 (글줄만 남고 단추는 사라진다)",
+      (await st()).indexOf("저장됨") === 0 &&
+      (await page.locator(".ss-svbtn").isVisible()) === false && (await writes()) === 1, await st());
 
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.type(" 추가한 글");
     await page.waitForTimeout(250);
-    check("자동저장: 치는 동안 «저장 대기» 로 보인다", (await st()) === "저장 대기", await st());
+    check("자동저장: 치는 동안 «저장» 단추가 나온다",
+      (await page.locator(".ss-svbtn").isVisible()) === true &&
+      (await page.locator(".ss-svbtn").textContent()) === "저장",
+      await page.locator(".ss-svbtn").textContent());
     await page.waitForTimeout(1500);
     check("자동저장: 손이 멈추면 저장된다", (await st()).indexOf("저장됨") === 0 && (await writes()) === 2, [await st(), await writes()]);
     /* 이게 핵심이다 — 저장하려고 편집을 끊으면 커서가 튄다 */
@@ -4147,9 +4156,9 @@ function check(name, ok, detail) {
         JSON.stringify(window.SCREENSPEC.specs[0].defs.map((d) => d.t));
     }));
     /* 저장 단추는 «누를 일이 있을 때만» 눌린다 (PM 2026-08-30) */
-    check("자동저장: 저장할 게 없으면 저장 단추가 꺼진다",
-      (await page.locator(".ss-svbtn").isDisabled()) === true &&
-      (await page.locator(".ss-svbtn").textContent()) === "저장");
+    check("자동저장: 저장할 게 없으면 단추가 아예 없다 (꺼진 단추를 두지 않는다)",
+      (await page.locator(".ss-svbtn").isVisible()) === false &&
+      (await page.locator(".ss-savest").textContent()).indexOf("저장됨") === 0);
 
     /* ---- 밖에서 바뀐 파일 ----
        PM 이 에이전트에게 프로토타입을 고치라고 하면 파일은 바뀌는데 브라우저는 모른다.
@@ -4172,8 +4181,10 @@ function check(name, ok, detail) {
     check("파일감시: 단추가 «무엇을 버리는지» 를 말한다 (#83)",
       (await page.locator('.ss-outside [data-oc="reload"]').textContent()).indexOf("내 미저장 버림") >= 0 &&
       (await page.locator('.ss-outside [data-oc="keep"]').isVisible()) === true);
-    check("파일감시: 그동안 상태는 «저장 멈춤»", (await page.locator(".ss-savest").textContent()) === "저장 멈춤",
-      await page.locator(".ss-savest").textContent());
+    check("파일감시: 그동안 칩은 경고색 「저장 멈춤」 단추다",
+      (await page.locator(".ss-svbtn").textContent()) === "저장 멈춤" &&
+      (await page.evaluate(() => document.querySelector(".ss-svbtn").classList.contains("ss-st-warn"))) === true,
+      await page.locator(".ss-svbtn").textContent());
     const w0 = await writes();
     await page.keyboard.type("Y");
     await page.waitForTimeout(1800);
@@ -4256,6 +4267,122 @@ function check(name, ok, detail) {
     await page.unroute("**");
     fs.unlinkSync(out);
   }
+  /* ============ 저장 칩 (PM 2026-09-06) ============
+     상태와 동작이 두 물건이던 것을 하나로 합쳤다. 여기서 보는 것: 상태마다 «단추인가 글줄인가».
+     저장은 틀리면 사용자의 글이 날아가는 자리라 여섯 갈래를 하나씩 전부 만들어 본다. */
+  if (sec("[chip] 저장 칩 — 상태 여섯 갈래")) {
+    const PROTO2 = '<h1 id="t">홈</h1><button id="buy" data-spec="1" style="margin:40px">구매하기</button>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-1',name:'홈'},specs:[{n:1,target:'1',title:'구매',defs:[{t:'첫 줄'}]}]};<" + "/script>";
+    const chip = async () => page.evaluate(() => {
+      const st = document.querySelector(".ss-savest");
+      const bt = document.querySelector(".ss-svbtn");
+      const why = document.querySelector(".ss-savewhy");
+      const vis = (e) => !!(e && e.offsetParent !== null);
+      return {
+        글줄: vis(st) ? st.textContent : null,
+        단추: vis(bt) ? bt.textContent : null,
+        경고: !!(bt && bt.classList.contains("ss-st-warn")),
+        물음표: vis(why),
+        툴바에긴설명: (document.querySelector(".ss-toolbar") || { textContent: "" }).textContent.indexOf("크롬·엣지에서 됩니다") >= 0,
+      };
+    });
+    const mockPicker = () => page.evaluate((src) => {
+      window.__file = "<html><body>" + src + "</body></html>";
+      window.__mt = 1000;
+      window.__block = false;
+      window.showOpenFilePicker = async () => [{
+        name: "proto.html",
+        queryPermission: async () => "granted",
+        requestPermission: async () => "granted",
+        getFile: async () => ({ text: async () => window.__file, lastModified: window.__mt }),
+        createWritable: async () => ({
+          write: async (t) => { while (window.__block) await new Promise((r) => setTimeout(r, 30)); window.__file = t; window.__mt += 10; },
+          close: async () => {},
+        }),
+      }];
+    }, PROTO2);
+
+    /* --- 1 미연결 : 단추만 --- */
+    await page.goto("about:blank");
+    await page.setContent(PROTO2);
+    await mockPicker();
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    let c = await chip();
+    check("1 미연결 : 단추 「자동저장 켜기」 하나만", c.단추 === "자동저장 켜기" && c.글줄 === null, c);
+
+    /* --- 2 다 저장됨 : 글줄만 --- */
+    await page.click(".ss-svbtn");
+    await page.waitForTimeout(600);
+    c = await chip();
+    check("2 다 저장됨 : 글줄만 · 누를 수 없는 단추가 없다", c.글줄 !== null && c.글줄.indexOf("저장됨") === 0 && c.단추 === null, c);
+    check("2 다 저장됨 : 초록 점",
+      await page.evaluate(() => document.querySelector(".ss-savest").classList.contains("ss-st-on")));
+
+    /* --- 3 고침 있음 : 단추 「저장」 --- */
+    await page.evaluate(() => { window.__block = true; });
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.type(" 고침");
+    await page.waitForTimeout(250);
+    c = await chip();
+    check("3 고침 있음 : 단추 「저장」", c.단추 === "저장" && c.글줄 === null, c);
+
+    /* --- 4 저장 중 : 글줄 「저장 중…」 --- */
+    await page.waitForTimeout(1400); /* 자동저장 타이머가 돌면 쓰기가 __block 에 걸려 머문다 */
+    c = await chip();
+    check("4 저장 중 : 글줄 「저장 중…」 · 노란 점", c.글줄 === "저장 중…" && c.단추 === null &&
+      (await page.evaluate(() => document.querySelector(".ss-savest").classList.contains("ss-st-busy"))), c);
+    await page.evaluate(() => { window.__block = false; });
+    await page.waitForTimeout(900);
+
+    /* --- 5 밖에서 바뀜 : 경고색 단추 --- */
+    await page.evaluate(() => { window.__file = "<html><body>밖에서 고쳤다</body></html>"; window.__mt += 5000; });
+    await page.waitForTimeout(4200); /* 파일 감시는 3초 주기다 */
+    c = await chip();
+    check("5 밖에서 바뀜 : 경고색 단추 「저장 멈춤」", c.단추 === "저장 멈춤" && c.경고 === true && c.글줄 === null, c);
+    check("5 : 눌러서 지금 저장할 수 있다 (누를 수 있는 상태)",
+      (await page.evaluate(() => document.querySelector(".ss-svbtn").disabled)) === false);
+
+    /* --- 6 브라우저가 못 씀 : 단추 「내려받기」 + 물음표, 긴 설명은 툴바 밖 --- */
+    await page.goto("about:blank");
+    await page.setContent(PROTO2);
+    await page.evaluate(() => { try { delete window.showOpenFilePicker; } catch (e) { window.showOpenFilePicker = undefined; } });
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    c = await chip();
+    check("6 브라우저가 못 씀 : 단추 「내려받기」 + 물음표", c.단추 === "내려받기" && c.물음표 === true && c.글줄 === null, c);
+    check("6 : 긴 설명이 툴바에 상시로 있지 않다", c.툴바에긴설명 === false, c);
+    await page.click(".ss-savewhy");
+    await page.waitForTimeout(200);
+    check("6 : 물음표를 누르면 까닭이 나온다",
+      (await page.locator(".ss-savewhytxt").isVisible()) === true);
+
+    /* --- 훅 경로 : 「자동저장 켜기」가 뜨면 안 된다 (쓸 곳이 이미 있다) --- */
+    await page.goto("about:blank");
+    await page.setContent(PROTO2.replace("};<", ",save:{async write(t){window.__hookGot=t;}}};<"));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    c = await chip();
+    check("훅이 있으면 「자동저장 켜기」가 안 뜬다", c.단추 !== "자동저장 켜기", c);
+
+    /* --- readonly : 칩 자체가 없다 --- */
+    await page.goto("about:blank");
+    await page.setContent(PROTO2.replace("window.SCREENSPEC={", "window.SCREENSPEC={readonly:true,"));
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(400);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("readonly 전달본 : 저장 칩이 아예 없다",
+      (await page.locator(".ss-savest").count()) === 0 && (await page.locator(".ss-svbtn").count()) === 0);
+  }
+
   if (sec("[brand] 브랜드 마크 — 바깥으로 나가는 문 하나")) {
     const U = (rel) => require("url").pathToFileURL(path.join(REPO, rel)).href;
     const F = U("examples/shop.html");

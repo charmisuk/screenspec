@@ -610,6 +610,15 @@
   .ss-savest.ss-st-on{color:#2F8F5B}
   .ss-savest.ss-st-busy{color:#B8862B}
   .ss-savest.ss-st-warn{color:#E0522F}
+  /* 저장 칩 — 누를 일이 있으면 단추, 없으면 글줄. 한 번에 하나만 보인다 (PM 2026-09-06).
+     .ss-ui 는 display 를 직접 정하는 것이 많아 hidden 만으로는 안 사라진다 */
+  .ss-ui[hidden]{display:none!important}
+  .ss-headbtn.ss-st-warn,.ss-headbtn.ss-st-warn:hover{border-color:#E0522F;color:#E0522F}
+  .ss-savewhy{width:20px;height:20px;flex:none;border:1px solid var(--ss-line2);background:#fff;
+    color:var(--ss-ink3);border-radius:99px;font-size:11px;font-weight:800;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center}
+  .ss-savewhy:hover{color:var(--ss-ink2);border-color:var(--ss-ink3)}
+  .ss-savewhytxt{font-size:11px;font-weight:700;color:var(--ss-ink2);white-space:nowrap}
   .ss-headbtn:disabled{opacity:.45;cursor:default;border-color:var(--ss-line)}
   .ss-headbtn:disabled:hover{border-color:var(--ss-line);color:var(--ss-ink2)}
   /* 밖에서 바뀐 파일 띠 — 초안 띠와 같은 자리·같은 모양, 색만 다르다 */
@@ -2873,6 +2882,18 @@ ${HL_CSS}
         };
         home.appendChild(sv);
         edSync();
+        /* 「크롬·엣지에서 됩니다」는 상태가 아니라 설명이다 — 툴바에서 가장 넓은 자리를 쓰던 것을
+           물음표 뒤로 내린다. 터치 기기(사파리)가 이 상태의 주 무대라 hover 만으로는 안 된다 */
+        edWhy = h("button", { class: "ss-savewhy ss-ui", type: "button",
+          "aria-label": "자동저장이 왜 안 되나요", title: "자동저장이 왜 안 되나요" }, "?");
+        edWhyTxt = h("span", { class: "ss-savewhytxt ss-ui" }, "크롬·엣지에서 파일을 직접 열었을 때 됩니다");
+        edWhyTxt.hidden = true;
+        edWhy.onclick = () => {
+          edWhyTxt.hidden = !edWhyTxt.hidden;
+          if (!edWhyTxt.hidden) setTimeout(() => { edWhyTxt.hidden = true; }, 6000);
+        };
+        home.appendChild(edWhy);
+        home.appendChild(edWhyTxt);
         const cp = h("button", { class: "ss-headbtn ss-ui", type: "button",
           title: "지금까지 쓴 기능 설명을 통째로 복사합니다 (자동저장이 안 되는 브라우저용)" }, "설명 복사");
         cp.onclick = edCopyBlock;
@@ -2918,6 +2939,7 @@ ${HL_CSS}
     let edDirty = false;    /* 저장 안 된 변경이 있는가 */
     let edHandle = null;    /* 파일에 직접 저장할 때의 파일 손잡이 (세션 동안 기억) */
     let edBar = null, edBtn2 = null, edWhen = null, edMsg = null, edDraftBar = null;
+    let edWhy = null, edWhyTxt = null;
 
     function edStore(fn) { try { return fn(); } catch (e) { return null; } } /* 사생활 보호 모드 등 localStorage 차단 대비 */
     function edSay(msg) { if (edMsg) edMsg.textContent = msg || ""; }
@@ -3064,16 +3086,29 @@ ${HL_CSS}
     function edSync() {
       if (edWhen) edWhen.textContent = edDirty ? "저장 안 됨" : (edSavedAt ? "마지막 저장 " + edSavedAt : "");
       if (!edStat) return;
-      let cls = "ss-savest ss-ui", txt;
+      /* 여섯 갈래에 이름을 붙인다 — 아래는 «어떻게 그릴지» 만 고른다 */
       const hook = edHook(); /* 훅이 있으면 브라우저가 파일에 못 써도 저장은 된다 (#87) */
-      if (!hook && !edCanFile()) { cls += " ss-st-off"; txt = "자동저장 안 됨 (크롬·엣지에서 됩니다)"; }
-      else if (!hook && !edHandle) { cls += " ss-st-off"; txt = "자동저장 꺼짐"; }
-      else if (edOutside) { cls += " ss-st-warn"; txt = "저장 멈춤"; }
-      else if (edSaving) { cls += " ss-st-busy"; txt = "저장 중…"; }
-      else if (edDirty) { cls += " ss-st-busy"; txt = "저장 대기"; }
-      else { cls += " ss-st-on"; txt = "저장됨" + (edSavedAt ? " · " + edSavedAt : ""); }
+      const state = (!hook && !edCanFile()) ? "nofile"
+                  : (!hook && !edHandle)    ? "unlinked"
+                  : edOutside               ? "stuck"
+                  : edSaving                ? "saving"
+                  : edDirty                 ? "dirty"
+                  :                           "saved";
+      /* 누를 일이 있으면 단추, 없으면 글줄. 둘을 나란히 두면 늘 하나가 잉여였다 (PM 2026-09-06):
+         미연결에서는 「자동저장 꺼짐 + 자동저장 켜기」로 같은 말을 두 번 했고,
+         다 저장됐을 때는 누를 수 없는 단추가 자리만 차지했다.
+         「저장 멈춤」만 상태를 라벨에 쓴다 — 무슨 일이 났는지가 먼저 보여야 하고,
+         무엇을 하는지는 title 과 아래 띠(#83)가 말한다 */
+      const ACT = { nofile: "내려받기", unlinked: "자동저장 켜기", stuck: "저장 멈춤", dirty: "저장" };
+      const asBtn = !!ACT[state];
+      const cls = "ss-savest ss-ui " + (state === "saving" ? "ss-st-busy" : "ss-st-on");
+      edStat.hidden = asBtn;
       edStat.className = cls;
-      edStat.textContent = txt;
+      edStat.textContent = asBtn ? ""                       /* 안 보이는 글줄은 비운다 — 숨은 거짓말을 남기지 않는다 */
+        : state === "saving" ? "저장 중…"
+        : "저장됨" + (edSavedAt ? " · " + edSavedAt : "");
+      if (edWhy) edWhy.hidden = state !== "nofile";
+      if (edWhyTxt && state !== "nofile") edWhyTxt.hidden = true;
       /* 접힌 툴바(폰)에서는 상태 글줄이 안 보인다 — «봐야 할» 상태만 ⋯ 위 점으로 (#94) */
       const tb = edStat.closest && edStat.closest(".ss-toolbar");
       if (tb) {
@@ -3081,13 +3116,15 @@ ${HL_CSS}
         tb.classList.toggle("ss-save-busy", cls.indexOf("ss-st-warn") < 0 && (edDirty || edSaving));
       }
       if (edSvBtn) {
-        const can = edCanWrite();
-        edSvBtn.textContent = can ? "저장" : (edCanFile() ? "자동저장 켜기" : "내려받기");
-        /* 자동저장이 켜져 있고 이미 저장됐으면 누를 일이 없다 — 눌러도 되는 것처럼 두지 않는다 (PM 2026-08-30) */
-        const idle = can && !edDirty && !edSaving && !edOutside;
-        edSvBtn.disabled = !!idle;
-        edSvBtn.title = !can ? (edCanFile() ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다" : "고친 내용을 파일로 내려받습니다")
-          : idle ? "저장할 것이 없습니다"
+        edSvBtn.hidden = !asBtn;
+        edSvBtn.textContent = ACT[state] || "";
+        edSvBtn.classList.toggle("ss-st-warn", state === "stuck");
+        /* 보이면 언제나 누를 수 있다 — 누를 일이 없는 상태에서는 아예 안 보인다 */
+        edSvBtn.disabled = false;
+        edSvBtn.title =
+            state === "unlinked" ? "쓸 파일을 한 번 고르면 그 뒤로는 알아서 저장합니다"
+          : state === "nofile"   ? "고친 내용을 파일로 내려받습니다"
+          : state === "stuck"    ? "밖에서 파일이 바뀌어 자동저장이 멈췄습니다. 눌러 지금 저장합니다"
           : edHandle ? "「" + edHandle.name + "」 에 바로 씁니다" : "이 앱이 정의를 소스에 씁니다";
       }
     }
