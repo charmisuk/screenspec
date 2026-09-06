@@ -4422,6 +4422,33 @@ function check(name, ok, detail) {
       (await page.evaluate(() => document.querySelector(".ss-svbtn").disabled)) === false);
     check("5 : 물음표는 안 보인다", c.물음표 === false, c);
 
+    /* --- 접혀서 칩이 ⋯ 안으로 들어가도 «봐야 할 상태» 는 점으로 보인다 --- */
+    await page.setViewportSize({ width: 380, height: 820 });
+    await page.waitForTimeout(500);
+    const dot = () => page.evaluate(() => {
+      const more = document.querySelector(".ss-toolbar .ss-more");
+      const tb = document.querySelector(".ss-toolbar");
+      if (!more || more.offsetParent === null) return "⋯ 가 없다";
+      const c = getComputedStyle(more, "::after");
+      return { 보임: c.display !== "none", 색: c.backgroundColor,
+        접힘: tb.classList.contains("ss-fold3"), 칩숨음: document.querySelector(".ss-svbtn").offsetParent === null };
+    });
+    let d = await dot();
+    check("접힘 : 저장 칩이 ⋯ 안으로 들어간다", d.접힘 === true && d.칩숨음 === true, d);
+    check("접힘 : 저장할 것이 없으면 점도 없다", d.보임 === false, d);
+    await page.evaluate(() => { window.__block = true; });
+    await page.click(".ss-more");
+    await page.waitForTimeout(200);
+    await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.type(" 좁은 화면에서 고침");
+    await page.waitForTimeout(400);
+    d = await dot();
+    check("접힘 : 저장할 것이 있으면 ⋯ 위에 점이 뜬다", d.보임 === true, d);
+    await page.evaluate(() => { window.__block = false; });
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.waitForTimeout(500);
+
     /* --- 6 브라우저가 못 씀 : 단추 「내려받기」 + 물음표, 긴 설명은 툴바 밖 --- */
     await page.goto("about:blank");
     await page.setContent(PROTO2);
