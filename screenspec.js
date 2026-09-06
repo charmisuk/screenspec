@@ -1,5 +1,5 @@
 /*!
- * ScreenSpec v0.30 — 프로토타입 자체가 화면정의서가 되는 오버레이
+ * ScreenSpec v0.31 — 프로토타입 자체가 화면정의서가 되는 오버레이
  * Copyright (c) 2026 ScreenSpec · MIT License · https://github.com/charmisuk/screenspec
  *
  * 이 파일은 프로토타입 HTML 안에 통째로 넣어 쓸 수 있다 (미리보기 환경 대응).
@@ -94,7 +94,7 @@
   const READONLY = RAW.readonly === true;
   /* 브랜드 마크 (툴바 맨 왼쪽) — 바깥으로 나가는 문 하나. 끄면 «만들지 않는다»(숨김이 아니다) */
   const BRAND = RAW.brand !== false;
-  const SS_VER = "0.30"; /* lint 이 헤더 버전과 대조한다 — 어긋나면 FAIL */
+  const SS_VER = "0.31"; /* lint 이 헤더 버전과 대조한다 — 어긋나면 FAIL */
   const SS_SITE = "https://charmisuk.github.io/screenspec/";
   const BRAND_SEEN = "screenspec:guide-seen";
   /* 저장은 «원본 HTML 의 설정 블록만» 갈아끼운다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 원본이 아니므로,
@@ -5125,7 +5125,7 @@ ${HL_CSS}
           <div class="ss-defs-resize" title="좌우로 끌어 폭 조절"></div>
           <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-cnt"></span></div>
           <div class="ss-defs-list" id="ss-defsList"></div>
-          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.30</div>
+          <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.31</div>
         </aside>
       </div>`);
 
@@ -5537,7 +5537,7 @@ ${HL_CSS}
     if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가: mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
     usePreset(base);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
-    console.info("[ScreenSpec v0.30] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
+    console.info("[ScreenSpec v0.31] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
   /* ============================================================
@@ -5573,7 +5573,7 @@ ${HL_CSS}
     const panel = h("aside", { class: "ss-ui ss-ov-panel", "aria-label": "기능 설명" }, `
       <div class="ss-defs-head"><h2>기능 설명</h2><span class="ss-cnt" id="ss-ovCnt"></span></div>
       <div class="ss-defs-list" id="ss-ovList"></div>
-      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.30</div>`);
+      <div class="ss-badge">Made with <a href="https://github.com/charmisuk/screenspec" target="_blank" rel="noopener">ScreenSpec</a> · v0.31</div>`);
     const markerLayer = h("div", { class: "ss-ov-markers" });
     const annoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     annoSvg.setAttribute("class", "ss-ov-anno");
@@ -5678,7 +5678,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
-    console.info("[ScreenSpec v0.30] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
+    console.info("[ScreenSpec v0.31] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
