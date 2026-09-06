@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>3분 가이드 · ScreenSpec</title>
 <meta name="description" content="ScreenSpec 을 붙인 뒤 익힐 것 네 가지. 고치기 · 번호 붙이기 · 저장 · 넘기기.">
+
+<!-- 이 페이지의 유일한 바깥 의존성. 쿠키를 쓰지 않고 하루 기준으로 사람을 센다.
+     data-domains 로 우리 주소에서만 보낸다 — 이 저장소는 공개라 누가 복사해 열어도 숫자가 섞이지 않는다 -->
+<script defer src="https://cloud.umami.is/script.js"
+        data-website-id="fa12cba4-0820-4230-b884-62312f6c0509"
+        data-domains="charmisuk.github.io"></script>
 <style>
 /* 색은 라이브러리 토큰을 그대로 가져온다 (screenspec.js --ss-*) */
 :root{
@@ -236,10 +242,22 @@ body:not(.js) .sl{margin-bottom:64px;border-bottom:1px solid var(--line);padding
     if (m.tagName === "IMG" && m.complete && m.naturalWidth === 0) fail();
   });
 
-  /* 계수기 — 아직 붙이지 않았다. 도구가 정해지면 이 함수 한 곳만 바꾼다 (funnel.md §1) */
-  function track(name, data) {
-    if (typeof window.umami === "object" && window.umami.track) window.umami.track(name, data);
+  /* 계수기는 defer 로 늦게 온다 — 페이지 열림 사건이 먼저 일어나므로 줄을 세웠다가 흘려보낸다.
+     끝내 안 오면(막힌 환경) 그냥 버린다. 페이지는 계수기 없이도 똑같이 동작한다 */
+  var queue = [];
+  var ready = () => window.umami && typeof window.umami.track === "function";
+  function flush() {
+    if (!ready()) return false;
+    while (queue.length) { var e = queue.shift(); try { window.umami.track(e[0], e[1]); } catch (x) {} }
+    return true;
   }
+  function track(name, data) {
+    queue.push([name, data]);
+    flush();
+  }
+  document.addEventListener("DOMContentLoaded", flush);
+  window.addEventListener("load", flush);
+  setTimeout(flush, 2000); /* 느린 회선 대비 한 번 더 */
 
   var P = new URLSearchParams(location.search);
   track("guide_open", {

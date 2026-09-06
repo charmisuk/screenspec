@@ -4313,6 +4313,8 @@ function check(name, ok, detail) {
 
   if (sec("[guide] 3분 가이드 페이지")) {
     const G = require("url").pathToFileURL(path.join(REPO, "guide/index.html")).href;
+    /* 시험이 바깥 서버(계수기)에 기대지 않게 막는다 — 없어도 페이지는 똑같이 동작해야 한다 */
+    await page.route("**", (r) => (/^https?:/i.test(r.request().url()) ? r.abort() : r.continue()));
     await page.goto(G);
     await page.waitForTimeout(300);
     const shown = () => page.evaluate(() =>
@@ -4358,6 +4360,7 @@ function check(name, ok, detail) {
     await np.goto(G);
     check("JS 없이 여섯 장이 다 보인다", (await np.locator(".sl:visible").count()) === 6);
     await noJs.close();
+    await page.unroute("**");
   }
 
   check("JS 에러 0건", errors.length === 0, errors.slice(0, 3));
