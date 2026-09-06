@@ -109,7 +109,11 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
     done.push(`${file} ${want}곳`);
     return null;
   };
-  const errs = [one("screenspec.js", "v" + fromMajor, "v" + toMajor, 5)];
+  const errs = [
+    one("screenspec.js", "v" + fromMajor, "v" + toMajor, 5),
+    /* «v» 가 없는 자리 — 브랜드 마크가 주소에 싣는 판 번호 */
+    one("screenspec.js", 'SS_VER = "' + fromMajor + '"', 'SS_VER = "' + toMajor + '"', 1),
+  ];
   /* 문서는 «몇 곳» 을 못 박지 않는다 — 어느 문서에 몇 번 박혀 있든 전부 올린다.
      대신 «어디에도 없다» 는 잡는다: 그러면 사용자에게 줄 고정 주소가 사라진 것이다 */
   let docHits = 0;
@@ -176,7 +180,7 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
       console.log(`  v${curMajor}/@v${curTag} → v${toMajor}/@v${version}`);
       console.log(`  판 이름: ${title}`);
       if (!APPLY) {
-        ok("고칠 곳: screenspec.js 5 · README.md 1 · SKILL.md 1 (일곱 곳)");
+        ok("고칠 곳: screenspec.js 6(SS_VER 포함) · 판을 박아 둔 문서 전부");
         console.log("\n결과: --apply 를 붙이면 위대로 고치고 커밋·태그·푸시·퍼지·Release 까지 간다");
         process.exit(0);
       }
