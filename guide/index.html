@@ -68,6 +68,9 @@ kbd{font:700 13px/1 var(--mono);background:var(--canvas);border:1px solid var(--
   text-decoration:none;font-size:15px;font-weight:700;color:var(--ink)}
 .cards a span{display:block;margin-top:8px;font:400 12px/1 var(--mono);color:var(--ink3)}
 .cards a:hover{border-color:var(--ink3)}
+.again{margin-top:24px;border:0;background:none;color:var(--ink3);font:700 13px/1 inherit;
+  cursor:pointer;padding:10px 12px;border-radius:8px}
+.again:hover{color:var(--ink2);background:var(--canvas)}
 
 /* ---- 발 ---- */
 .ft{position:fixed;bottom:0;left:0;right:0;height:var(--foot);z-index:10;background:#fff;
@@ -198,12 +201,14 @@ body:not(.js) .sl{margin-bottom:64px;border-bottom:1px solid var(--line);padding
   <section class="sl mid" data-n="6">
     <div class="tx">
       <h2>다음 걸음</h2>
-      <p>여기까지면 충분합니다. 더 필요해지면 그때 보세요.</p>
+      <p>여기까지면 충분합니다. 이제 문서로 돌아가 직접 해 보세요.</p>
       <div class="cards">
-        <a href="../docs/config.md" data-out="config">설정 전부 보기<span>config.md</span></a>
-        <a href="../SKILL.md" data-out="skill">AI 에게 맡기기<span>SKILL.md</span></a>
-        <a href="../examples/shop.html" data-out="examples">예제 6종<span>examples</span></a>
+        <!-- 깃허브 렌더링 주소로 보낸다. Pages 는 .md 를 글자 그대로 주므로 코드처럼 보인다 -->
+        <a href="https://charmisuk.github.io/screenspec/examples/shop.html" data-out="examples">예제로 연습하기<span>내 파일 말고 여기서</span></a>
+        <a href="https://github.com/charmisuk/screenspec/blob/main/docs/config.md" data-out="config">설정 전부 보기<span>필드와 예시</span></a>
+        <a href="https://github.com/charmisuk/screenspec/blob/main/SKILL.md" data-out="skill">AI 에게 맡기기<span>작업 지시서</span></a>
       </div>
+      <button class="again" id="again" type="button">처음부터 다시 보기</button>
     </div>
   </section>
 
@@ -332,6 +337,11 @@ body:not(.js) .sl{margin-bottom:64px;border-bottom:1px solid var(--line);padding
   }, { passive: true });
 
   window.addEventListener("hashchange", function () { go(parseInt(location.hash.slice(1), 10) || 1, true); });
+
+  document.getElementById("again").addEventListener("click", function () {
+    track("guide_again", {});
+    go(1);
+  });
 
   [].slice.call(document.querySelectorAll("[data-out]")).forEach(function (a) {
     a.addEventListener("click", function () { track("guide_out", { to: a.getAttribute("data-out") }); });

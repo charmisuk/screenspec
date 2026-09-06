@@ -4345,6 +4345,15 @@ function check(name, ok, detail) {
     await page.waitForTimeout(200);
     check("진행 점으로 이동", (await shown()) === "6");
     check("6장에는 「다음」이 없다", await page.evaluate(() => document.getElementById("next").hidden));
+    /* Pages 는 .md 를 글자 그대로 준다 — 링크가 그리로 가면 사용자에게 코드가 보인다 */
+    const outs = await page.evaluate(() =>
+      [].slice.call(document.querySelectorAll(".cards a")).map((a) => a.getAttribute("href")));
+    /* 깃허브 blob 주소는 .md 로 끝나도 화면에 그려 준다. 문제는 «우리 Pages 의 .md» 다 */
+    const raw = outs.filter((h) => h.split("?")[0].split("#")[0].endsWith(".md") && h.indexOf("github.com") < 0);
+    check("마무리 링크가 글자 그대로의 .md 로 가지 않는다", outs.length === 3 && raw.length === 0, raw);
+    await page.click("#again");
+    await page.waitForTimeout(250);
+    check("「처음부터 다시」 가 1장으로", (await shown()) === "1");
     await page.waitForTimeout(600);
     check("여섯 액자에 그림이 붙어 있다",
       await page.evaluate(() => [].slice.call(document.querySelectorAll(".fr")).every((f) => !f.classList.contains("na"))));
