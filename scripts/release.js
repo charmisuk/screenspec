@@ -80,7 +80,10 @@ const shipped = [...new Set([...((changelog.split(/^## /m)[1] || "").matchAll(/#
 
 if (NOTES) { console.log((changelog.split(/^## /m)[1] || "").split("\n").slice(1).join("\n").trim()); process.exit(0); }
 
-const DOC_FILES = ["README.md", "SKILL.md"];
+/* 판을 박아 둔 문서는 자라기도 옮기기도 한다 (2026-09-06: README 개편으로 docs/share.md 로 옮겨 갔다).
+   그래서 목록을 손으로 적지 않고 «문서 전부» 를 본다 — 어디에 박혀 있든 릴리스 때 같이 올라간다 */
+const DOC_FILES = ["README.md", "SKILL.md"].concat(
+  fs.readdirSync(path.join(REPO, "docs")).filter((f) => /\.md$/.test(f)).map((f) => "docs/" + f));
 const readDocTags = () => {
   const set = new Set();
   for (const f of DOC_FILES) {
@@ -106,12 +109,21 @@ function bumpFiles(fromMajor, toMajor, fromTag, toTag) {
     done.push(`${file} ${want}곳`);
     return null;
   };
-  const errs = [
-    one("screenspec.js", "v" + fromMajor, "v" + toMajor, 5),
-    one("README.md", "@v" + fromTag, "@v" + toTag, 1),
-    one("SKILL.md", "@v" + fromTag, "@v" + toTag, 1),
-  ].filter(Boolean);
-  return { errs, done };
+  const errs = [one("screenspec.js", "v" + fromMajor, "v" + toMajor, 5)];
+  /* 문서는 «몇 곳» 을 못 박지 않는다 — 어느 문서에 몇 번 박혀 있든 전부 올린다.
+     대신 «어디에도 없다» 는 잡는다: 그러면 사용자에게 줄 고정 주소가 사라진 것이다 */
+  let docHits = 0;
+  for (const f of DOC_FILES) {
+    const at = path.join(REPO, f);
+    const src = fs.readFileSync(at, "utf8");
+    const n = src.split("@v" + fromTag).length - 1;
+    if (!n) continue;
+    fs.writeFileSync(at, src.split("@v" + fromTag).join("@v" + toTag));
+    done.push(f + " " + n + "곳");
+    docHits += n;
+  }
+  if (!docHits) errs.push("문서 어디에도 \"@v" + fromTag + "\" 가 없다 — 고정 주소를 안내하는 곳이 사라졌나");
+  return { errs: errs.filter(Boolean), done };
 }
 
 (async () => {

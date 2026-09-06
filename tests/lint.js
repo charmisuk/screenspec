@@ -63,7 +63,10 @@ try {
   check("헤더 버전 존재", !!header, "주석에서 'ScreenSpec vX.Y'를 찾지 못함");
   check("배지 버전 = 헤더 버전 (" + header + ")", badges.length > 0 && badges.every((v) => v === header), JSON.stringify(badges));
   const docTags = [];
-  for (const f of ["README.md", "SKILL.md"]) {
+  /* 판을 박아 둔 곳은 문서 어디든 될 수 있다 — 한 곳만 보면 나머지가 죽은 판을 가리켜도 조용하다 */
+  const TAGGED = ["README.md", "SKILL.md"].concat(
+    fs.readdirSync(path.join(REPO, "docs")).filter((f) => /\.md$/.test(f)).map((f) => "docs/" + f));
+  for (const f of TAGGED) {
     const d = fs.readFileSync(path.join(REPO, f), "utf8");
     [...d.matchAll(/@v(\d+\.\d+\.\d+)/g)].forEach((m) => docTags.push(f + ":" + m[1]));
   }
