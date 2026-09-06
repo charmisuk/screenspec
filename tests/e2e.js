@@ -4343,8 +4343,14 @@ function check(name, ok, detail) {
     await page.waitForTimeout(200);
     check("진행 점으로 이동", (await shown()) === "6");
     check("6장에는 「다음」이 없다", await page.evaluate(() => document.getElementById("next").hidden));
-    check("그림이 없으면 장면 설명으로 대신한다",
-      await page.evaluate(() => [].slice.call(document.querySelectorAll(".fr")).every((f) => f.classList.contains("na"))));
+    await page.waitForTimeout(600);
+    check("여섯 액자에 그림이 붙어 있다",
+      await page.evaluate(() => [].slice.call(document.querySelectorAll(".fr")).every((f) => !f.classList.contains("na"))));
+    check("그림이 빠지면 장면 설명이 대신 뜬다", await page.evaluate(() => {
+      const f = document.querySelector(".fr");
+      f.querySelector("video,img").dispatchEvent(new Event("error"));
+      return f.classList.contains("na") && !!f.getAttribute("data-cap");
+    }));
 
     /* 자바스크립트가 막힌 곳에서도 빈 화면이 되지 않는다 */
     const noJs = await browser.newContext({ javaScriptEnabled: false });
