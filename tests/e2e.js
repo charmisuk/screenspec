@@ -4385,6 +4385,7 @@ function check(name, ok, detail) {
     await page.waitForTimeout(300);
     let c = await chip();
     check("1 미연결 : 단추 「자동저장 켜기」 하나만", c.단추 === "자동저장 켜기" && c.글줄 === null, c);
+    check("1 미연결 : 물음표는 안 보인다 (이 브라우저는 쓸 수 있다)", c.물음표 === false, c);
 
     /* --- 2 다 저장됨 : 글줄만 --- */
     await page.click(".ss-svbtn");
@@ -4393,6 +4394,7 @@ function check(name, ok, detail) {
     check("2 다 저장됨 : 글줄만 · 누를 수 없는 단추가 없다", c.글줄 !== null && c.글줄.indexOf("저장됨") === 0 && c.단추 === null, c);
     check("2 다 저장됨 : 초록 점",
       await page.evaluate(() => document.querySelector(".ss-savest").classList.contains("ss-st-on")));
+    check("2 다 저장됨 : 물음표는 안 보인다", c.물음표 === false, c);
 
     /* --- 3 고침 있음 : 단추 「저장」 --- */
     await page.evaluate(() => { window.__block = true; });
@@ -4418,6 +4420,7 @@ function check(name, ok, detail) {
     check("5 밖에서 바뀜 : 경고색 단추 「저장 멈춤」", c.단추 === "저장 멈춤" && c.경고 === true && c.글줄 === null, c);
     check("5 : 눌러서 지금 저장할 수 있다 (누를 수 있는 상태)",
       (await page.evaluate(() => document.querySelector(".ss-svbtn").disabled)) === false);
+    check("5 : 물음표는 안 보인다", c.물음표 === false, c);
 
     /* --- 6 브라우저가 못 씀 : 단추 「내려받기」 + 물음표, 긴 설명은 툴바 밖 --- */
     await page.goto("about:blank");

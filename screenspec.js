@@ -2890,6 +2890,7 @@ ${HL_CSS}
         edWhy = h("button", { class: "ss-savewhy ss-ui", type: "button",
           "aria-label": "자동저장이 왜 안 되나요", title: "자동저장이 왜 안 되나요" }, "?");
         edWhyTxt = h("span", { class: "ss-savewhytxt ss-ui" }, "크롬·엣지에서 파일을 직접 열었을 때 됩니다");
+        edWhy.hidden = true;
         edWhyTxt.hidden = true;
         edWhy.onclick = () => {
           edWhyTxt.hidden = !edWhyTxt.hidden;
@@ -2897,6 +2898,7 @@ ${HL_CSS}
         };
         home.appendChild(edWhy);
         home.appendChild(edWhyTxt);
+        edSync(); /* 물음표까지 붙은 뒤에 상태를 맞춘다 — 먼저 맞추면 이것만 뒤처진다 */
         const cp = h("button", { class: "ss-headbtn ss-ui", type: "button",
           title: "지금까지 쓴 기능 설명을 통째로 복사합니다 (자동저장이 안 되는 브라우저용)" }, "설명 복사");
         cp.onclick = edCopyBlock;
