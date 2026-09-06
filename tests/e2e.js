@@ -4270,6 +4270,79 @@ function check(name, ok, detail) {
   /* ============ 저장 칩 (PM 2026-09-06) ============
      상태와 동작이 두 물건이던 것을 하나로 합쳤다. 여기서 보는 것: 상태마다 «단추인가 글줄인가».
      저장은 틀리면 사용자의 글이 날아가는 자리라 여섯 갈래를 하나씩 전부 만들어 본다. */
+  /* ============ 툴바 접기 (PM 2026-09-06) ============
+     640px 하나로 꺾던 동안 641~883px 이 통째로 깨져 있었다. 이제 재서 접는다.
+     여기서 보는 것: 어떤 폭에서도 안 삐져나가는가 · 모드 토글이 온전한가 · 되돌아오는가. */
+  if (sec("[fold] 툴바 접기 — 재서 접는다")) {
+    const F = require("url").pathToFileURL(path.join(REPO, "examples/shop.html")).href;
+    const look = () => page.evaluate(() => {
+      const tb = document.querySelector(".ss-toolbar");
+      let lvl = 0;
+      for (let i = 1; i <= 5; i++) if (tb.classList.contains("ss-fold" + i)) lvl = i;
+      const kids = [].slice.call(tb.children).filter((e) => getComputedStyle(e).display !== "none");
+      const boxes = kids.map((e) => e.getBoundingClientRect());
+      let overlap = false;
+      for (let i = 1; i < boxes.length; i++) if (boxes[i].left < boxes[i - 1].right - 0.5) overlap = true;
+      const modes = [].slice.call(tb.querySelectorAll(".ss-modes button"));
+      return {
+        lvl: lvl,
+        over: tb.scrollWidth > tb.clientWidth + 0.5,
+        outside: boxes.some((x) => x.right > tb.clientWidth + 0.5 || x.left < -0.5),
+        overlap: overlap,
+        h: Math.round(tb.getBoundingClientRect().height),
+        modesWhole: modes.length === 2 && modes.every((m) => m.scrollWidth <= m.clientWidth + 1 && m.textContent.trim().length > 2),
+      };
+    });
+    const go = async (w) => {
+      await page.setViewportSize({ width: w, height: 860 });
+      await page.waitForTimeout(400);
+      return look();
+    };
+
+    await page.setViewportSize({ width: 1440, height: 860 });
+    await page.goto(F);
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(500);
+
+    /* 아이패드 세로 · 폴드 펼침 · 폰까지 — 640 하나로 꺾던 시절 깨지던 구간을 포함한다 */
+    const WS = [1440, 1024, 900, 884, 820, 768, 700, 653, 640, 600, 540, 412, 390, 360, 320];
+    const bad = [];
+    for (const w of WS) {
+      const r = await go(w);
+      if (r.over || r.outside || r.overlap || r.h !== 50 || !r.modesWhole) bad.push({ w: w, r: r });
+    }
+    check("폭 " + WS.length + "종에서 삐져나감·겹침 0 · 높이 50px", bad.length === 0, bad.slice(0, 3));
+    check("어느 폭에서도 모드 토글 글자가 온전하다", bad.filter((x) => !x.r.modesWhole).length === 0);
+
+    /* 되돌아오는가 — 줄였다 늘리면 원래 모습이어야 한다 */
+    const wide1 = await go(1440);
+    await go(360);
+    const wide2 = await go(1440);
+    check("넓혔다 줄였다 해도 원래대로 돌아온다", wide1.lvl === 0 && wide2.lvl === 0, { wide1: wide1.lvl, wide2: wide2.lvl });
+
+    /* 좁을수록 더 접힌다 — 사다리가 거꾸로 서지 않았는가 */
+    const l1440 = (await go(1440)).lvl, l768 = (await go(768)).lvl, l360 = (await go(360)).lvl;
+    check("좁을수록 더 접힌다", l1440 <= l768 && l768 <= l360, { l1440: l1440, l768: l768, l360: l360 });
+
+    /* 경계에서 떨지 않는가 — 1px 씩 오가며 같은 폭이면 같은 단계여야 한다 */
+    const a1 = (await go(700)).lvl;
+    await go(701); await go(699);
+    const a2 = (await go(700)).lvl;
+    check("경계 폭에서 깜빡이지 않는다 (같은 폭 = 같은 단계)", a1 === a2, { a1: a1, a2: a2 });
+
+    /* 접힌 뒤에도 도구는 ⋯ 로 닿는다 */
+    await go(390);
+    await page.click(".ss-more");
+    await page.waitForTimeout(250);
+    check("접혀도 도구는 ⋯ 안에서 쓸 수 있다",
+      (await page.locator(".ss-toolbar .ss-tools").isVisible()) === true &&
+      (await page.locator(".ss-toolbar .ss-tools .ss-headbtn").count()) >= 2);
+
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await page.waitForTimeout(300);
+  }
+
   if (sec("[chip] 저장 칩 — 상태 여섯 갈래")) {
     const PROTO2 = '<h1 id="t">홈</h1><button id="buy" data-spec="1" style="margin:40px">구매하기</button>' +
       "<script>window.SCREENSPEC={screen:{id:'S-1',name:'홈'},specs:[{n:1,target:'1',title:'구매',defs:[{t:'첫 줄'}]}]};<" + "/script>";

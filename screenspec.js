@@ -503,6 +503,8 @@
   .ss-ui button{flex:none}
   .ss-toolbar{position:fixed;top:0;left:0;right:0;z-index:9020;height:50px;background:#fff;
     border-bottom:1px solid var(--ss-line2);display:flex;align-items:center;gap:14px;padding:0 16px}
+  /* 접기 규칙은 «넘쳤는가» 로 판단한다 — 자식이 쭈그러들면 넘친 적이 없는 것처럼 보인다 */
+  .ss-toolbar>*{flex:none}
   .ss-modes{display:flex;flex-shrink:0;border:1px solid var(--ss-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
   .ss-modes button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;color:var(--ss-ink2)}
   .ss-modes button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
@@ -515,7 +517,6 @@
   .ss-brand-hint{font-size:11px;font-weight:700;color:var(--ss-accent);white-space:nowrap;
     max-width:0;overflow:hidden;opacity:0;transition:opacity .25s,max-width .25s}
   .ss-brand-hint.ss-on{max-width:90px;opacity:1}
-  @media(max-width:640px){.ss-brand-t{display:none}.ss-brand{padding:5px;gap:0}}
   .ss-widthsim{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ss-ink2)}
   .ss-widthsim .ss-seg{display:flex;border:1px solid var(--ss-line2);border-radius:8px;padding:2px;gap:2px;background:#FAFAF9}
   .ss-widthsim .ss-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
@@ -528,24 +529,26 @@
     border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);border-radius:8px;
     font-size:16px;font-weight:800;line-height:1;align-items:center;justify-content:center}
   .ss-more::after{content:"";position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;display:none}
-  @media(max-width:640px){.ss-wpx{display:none}}
-  /* 폰 폭 (#94, PM 2026-09-01) — 툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다.
-     좁은 폭에서는 ① 폭 시뮬레이터를 숨긴다: 진짜 폰에서는 자기 화면이 곧 기기다 (v0.19.2 와 같은 논리)
-     ② 도구(저장·복사·내보내기·상태)는 「⋯」 하나로 접는다 — 노션이 모바일에서 하는 방식 */
-  @media(max-width:640px){
-    .ss-toolbar{gap:10px;padding:0 12px}
-    .ss-toolbar .ss-widthsim{display:none}
-    .ss-toolbar .ss-more{display:inline-flex}
-    .ss-toolbar .ss-tools{display:none;position:fixed;top:56px;right:10px;z-index:9030;
-      flex-direction:column;align-items:stretch;gap:8px;background:#fff;border:1px solid var(--ss-line2);
-      border-radius:12px;padding:10px;box-shadow:0 12px 32px rgba(17,24,39,.16)}
-    .ss-toolbar.ss-tools-open .ss-tools{display:flex}
-    .ss-toolbar .ss-tools .ss-headbtn{padding:9px 14px;text-align:center}
-    .ss-toolbar .ss-tools .ss-savest{justify-content:center}
-    /* 접힌 동안에도 «봐야 할 상태» 는 점 하나로 — 미저장(호박)·멈춤(주황) */
-    .ss-toolbar.ss-save-busy .ss-more::after{display:block;background:#B8862B}
-    .ss-toolbar.ss-save-warn .ss-more::after{display:block;background:#E0522F}
-  }
+  /* 접힘 단계 (PM 2026-09-06) — 폭을 몇 px 로 꺾지 않는다. 툴바가 재서 안 들어가면 한 단계씩 접는다.
+     폭이 같아도 내용 폭은 다르다: 저장 상태 문구 · readonly 여부 · 배율 표시 · 첫 진입 강조 · 앞으로 붙을 것.
+     그래서 «몇 px 부터» 로는 영영 못 맞춘다 — 640 하나로 꺾던 동안 641~883px 이 통째로 깨져 있었다.
+     접는 순서: 배율 → 브랜드 라벨 → 도구(⋯) → 폭 시뮬 → 여백. 모드 토글 글자는 어느 단계에서도 안 접는다 */
+  .ss-toolbar.ss-fold1 .ss-wpx{display:none}
+  .ss-toolbar.ss-fold2 .ss-brand-t,.ss-toolbar.ss-fold2 .ss-brand-hint{display:none}
+  .ss-toolbar.ss-fold2 .ss-brand{padding:5px;gap:0}
+  .ss-toolbar.ss-fold3 .ss-more{display:inline-flex}
+  .ss-toolbar.ss-fold3 .ss-tools{display:none;position:fixed;top:56px;right:10px;z-index:9030;
+    flex-direction:column;align-items:stretch;gap:8px;background:#fff;border:1px solid var(--ss-line2);
+    border-radius:12px;padding:10px;box-shadow:0 12px 32px rgba(17,24,39,.16);min-width:170px}
+  .ss-toolbar.ss-fold3.ss-tools-open .ss-tools{display:flex}
+  .ss-toolbar.ss-fold3 .ss-tools .ss-headbtn{padding:9px 14px;text-align:center}
+  .ss-toolbar.ss-fold3 .ss-tools .ss-savest{justify-content:center}
+  .ss-toolbar.ss-fold4 .ss-widthsim{display:none}
+  .ss-toolbar.ss-fold5{gap:8px;padding:0 10px}
+  .ss-toolbar.ss-fold5 .ss-modes button{padding:6px 10px}
+  /* 접힌 동안에도 «봐야 할 상태» 는 점 하나로 — 미저장(호박) · 멈춤(주황) */
+  .ss-toolbar.ss-save-busy .ss-more::after{display:block;background:#B8862B}
+  .ss-toolbar.ss-save-warn .ss-more::after{display:block;background:#E0522F}
   /* 스크롤러는 하나다 (#102). 툴바 아래를 채우는 상자 하나가 두 축을 다 맡는다 — 정의서 모드의 .ss-stage 와 같은 꼴.
      가로는 이 상자가, 세로는 문서가 맡던 동안 브라우저의 «보이게 스크롤» 이 그 경계를 못 넘었다.
      앱이 position:fixed 로 붙인 패널·버튼(프레임이 창보다 크면 창 밖으로 나간다)에
@@ -5054,6 +5057,56 @@ ${HL_CSS}
         <span class="ss-wpx" id="ss-wpx" title="시트 크기 · 창에 안 들어갈 때는 줄인 배율"></span>
       </div>`);
 
+    /* ---- 접기 규칙 (PM 2026-09-06) ----
+       재서 안 들어가면 덜 중요한 것부터 한 단계씩 접는다. 넓어지면 역순으로 펴진다.
+       경계에서 접혔다 펴졌다 떨지 않게, 펴는 기준을 접는 기준보다 넉넉히 둔다 */
+    const FOLD_MAX = 5, FOLD_EASE = 24;
+    let foldNow = 0;
+    function foldSet(n) {
+      for (let i = 1; i <= FOLD_MAX; i++) toolbar.classList.toggle("ss-fold" + i, i <= n);
+      if (n < 3) toolbar.classList.remove("ss-tools-open"); /* 접기 전으로 돌아오면 열린 메뉴는 닫는다 */
+      foldNow = n;
+    }
+    function foldNeed() {
+      const cs = getComputedStyle(toolbar);
+      const gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
+      let w = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0), n = 0;
+      for (let i = 0; i < toolbar.children.length; i++) {
+        const el = toolbar.children[i], es = getComputedStyle(el);
+        if (es.display === "none" || es.position === "fixed") continue; /* 접힌 도구는 흐름 밖이다 */
+        w += el.getBoundingClientRect().width;
+        n++;
+      }
+      return w + Math.max(0, n - 1) * gap;
+    }
+    const foldOver = (ease) => foldNeed() > toolbar.clientWidth + (ease || 0);
+    function foldFit() {
+      while (foldNow > 0) {                 /* 넉넉히 남을 때만 편다 */
+        const back = foldNow;
+        foldSet(back - 1);
+        if (foldOver(-FOLD_EASE)) { foldSet(back); break; }
+      }
+      while (foldNow < FOLD_MAX && foldOver(0)) foldSet(foldNow + 1);
+    }
+    /* 폭이 바뀔 때 · 안에 든 것이 바뀔 때 잰다 — 매 프레임이 아니다.
+       배율 표시와 저장 칩은 툴바가 생긴 뒤에 채워지므로 처음 한 번으로는 늦는다 */
+    let foldWait = 0;
+    function foldSoon() {
+      if (foldWait) return;
+      foldWait = requestAnimationFrame(() => { foldWait = 0; foldFit(); });
+    }
+    if (typeof ResizeObserver === "function") new ResizeObserver(foldSoon).observe(toolbar);
+    if (typeof MutationObserver === "function") {
+      new MutationObserver((recs) => {
+        /* 우리가 방금 건 접힘 단계 때문에 다시 부르지 않는다 — 안 그러면 서로 부른다 */
+        if (recs.every((r) => r.target === toolbar && r.attributeName === "class")) return;
+        foldSoon();
+      }).observe(toolbar, { childList: true, subtree: true, characterData: true,
+        attributes: true, attributeFilter: ["hidden", "class", "style"] });
+    }
+    toolbar.addEventListener("transitionend", foldSoon); /* 늘어나는 것이 다 늘어난 뒤에도 한 번 */
+    window.addEventListener("resize", foldSoon);
+
     /* 브랜드 마크는 맨 왼쪽 — 로고 자리는 웹의 보편 규칙이라 배울 것이 없다 */
     const brand = brandMake(FRAME ? "frame" : "wrap");
     if (brand) {
@@ -5468,6 +5521,7 @@ ${HL_CSS}
     panelMount();
 
     core.prMount(toolbar);
+    requestAnimationFrame(foldFit); /* 도구가 붙은 뒤의 폭으로 다시 잰다 */
     core.edMount();
     core.lyMount();
     window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
