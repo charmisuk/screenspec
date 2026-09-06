@@ -72,6 +72,9 @@ try {
   check("문서 태그 = 헤더 버전 계열", uniq.length === 1 && uniq[0].startsWith(header + "."), uniq[0] + " vs v" + header);
   /* 16) 부팅 로그·CHANGELOG 도 같은 버전 */
   const infos = [...new Set([...lib.matchAll(/\[ScreenSpec v(\d+\.\d+)\]/g)].map((m) => m[1]))];
+  /* 브랜드 마크가 링크에 싣는 판 번호 — 사람이 기억할 자리를 늘리지 않고 기계가 지킨다 */
+  const ssver = (lib.match(/const SS_VER = "(\d+\.\d+)"/) || [])[1];
+  check("SS_VER = 헤더 버전", ssver === header, "SS_VER=" + ssver + " · 헤더=" + header);
   check("console.info 버전 = 헤더 버전", infos.length === 1 && infos[0] === header, JSON.stringify(infos));
   const clTop = (fs.readFileSync(path.join(REPO, "CHANGELOG.md"), "utf8").match(/^## v(\d+\.\d+\.\d+)/m) || [])[1];
   check("CHANGELOG 최상단 = 문서 CDN 태그 (" + clTop + ")", !!clTop && uniq[0] === clTop, clTop + " vs " + uniq[0]);

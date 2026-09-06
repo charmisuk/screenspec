@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3분 가이드 · ScreenSpec</title>
+<meta name="description" content="ScreenSpec 을 붙인 뒤 익힐 것 네 가지. 고치기 · 번호 붙이기 · 저장 · 넘기기.">
+<style>
+/* 색은 라이브러리 토큰을 그대로 가져온다 (screenspec.js --ss-*) */
+:root{
+  --canvas:#F1F1F0; --ink:#191919; --ink2:#50524E; --ink3:#9B9A97;
+  --line:#E9E9E7; --line2:#D3D1CB; --accent:#2952E3;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  --head:56px; --foot:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#fff;color:var(--ink);
+  font:400 16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  -webkit-text-size-adjust:100%}
+a{color:inherit}
+
+/* ---- 머리 ---- */
+.hd{position:fixed;top:0;left:0;right:0;height:var(--head);z-index:10;background:#fff;
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 20px}
+.hd .brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+  color:var(--ink2);font-size:13px;font-weight:700}
+.hd .brand svg{width:16px;height:16px;display:block;flex-shrink:0}
+.hd .cnt{margin-left:auto;font:700 12px/1 var(--mono);color:var(--ink3)}
+
+/* ---- 본문 ---- */
+main{padding:calc(var(--head) + 40px) 20px calc(var(--foot) + 40px)}
+.sl{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:6fr 4fr;gap:40px;align-items:center}
+.sl[hidden]{display:none}
+.sl.mid{grid-template-columns:1fr;justify-items:center;text-align:center;max-width:760px}
+
+/* 액자 */
+.fr{position:relative;background:var(--canvas);border:1px solid var(--line2);border-radius:12px;
+  overflow:hidden;width:100%;aspect-ratio:3/2;display:flex;align-items:center;justify-content:center}
+.fr video,.fr img{width:100%;height:100%;object-fit:cover;display:block}
+/* 그림이 아직 없거나 못 불러오면 장면 설명을 대신 보인다 */
+.fr.na video,.fr.na img{display:none}
+.fr.na::after{content:attr(data-cap);white-space:pre-line;color:var(--ink3);
+  font-size:13px;line-height:1.8;text-align:center;padding:24px}
+.sl.mid .fr{max-width:520px;aspect-ratio:16/10}
+
+/* 글 */
+.tx h2{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.35;color:var(--ink)}
+.tx p{margin-top:16px;color:var(--ink2)}
+.tx .sub{margin-top:24px;font-size:13px;line-height:1.6;color:var(--ink3)}
+.tx .sub dl{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;align-items:center}
+.tx .sub dt{white-space:nowrap}
+.tx .sub dd{margin:0}
+kbd{font:700 13px/1 var(--mono);background:var(--canvas);border:1px solid var(--line2);
+  border-radius:4px;padding:3px 6px;color:var(--ink);white-space:nowrap}
+.cmd{display:inline-block;font:400 13px/1.6 var(--mono);background:var(--canvas);
+  border:1px solid var(--line2);border-radius:6px;padding:8px 10px;color:var(--ink);word-break:break-all}
+
+/* 마무리 카드 */
+.cards{margin-top:40px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;width:100%}
+.cards a{display:block;border:1px solid var(--line2);border-radius:10px;padding:16px;
+  text-decoration:none;font-size:15px;font-weight:700;color:var(--ink)}
+.cards a span{display:block;margin-top:8px;font:400 12px/1 var(--mono);color:var(--ink3)}
+.cards a:hover{border-color:var(--ink3)}
+
+/* ---- 발 ---- */
+.ft{position:fixed;bottom:0;left:0;right:0;height:var(--foot);z-index:10;background:#fff;
+  border-top:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 20px}
+.ft .in{max-width:1080px;margin:0 auto;width:100%;display:flex;align-items:center;gap:16px}
+.dots{margin:0 auto;display:flex;gap:8px}
+.dots button{width:8px;height:8px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  background:var(--line2)}
+.dots button.on{background:var(--accent)}
+.dots button.past{background:var(--ink3)}
+.nav{border:0;background:none;font:700 14px/1 inherit;color:var(--ink2);cursor:pointer;
+  padding:12px 8px;border-radius:8px}
+.nav:hover{color:var(--ink)}
+.nav[hidden]{display:none}
+.next{background:var(--accent);color:#fff;padding:0 20px;height:44px;border-radius:8px;
+  border:0;font:700 14px/1 inherit;cursor:pointer}
+.next[hidden]{display:none}
+
+/* ---- 좁은 화면 ---- */
+@media (max-width:900px){
+  .sl{grid-template-columns:1fr;gap:24px;max-width:720px}
+}
+@media (max-width:720px){
+  :root{--head:48px;--foot:56px}
+  main{padding:calc(var(--head) + 24px) 16px calc(var(--foot) + 24px)}
+  .hd,.ft{padding:0 16px}
+  .hd .brand span{display:none}
+  .tx h2{font-size:22px}
+  .tx p{font-size:15px}
+  .cards{grid-template-columns:1fr}
+  .next{padding:0 16px}
+}
+
+/* ---- 자바스크립트가 없으면 여섯 장이 다 보인다 ---- */
+.js-only{display:none}
+.js .js-only{display:flex}
+.js main{padding-top:calc(var(--head) + 40px)}
+body:not(.js) main{padding:40px 20px}
+body:not(.js) .sl{margin-bottom:64px;border-bottom:1px solid var(--line);padding-bottom:64px}
+
+/* ---- 전환 · 움직임 줄이기 ---- */
+.sl{animation:in .16s ease-out}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .sl{animation:none}
+}
+</style>
+</head>
+<body>
+
+<header class="hd js-only">
+  <a class="brand" href="../" title="ScreenSpec">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 14.4 8 8 14.4 1.6 8Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    <span>ScreenSpec 가이드</span>
+  </a>
+  <span class="cnt" id="cnt">1 / 6</span>
+</header>
+
+<main id="deck">
+
+  <!-- 1 표지 -->
+  <section class="sl mid" data-n="1">
+    <figure class="fr" data-cap="화면정의서 모드 전체&#10;(정지 1컷)">
+      <img src="media/s1.jpg" alt="화면정의서 모드 전체 화면">
+    </figure>
+    <div class="tx">
+      <h2>익힐 것 네 가지</h2>
+      <p>고치기 · 번호 붙이기 · 저장 · 넘기기</p>
+      <div class="sub">3분이면 끝납니다. 지금 열어 둔 문서를 옆에 두고 따라 해 보세요.</div>
+    </div>
+  </section>
+
+  <!-- 2 글자 고치기 -->
+  <section class="sl" data-n="2">
+    <figure class="fr" data-cap="설명 줄 클릭 → 수정&#10;→ Enter → 새 줄 추가&#10;(반복 4초)">
+      <video src="media/s2.mp4" poster="media/s2.jpg" muted loop playsinline preload="none"></video>
+    </figure>
+    <div class="tx">
+      <h2>글자 고치기</h2>
+      <p>글자를 누르면 그 자리에서 고쳐집니다. 편집 모드를 켜고 끌 필요가 없습니다.</p>
+      <div class="sub">
+        <dl>
+          <dt>줄 늘리기</dt><dd><kbd>Enter</kbd></dd>
+          <dt>불릿</dt><dd><kbd>-</kbd> 다음 스페이스</dd>
+          <dt>그 밖의 블록</dt><dd><kbd>/</kbd></dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 번호 붙이기 -->
+  <section class="sl" data-n="3">
+    <figure class="fr" data-cap="/ → 「번호」 → 장바구니 클릭&#10;→ 마커가 붙음&#10;(반복 5초)">
+      <video src="media/s3.mp4" poster="media/s3.jpg" muted loop playsinline preload="none"></video>
+    </figure>
+    <div class="tx">
+      <h2>번호 붙이기</h2>
+      <p>번호는 화면에서 찍습니다. 빈 줄에서 <kbd>/</kbd> 를 누르고 「번호」를 고른 다음, 화면에서 설명할 곳을 클릭합니다.</p>
+      <div class="sub">이름표는 자동으로 붙습니다. 코드에 손으로 적지 않습니다.</div>
+    </div>
+  </section>
+
+  <!-- 4 자동 저장 -->
+  <section class="sl" data-n="4">
+    <figure class="fr" data-cap="자동저장 켜기 → 파일 고르기&#10;→ 「저장됨」&#10;(반복 5초)">
+      <video src="media/s4.mp4" poster="media/s4.jpg" muted loop playsinline preload="none"></video>
+    </figure>
+    <div class="tx">
+      <h2>자동 저장</h2>
+      <p>파일을 한 번 고르면 그 뒤로는 알아서 저장됩니다. 오른쪽 위 「자동저장 켜기」를 누르고 열어 둔 HTML 파일을 고릅니다.</p>
+      <div class="sub">크롬·엣지에서 파일을 직접 열었을 때 됩니다. 안 되는 곳에서는 「설명 복사」로 원본에 붙여넣습니다.</div>
+    </div>
+  </section>
+
+  <!-- 5 전달본 만들기 -->
+  <section class="sl" data-n="5">
+    <figure class="fr" data-cap="파일 하나 → 다른 브라우저에서 열림&#10;(정지 2컷)">
+      <img src="media/s5.jpg" alt="전달본 파일 하나를 다른 브라우저에서 연 모습">
+    </figure>
+    <div class="tx">
+      <h2>전달본 만들기</h2>
+      <p>파일 하나로 뽑으면 어디서든 열립니다. 라이브러리까지 안에 들어가므로 받는 사람은 브라우저로 열기만 하면 됩니다.</p>
+      <div class="sub"><span class="cmd">node scripts/inline.js 내파일.html</span></div>
+    </div>
+  </section>
+
+  <!-- 6 다음 걸음 -->
+  <section class="sl mid" data-n="6">
+    <div class="tx">
+      <h2>다음 걸음</h2>
+      <p>여기까지면 충분합니다. 더 필요해지면 그때 보세요.</p>
+      <div class="cards">
+        <a href="../docs/config.md" data-out="config">설정 전부 보기<span>config.md</span></a>
+        <a href="../SKILL.md" data-out="skill">AI 에게 맡기기<span>SKILL.md</span></a>
+        <a href="../examples/shop.html" data-out="examples">예제 6종<span>examples</span></a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="ft js-only">
+  <div class="in">
+    <button class="nav" id="prev" type="button">← 이전</button>
+    <div class="dots" id="dots" role="tablist" aria-label="장 이동"></div>
+    <button class="next" id="next" type="button">다음 →</button>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  document.body.classList.add("js");
+
+  var deck  = document.getElementById("deck");
+  var slides = [].slice.call(deck.querySelectorAll(".sl"));
+  var LAST = slides.length;
+  var cnt = document.getElementById("cnt");
+  var dots = document.getElementById("dots");
+  var prev = document.getElementById("prev");
+  var next = document.getElementById("next");
+  var cur = 0; /* 아직 아무 장도 안 그렸다 */
+
+  /* 그림이 없거나 못 불러오면 장면 설명으로 대체한다 (2.7 상태) */
+  slides.forEach(function (s) {
+    var fr = s.querySelector(".fr");
+    if (!fr) return;
+    var m = fr.querySelector("video,img");
+    if (!m) { fr.classList.add("na"); return; }
+    var fail = function () { fr.classList.add("na"); };
+    m.addEventListener("error", fail, true);
+    if (m.tagName === "IMG" && m.complete && m.naturalWidth === 0) fail();
+  });
+
+  /* 계수기 — 아직 붙이지 않았다. 도구가 정해지면 이 함수 한 곳만 바꾼다 (funnel.md §1) */
+  function track(name, data) {
+    if (typeof window.umami === "object" && window.umami.track) window.umami.track(name, data);
+  }
+
+  var P = new URLSearchParams(location.search);
+  track("guide_open", {
+    ss:    P.get("ss")    || "none",   /* 어느 자리에서 왔나 */
+    v:     P.get("v")     || "none",   /* 라이브러리 판 */
+    m:     P.get("m")     || "none",   /* 적용 모드 */
+    first: P.get("first") || "none"    /* 이 브라우저에서 처음 눌렀나 */
+  });
+
+  /* 진행 점 */
+  slides.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-label", (i + 1) + "장");
+    b.addEventListener("click", function () { go(i + 1); });
+    dots.appendChild(b);
+  });
+  var dotEls = [].slice.call(dots.children);
+
+  /* 장을 바꾸는 일은 여기 한 곳에서만 한다 — 흩어지면 상태가 어긋난다 */
+  function go(n, replace) {
+    n = Math.min(LAST, Math.max(1, n | 0));
+    if (n === cur) return;
+    cur = n;
+
+    slides.forEach(function (s, i) {
+      var on = i === n - 1;
+      s.hidden = !on;
+      var v = s.querySelector("video");
+      if (v) { if (on) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } else { v.pause(); } }
+    });
+
+    dotEls.forEach(function (d, i) {
+      d.classList.toggle("on", i === n - 1);
+      d.classList.toggle("past", i < n - 1);
+      d.setAttribute("aria-selected", i === n - 1 ? "true" : "false");
+    });
+
+    cnt.textContent = n + " / " + LAST;
+    prev.hidden = n === 1;
+    next.hidden = n === LAST;
+    next.textContent = n === 1 ? "시작하기 →" : "다음 →";
+
+    var hash = "#" + n;
+    if (location.hash !== hash) {
+      if (replace) history.replaceState(null, "", hash);
+      else history.pushState(null, "", hash);
+    }
+
+    track("guide_slide", { n: n });
+    if (n === LAST) track("guide_done", {});
+  }
+
+  prev.addEventListener("click", function () { go(cur - 1); });
+  next.addEventListener("click", function () { go(cur + 1); });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(cur + 1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(cur - 1); }
+  });
+
+  /* 쓸기 — 세로 스크롤과 다투지 않게 가로가 더 클 때만 */
+  var sx = 0, sy = 0;
+  deck.addEventListener("touchstart", function (e) {
+    sx = e.changedTouches[0].clientX; sy = e.changedTouches[0].clientY;
+  }, { passive: true });
+  deck.addEventListener("touchend", function (e) {
+    var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) go(cur + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+
+  window.addEventListener("hashchange", function () { go(parseInt(location.hash.slice(1), 10) || 1, true); });
+
+  [].slice.call(document.querySelectorAll("[data-out]")).forEach(function (a) {
+    a.addEventListener("click", function () { track("guide_out", { to: a.getAttribute("data-out") }); });
+  });
+
+  go(parseInt(location.hash.slice(1), 10) || 1, true);
+})();
+</script>
+</body>
+</html>

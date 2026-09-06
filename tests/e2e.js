@@ -4256,6 +4256,104 @@ function check(name, ok, detail) {
     await page.unroute("**");
     fs.unlinkSync(out);
   }
+  if (sec("[brand] 브랜드 마크 — 바깥으로 나가는 문 하나")) {
+    const U = (rel) => require("url").pathToFileURL(path.join(REPO, rel)).href;
+    const F = U("examples/shop.html");
+    await page.goto(F);
+    await page.evaluate(() => { try { localStorage.removeItem("screenspec:guide-seen"); } catch (e) {} });
+    await page.reload();
+    await page.waitForTimeout(400);
+
+    const brand = page.locator(".ss-toolbar .ss-brand");
+    check("마크가 툴바에 있다", (await brand.count()) === 1);
+    check("마크가 툴바 맨 왼쪽이다",
+      await page.evaluate(() => document.querySelector(".ss-toolbar").firstElementChild.classList.contains("ss-brand")));
+
+    const href = await brand.getAttribute("href");
+    check("이름표: 어느 자리에서 왔나", href.indexOf("ss=app.guide") > 0, href);
+    check("이름표: 판 번호", /[?&]v=[0-9]+[.][0-9]+/.test(href), href);
+    check("이름표: 적용 모드", href.indexOf("m=wrap") > 0, href);
+    check("이름표: 첫 클릭 여부", /[?&]first=[01]/.test(href), href);
+    check("담지 않는 것: 화면 이름·경로·정의", !/SCR-|shop|file:/i.test(href), href);
+    check("새 탭으로 연다", (await brand.getAttribute("target")) === "_blank");
+
+    /* 프로토타입은 한 픽셀도 안 밀린다 — 마크는 이미 있던 툴바 «안» 에 산다 */
+    check("툴바 높이 그대로 (50px)",
+      await page.evaluate(() => Math.round(document.querySelector(".ss-toolbar").getBoundingClientRect().height)) === 50);
+
+    /* 강조는 한 번, 존재는 늘 */
+    const lit = () => page.evaluate(() => document.querySelector(".ss-brand-hint").classList.contains("ss-on"));
+    check("첫 진입 전에는 강조 없음", !(await lit()));
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("첫 진입에 강조가 뜬다", await lit());
+    check("강조 문구", (await page.locator(".ss-brand-hint").textContent()).indexOf("처음") >= 0);
+    /* «한 번» 은 브라우저당 한 번이다 — 다시 열어도 안 뜬다 (같은 세션 안에서 켜져 있는 것은 6초 뒤 스스로 꺼진다) */
+    await page.goto(F);
+    await page.waitForTimeout(300);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(300);
+    check("다시 열면 강조 없음 (브라우저당 한 번)", !(await lit()));
+    check("그래도 마크는 그대로 있다", (await page.locator(".ss-toolbar .ss-brand").count()) === 1);
+
+    /* 끄면 «만들지 않는다» — 숨김이 아니다 */
+    await page.addInitScript(() => {
+      let v;
+      Object.defineProperty(window, "SCREENSPEC", {
+        configurable: true,
+        get() { return v; },
+        set(x) { v = x; if (x && typeof x === "object") x.brand = false; }
+      });
+    });
+    await page.goto(F);
+    await page.waitForTimeout(400);
+    check("brand:false 면 마크가 없다", (await page.locator(".ss-brand").count()) === 0);
+    check("brand:false 여도 툴바는 정상", (await page.locator(".ss-toolbar .ss-modes button").count()) === 2);
+  }
+
+  if (sec("[guide] 3분 가이드 페이지")) {
+    const G = require("url").pathToFileURL(path.join(REPO, "guide/index.html")).href;
+    await page.goto(G);
+    await page.waitForTimeout(300);
+    const shown = () => page.evaluate(() =>
+      [].slice.call(document.querySelectorAll(".sl")).filter((x) => !x.hidden).map((x) => x.dataset.n).join(","));
+    check("여섯 장", (await page.locator(".sl").count()) === 6);
+    check("처음엔 1장만", (await shown()) === "1");
+    check("1장에는 「이전」이 없다", await page.evaluate(() => document.getElementById("prev").hidden));
+    check("1장 단추는 「시작하기」", (await page.locator("#next").textContent()).indexOf("시작하기") >= 0);
+    await page.click("#next");
+    await page.waitForTimeout(200);
+    check("클릭으로 2장", (await shown()) === "2");
+    check("주소에 장 번호", (await page.evaluate(() => location.hash)) === "#2");
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(200);
+    check("키보드로 3장", (await shown()) === "3");
+    /* 뒤로가기는 «직전 동작» 을 되돌린다 — 장을 옮길 때마다 방문 기록이 하나 쌓이기 때문이다 */
+    await page.goBack();
+    await page.waitForTimeout(300);
+    check("뒤로가기가 직전 장으로", (await shown()) === "2");
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForTimeout(200);
+    check("키보드로 1장", (await shown()) === "1");
+    await page.goto(G + "#4");
+    await page.waitForTimeout(300);
+    check("주소로 바로 열기", (await shown()) === "4");
+    check("진행 점 6개", (await page.locator(".dots button").count()) === 6);
+    await page.locator(".dots button").nth(5).click();
+    await page.waitForTimeout(200);
+    check("진행 점으로 이동", (await shown()) === "6");
+    check("6장에는 「다음」이 없다", await page.evaluate(() => document.getElementById("next").hidden));
+    check("그림이 없으면 장면 설명으로 대신한다",
+      await page.evaluate(() => [].slice.call(document.querySelectorAll(".fr")).every((f) => f.classList.contains("na"))));
+
+    /* 자바스크립트가 막힌 곳에서도 빈 화면이 되지 않는다 */
+    const noJs = await browser.newContext({ javaScriptEnabled: false });
+    const np = await noJs.newPage();
+    await np.goto(G);
+    check("JS 없이 여섯 장이 다 보인다", (await np.locator(".sl:visible").count()) === 6);
+    await noJs.close();
+  }
+
   check("JS 에러 0건", errors.length === 0, errors.slice(0, 3));
 
   await browser.close();

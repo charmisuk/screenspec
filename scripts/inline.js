@@ -46,7 +46,8 @@ if (!TAG.test(html)) {
 }
 
 const before = html.match(TAG)[0];
-html = html.replace(TAG, () => "<script>\n" + lib + "\n" + CLOSE);
+/* 전달본이라는 표식 — 받은 사람에게 필요한 것은 「가이드」가 아니라 「이게 뭔지」다 */
+html = html.replace(TAG, () => "<script>\nwindow.__SCREENSPEC_INLINE__=1;\n" + lib + "\n" + CLOSE);
 
 const out = outArg || input.replace(/\.html?$/i, "") + ".inline.html";
 fs.writeFileSync(out, html);
@@ -55,6 +56,7 @@ fs.writeFileSync(out, html);
 const check = fs.readFileSync(out, "utf8");
 const problems = [];
 if (!check.includes("__SCREENSPEC_BOOTED__")) problems.push("라이브러리 본문이 들어가지 않았다");
+if (!check.includes("__SCREENSPEC_INLINE__")) problems.push("전달본 표식이 들어가지 않았다");
 if (/<script[^>]+src=["']https?:\/\/[^"']*screenspec/i.test(check)) problems.push("바깥 주소를 가리키는 태그가 남아 있다");
 if (check.length < lib.length) problems.push("출력이 라이브러리보다 작다");
 if (problems.length) die("검증 실패:\n  - " + problems.join("\n  - "));

@@ -92,6 +92,11 @@
   /* 편집 잠금 (#37) — 전달본을 못 고치게 한다. 「보여 주기만」 하는 사본에 건다.
      숨김이 아니라 미생성이다: 고칠 수 있는 표식도 저장 경로도 아예 만들지 않는다 */
   const READONLY = RAW.readonly === true;
+  /* 브랜드 마크 (툴바 맨 왼쪽) — 바깥으로 나가는 문 하나. 끄면 «만들지 않는다»(숨김이 아니다) */
+  const BRAND = RAW.brand !== false;
+  const SS_VER = "0.30"; /* lint 이 헤더 버전과 대조한다 — 어긋나면 FAIL */
+  const SS_SITE = "https://charmisuk.github.io/screenspec/";
+  const BRAND_SEEN = "screenspec:guide-seen";
   /* 저장은 «원본 HTML 의 설정 블록만» 갈아끼운다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 원본이 아니므로,
      손대기 전 사본을 부팅 직전에 떠 둔다 — file:// 처럼 fetch 가 막힌 자리에서는 이게 유일한 원본이다 */
   let SRC_SNAPSHOT = null;
@@ -501,6 +506,16 @@
   .ss-modes{display:flex;flex-shrink:0;border:1px solid var(--ss-line2);border-radius:9px;padding:2px;gap:2px;background:#FAFAF9}
   .ss-modes button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;color:var(--ss-ink2)}
   .ss-modes button[aria-pressed="true"]{background:var(--ss-ink);color:#fff}
+  /* 브랜드 마크 — 작게, 조용히, 늘. 프로토타입은 한 픽셀도 안 밀린다 (툴바 안에 산다) */
+  .ss-brand{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;text-decoration:none;
+    color:var(--ss-ink3);font-size:12px;font-weight:700;line-height:1;padding:5px 7px;border-radius:7px}
+  .ss-brand:hover{color:var(--ss-ink2);background:#FAFAF9}
+  .ss-brand svg{width:15px;height:15px;display:block;flex-shrink:0}
+  .ss-brand-sep{width:1px;height:18px;background:var(--ss-line);flex-shrink:0}
+  .ss-brand-hint{font-size:11px;font-weight:700;color:var(--ss-accent);white-space:nowrap;
+    max-width:0;overflow:hidden;opacity:0;transition:opacity .25s,max-width .25s}
+  .ss-brand-hint.ss-on{max-width:90px;opacity:1}
+  @media(max-width:640px){.ss-brand-t{display:none}.ss-brand{padding:5px;gap:0}}
   .ss-widthsim{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ss-ink2)}
   .ss-widthsim .ss-seg{display:flex;border:1px solid var(--ss-line2);border-radius:8px;padding:2px;gap:2px;background:#FAFAF9}
   .ss-widthsim .ss-seg button{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
@@ -1132,6 +1147,42 @@ ${HL_CSS}
     if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
     if (html != null) el.innerHTML = html;
     return el;
+  }
+  /* ---- 브랜드 마크 ----
+     라이브러리는 아무것도 «보내지» 않는다. 사람이 눌러야 브라우저가 우리 페이지로 «간다».
+     주소에 싣는 것은 어느 자리 · 판 · 모드 · 첫 클릭 여부 넷뿐이다 — 화면 이름·정의·경로는 담지 않는다 */
+  function brandSeen(mark) {
+    try {
+      if (mark) { localStorage.setItem(BRAND_SEEN, "1"); return true; }
+      return !!localStorage.getItem(BRAND_SEEN);
+    } catch (e) { return false; } /* 사생활 보호 모드 등 저장소가 막힌 경우 */
+  }
+  function brandMake(mode) {
+    if (!BRAND) return null;
+    /* 전달본(자체 완결 파일)을 받은 사람은 «이게 뭔지» 가 궁금하고, 붙인 사람은 «쓰는 법» 이 궁금하다.
+       그래서 라벨과 목적지가 갈린다 */
+    const isInline = !!window.__SCREENSPEC_INLINE__;
+    const href = SS_SITE + (isInline ? "" : "guide/") +
+      "?ss=" + (isInline ? "inline.guide" : "app.guide") +
+      "&v=" + SS_VER + "&m=" + mode + "&first=" + (brandSeen() ? "0" : "1");
+    return h("a", {
+      class: "ss-brand ss-ui", href: href, target: "_blank", rel: "noopener",
+      title: isInline ? "ScreenSpec 으로 만든 화면정의서입니다" : "3분 가이드"
+    },
+      '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 14.4 8 8 14.4 1.6 8Z" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>' +
+      '<span class="ss-brand-t">' + (isInline ? "ScreenSpec" : "가이드") + "</span>" +
+      '<span class="ss-brand-hint" aria-hidden="true"></span>');
+  }
+  /* 강조는 한 번, 존재는 늘 — 첫 진입에만 라벨이 잠깐 붙었다 사라진다 */
+  function brandHint(a) {
+    if (!a || brandSeen()) return;
+    brandSeen(1);
+    const t = a.querySelector(".ss-brand-hint");
+    if (!t) return;
+    t.textContent = "처음이신가요?";
+    requestAnimationFrame(() => t.classList.add("ss-on"));
+    setTimeout(() => t.classList.remove("ss-on"), 6000);
   }
   /* 다른 문서(액자 안)의 스타일시트를 글자로 — 캡처가 안쪽 CSS 까지 같이 실어야 그림이 맞다 */
   function cssText(doc) {
@@ -4966,6 +5017,13 @@ ${HL_CSS}
         <span class="ss-wpx" id="ss-wpx" title="시트 크기 · 창에 안 들어갈 때는 줄인 배율"></span>
       </div>`);
 
+    /* 브랜드 마크는 맨 왼쪽 — 로고 자리는 웹의 보편 규칙이라 배울 것이 없다 */
+    const brand = brandMake(FRAME ? "frame" : "wrap");
+    if (brand) {
+      toolbar.insertBefore(h("span", { class: "ss-brand-sep ss-ui" }), toolbar.firstChild);
+      toolbar.insertBefore(brand, toolbar.firstChild);
+    }
+
     /* ---- 화면정의서 모드 ---- */
     const docmode = h("div", { class: "ss-docmode ss-ui" }, `
       <div class="ss-doc-header" id="ss-dh-wrap"></div>
@@ -5064,6 +5122,7 @@ ${HL_CSS}
       else { protoHolder.appendChild(frame); frame.style.transform = ""; }
       if (back) appFrame.src = back;
       core.soloRoots(m === "doc"); /* 정의서 모드에서는 설명하는 화면만 (#75) */
+      if (m === "doc") brandHint(brand);
       requestAnimationFrame(layout);
     }
     mProto.onclick = () => setMode("proto");
@@ -5403,6 +5462,11 @@ ${HL_CSS}
     const hFields = h("div", { class: "ss-ov-hfields" });
     /* 앱 폭 표시 + 반응형 훅 — overlay 에는 폭 시뮬레이터가 없으므로(개발자 도구 기기 툴바 사용) 지금 몇 px 인지만 보여 준다 (#17) */
     const vw = h("span", { class: "ss-ui", id: "ss-ovVw", title: "앱 영역 폭 (설명 패널 제외). 폭을 바꾸려면 브라우저 개발자 도구의 기기 툴바" });
+    const brand = brandMake("overlay");
+    if (brand) {
+      header.appendChild(brand);
+      header.appendChild(h("span", { class: "ss-brand-sep ss-ui" }));
+    }
     header.appendChild(hFields);
     header.appendChild(vw);
     function updateWidth() {
@@ -5438,6 +5502,7 @@ ${HL_CSS}
       bProto.setAttribute("aria-pressed", String(m === "proto"));
       bDoc.setAttribute("aria-pressed", String(m === "doc"));
       if (m === "proto") core.clearActive();
+      if (m === "doc") brandHint(brand);
       updateWidth();
       requestAnimationFrame(place);
     }

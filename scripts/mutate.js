@@ -30,6 +30,12 @@ const E2E = path.join(REPO, "tests", "e2e.js");
 
 /* 돌연변이 목록 — find 를 replace 로 바꾸면 그 기능이 죽는다. only = 그것을 잡아야 할 e2e 섹션 */
 const MUTS = [
+  { id: "brand-hint-always", only: "[brand]", why: "첫 진입 강조가 «한 번» 이 아니라 매번 뜬다",
+    find: "    if (!a || brandSeen()) return;",
+    to:   "    if (!a) return;" },
+  { id: "brand-off-ignored", only: "[brand]", why: "brand:false 를 무시하고 마크를 만든다",
+    find: "  const BRAND = RAW.brand !== false;",
+    to:   "  const BRAND = true;" },
   { id: "infer-off", only: "[화면]", why: "root 추론을 꺼 버린다 (#67)",
     find: "    function ensureRoots() {\n      if (SCREENS.length < 2) return;",
     to:   "    function ensureRoots() {\n      if (SCREENS.length < 2) return;\n      return;" },
