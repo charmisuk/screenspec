@@ -29,6 +29,18 @@ const LIB = path.join(REPO, "screenspec.js");
 const E2E = path.join(REPO, "tests", "e2e.js");
 
 /* 돌연변이 목록 — find 를 replace 로 바꾸면 그 기능이 죽는다. only = 그것을 잡아야 할 e2e 섹션 */
+/* 심을 자리 찾기 — 줄바꿈에 관대하게. 윈도우 사본(CRLF)에서도 같은 자리를 찾는다 */
+function mutSpot(src, find) {
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(find.split("\n").map(esc).join("\\r?\\n"));
+  const m = re.exec(src);
+  return m ? { at: m.index, len: m[0].length } : null;
+}
+/* 심는 글도 그 파일의 줄바꿈을 따른다 */
+function mutNl(text, src) {
+  return src.indexOf("\r\n") >= 0 ? text.replace(/\r?\n/g, "\r\n") : text;
+}
+
 const MUTS = [
   { id: "fold-off", only: "[fold]", why: "접기 규칙을 꺼 버린다 — 좁은 폭에서 툴바가 다시 삐져나간다",
     find: "      while (foldNow < FOLD_MAX && foldOver(0)) foldSet(foldNow + 1);",
@@ -135,9 +147,8 @@ const MUTS = [
   { id: "tbl-rowdel-off", only: "[표]", why: "빈 행에서 Backspace 가 행을 안 지운다 (#97)",
     find: "          if (k === \"Backspace\" && empty) { if (tblKillRow(edEl)) eat(); return; }",
     to:   "          if (k === \"Backspace\" && empty) return;" },
-  { id: "mob-collapse-off", only: "[모바일]", why: "폰 폭에서 툴바가 다시 안 접힌다 — 버튼이 겹치고 잘린다 (#94)",
-    find: "  @media(max-width:640px){\n    .ss-toolbar{gap:10px;padding:0 12px}",
-    to:   "  @media(max-width:1px){\n    .ss-toolbar{gap:10px;padding:0 12px}" },
+  /* mob-collapse-off 는 걷어냈다 — 640px 로 꺾던 자리가 사라졌고, 같은 본질(툴바가 안 접힌다)은
+     fold-off 가 잡는다. 패턴별로 쪼개지 않고 하나로 둔다 (2026-09-06) */
   { id: "mob-menu-dead", only: "[모바일]", why: "⋯ 를 눌러도 도구가 안 나온다 (#94)",
     find: "          const on = box.classList.toggle(\"ss-tools-open\");",
     to:   "          const on = false;" },
@@ -352,10 +363,11 @@ function mirror(dst) {
 
 function runOne(m, dir, portBase) {
   return new Promise((done) => {
-    if (original.indexOf(m.find) < 0) return done({ m: m, kind: "broken" });
+    const spot = mutSpot(original, m.find);
+    if (!spot) return done({ m: m, kind: "broken" });
     const lib = path.join(dir, "screenspec.js");
     const e2e = path.join(dir, "tests", "e2e.js");
-    fs.writeFileSync(lib, original.replace(m.find, m.to));
+    fs.writeFileSync(lib, original.slice(0, spot.at) + mutNl(m.to, original) + original.slice(spot.at + spot.len));
     /* [grid] 는 플래그 뒤에 숨어 있다 — 안 켜면 «검사 0건» 이라 무엇을 심어도 초록이 된다 (#91) */
     const grid = m.only.indexOf("[grid]") === 0;
     const args = [e2e, "--only", m.only].concat(grid ? ["--grid"] : []);
