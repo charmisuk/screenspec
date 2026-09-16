@@ -1497,7 +1497,8 @@ function check(name, ok, detail) {
         mark: st("mark"), table: st("table"), dev: st("dev"),
         headKidsOff: d.querySelector('[data-pr-k="head"]').classList.contains("ss-off"),
         devBox: !!d.querySelector('[data-pr-k="table"]'),
-        pvPath: vis(".ss-pr-p-path"), pvMk: vis(".ss-pr-p-mk"), pvTbl: vis(".ss-pr-p-tbl"),
+        major: st("major"), mjVis: vis('[data-pr-k="mark"]'), mjOff: d.querySelector('[data-pr-k="mark"]').classList.contains("ss-off"),
+        pvPath: vis(".ss-pr-p-path"), pvMk: vis(".ss-pr-p-mk"), pvMk2: vis(".ss-pr-p-mkx"), pvTbl: vis(".ss-pr-p-tbl"),
         fname: d.querySelector(".ss-pr-fname").textContent, accent: d.style.getPropertyValue("--ss-accent") };
     });
     const baked = () => page.evaluate(() => {
@@ -1507,6 +1508,8 @@ function check(name, ok, detail) {
       return { id: q(".ss-cap-id"), name: q(".ss-cap-name"), path: q(".ss-cap-path"), when: q(".ss-cap-when"),
         whenText: (n.querySelector(".ss-cap-when") || {}).textContent || "", table: q(".ss-pr-table"),
         accent: n.style.getPropertyValue("--ss-accent"),
+        marks: [...n.querySelectorAll(".ss-marker")].map((m) => m.textContent.trim()),
+        rows: [...n.querySelectorAll(".ss-pr-table tbody .ss-pr-no")].map((m) => m.textContent.trim()),
         docAccent: getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim() };
     });
     const go = async () => { await page.click('[data-pr="go"]'); await page.waitForTimeout(2200); };
@@ -1659,6 +1662,98 @@ function check(name, ok, detail) {
       m.bt.length === 2 && m.bt[0].t === "취소" && m.bt[1].t === "내보내기" &&
       m.bt[1].y > m.bt[0].y && m.bt[1].w > 300, JSON.stringify(m.bt));
     check("폰: 아무것도 잘리지 않는다", m.fits === true);
+
+    /* ── 상위기획 갈래 (#106) — «사람이 누르는 길» 로 잰다 ──
+       한 정의서에서 상위기획(갈림길만)과 상세기획(전부) 두 그림이 나온다.
+       layer(누가 쓰나)와 직교하는 «어느 깊이인가» 축이라 layer 값을 늘려서는 안 풀린다.
+       주소로 받아 온 문서로 재는 이유: file:// 은 고치기 전에 «파일에 연결하세요»(#68)가 먼저 걸린다.
+       찍는 사람은 사내 서버·깃허브 페이지에 올려 둔 문서에서 찍는다 — 그 길이다. */
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const SHOP = fs.readFileSync(path.join(REPO, "examples", "shop.html"), "utf8");
+    const sM = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html"); res.end(SHOP);
+    });
+    await new Promise((r) => sM.listen(P(4260), r));
+    await page.goto("http://localhost:" + P(4260) + "/examples/shop.html");
+    await page.waitForTimeout(900);
+    await page.evaluate(() => {
+      window.__caps = [];
+      const orig = document.body.appendChild.bind(document.body);
+      document.body.appendChild = function (n) {
+        const r = orig(n);
+        if (n.classList && n.classList.contains("ss-cap")) window.__caps.push(n);
+        return r;
+      };
+      /* wrap 은 살아 있는 시트를 옮겼다 되돌린다 — 찍고 난 상자에는 번호가 없다.
+         그림이 «구워지는 순간»(상자를 복제할 때) 보이는 번호를 찍어 둔다 */
+      const oc = Node.prototype.cloneNode;
+      Node.prototype.cloneNode = function (deep) {
+        if (this.classList && this.classList.contains("ss-cap"))
+          window.__marks = [...this.querySelectorAll(".ss-marker")].filter((m) => m.getClientRects().length).map((m) => m.textContent.trim());
+        return oc.call(this, deep);
+      };
+    });
+    const bakedMarks = () => page.evaluate(() => window.__marks || []);
+    const liveMarks = () => page.evaluate(() => [...document.querySelectorAll(".ss-markers .ss-marker")].filter((m) => m.getClientRects().length).length);
+    const maj = async (n) => {
+      await page.hover("#ss-def-" + n);
+      await page.click("#ss-def-" + n + " .ss-rowmaj");
+      await page.waitForTimeout(250);
+    };
+    /* 항목 줄은 화면정의서 모드에서만 선다 — 찍는 사람도, 그림을 뽑는 사람도 거기 있다.
+       프로토타입 모드는 마커를 감추므로(그림에는 나온다) «보이는 번호» 를 재려면 여기여야 한다 */
+    const majs = async () => { await maj(1); await maj(3); };
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(350);
+    d = await dlg();
+    check("찍은 것이 없으면 «주요 항목만» 을 아예 안 내준다 (켜면 백지가 나온다)",
+      d.mjVis === false, JSON.stringify(d));
+    await page.click('[data-pr="cancel"]');
+    await page.waitForTimeout(250);
+    await page.click("#ss-mDoc"); await page.waitForTimeout(700);
+    await majs();
+    check("항목에 찍으면 표시가 남는다",
+      (await page.getAttribute("#ss-def-1 .ss-rowmaj", "aria-pressed")) === "true");
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(350);
+    d = await dlg();
+    check("찍은 뒤 열면 «주요 항목만» 이 나온다 (만들 때 한 번 재고 마는 것이 아니다)",
+      d.mjVis === true && d.major === "x", JSON.stringify(d));
+    await page.check('[data-pr-c="major"]');
+    await page.check('[data-pr-c="table"]');
+    await page.waitForTimeout(250);
+    d = await dlg();
+    check("스케치가 «건너뛴 번호» 를 보여 준다 (2번이 빠지고 1·3 만 남는다)",
+      d.pvMk === true && d.pvMk2 === false, JSON.stringify(d));
+    const allMarks = await liveMarks();
+    await go();
+    b = await baked();
+    check("그림에 주요 항목의 번호만 박힌다 — 다시 매기지 않고 전체 기준 그대로",
+      (await bakedMarks()).join(",") === "1,3", JSON.stringify(await bakedMarks()));
+    check("표도 같이 걸러진다 — 그림과 1:1 이다 (#106 이 호소한 바로 그것)",
+      b.rows.join(",") === "1,3", JSON.stringify(b.rows));
+    check("뽑고 나면 화면의 번호는 전부 돌아온다 (살아 있는 시트를 지우지 않는다)",
+      allMarks > 2 && (await liveMarks()) === allMarks, [allMarks, await liveMarks()]);
+    await page.uncheck('[data-pr-c="mark"]');
+    await page.waitForTimeout(200);
+    check("부모(«화면 위 번호»)를 끄면 «주요 항목만» 도 같이 꺼진다 (표→개발 과 같은 규칙)",
+      (await dlg()).major === "x");
+    await page.check('[data-pr-c="mark"]');
+    await page.waitForTimeout(200);
+    await go();
+    check("«주요 항목만» 이 꺼지면 번호가 전부 박힌다", (await bakedMarks()).length === allMarks, JSON.stringify(await bakedMarks()));
+    await page.click('[data-pr="cancel"]');
+    await page.waitForTimeout(250);
+    await majs();
+    check("다시 누르면 표시가 지워진다 (안 쓰는 문서에는 키가 안 남는다)",
+      (await page.getAttribute("#ss-def-1 .ss-rowmaj", "aria-pressed")) === "false");
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(350);
+    check("표시가 없어지면 선택지도 도로 사라진다", (await dlg()).mjVis === false);
+    await page.click('[data-pr="cancel"]');
+    sM.close();
+
     check("JS 에러 0건", errors.length === 0, errors);
     await page.setViewportSize({ width: 1440, height: 900 });
   }

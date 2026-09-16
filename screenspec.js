@@ -368,7 +368,7 @@
   const KEY_RANK = ["mode", "accent", "baseViewport", "devices", "checklist", "sources", "style", "off", "readonly",
     "vocab", "prefixes", "endings", "idScheme", "notes",
     "screen", "screens", "id", "name", "path", "route", "root", "viewports", "covers", "skip",
-    "n", "target", "sel", "anno", "title", "optional", "t", "ref", "head", "rows", "why", "subs", "layer", "defs", "dev", "parts",
+    "n", "target", "sel", "anno", "title", "optional", "major", "t", "ref", "head", "rows", "why", "subs", "layer", "defs", "dev", "parts",
     "play", "preview", "flowTo", "arrowTo", "selector", "label", "w", "h", "specs"];
   function ssStr(s) {
     /* JSON.stringify 가 따옴표·역슬래시·줄바꿈을 맡고, 우리는 «스크립트 블록을 깨뜨리는» 것만 더 막는다.
@@ -703,6 +703,13 @@
     font-size:14px;line-height:1;padding:2px 4px;border-radius:5px;cursor:pointer;transition:opacity .1s}
   body.ss-editing .ss-row:hover .ss-rowdel,body.ss-editing .ss-row:focus-within .ss-rowdel{opacity:1}
   .ss-rowdel:hover{background:var(--ss-canvas);color:var(--ss-ink)}
+  /* 「주요」 표시 (#106) — 꺼짐은 ×와 같이 올렸을 때만, 켜짐은 늘 보인다 */
+  .ss-rowmaj{margin-left:auto;flex-shrink:0;opacity:0;border:1px solid var(--ss-line2);background:none;
+    color:var(--ss-ink3);font-size:10px;font-weight:700;line-height:1;padding:2px 6px;border-radius:5px;
+    cursor:pointer;transition:opacity .1s}
+  .ss-rowmaj+.ss-rowdel{margin-left:4px}
+  body.ss-editing .ss-row:hover .ss-rowmaj,body.ss-editing .ss-row:focus-within .ss-rowmaj{opacity:1}
+  .ss-rowmaj.ss-on{opacity:1;background:var(--ss-accent-soft);border-color:var(--ss-accent);color:var(--ss-accent)}
   .ss-draft{display:none;align-items:center;gap:8px;padding:9px 18px;background:#FFF8E1;
     border-bottom:1px solid #F0E4B8;font-size:11.5px;color:#7A5B00;line-height:1.6}
   .ss-draft.ss-show{display:flex}
@@ -1219,6 +1226,13 @@ ${HL_CSS}
      깊이가 필요하면 그 번호 안의 불릿이 한다. 옛 문서에 parts 가 있어도 조용히 무시한다(안 깨진다).
      key = "1" · "2" … 마커·활성화·배치·화살표·재생이 전부 이 key 로 돈다. */
   const isBrief = (s) => !!s && s.anno === "overview";
+  /* 상위기획 갈래 (#106) — layer(«누가 쓰나»)와 직교하는 «어느 깊이인가» 축이다.
+     같은 기획 줄이라도 하나는 상위기획에 오르고 하나는 안 오르므로 layer 값을 늘려서는 안 풀린다.
+     «항목» 에 찍는 이유: 그림의 번호는 항목에 붙는다. 줄에 찍으면 «한 줄만 주요한 항목» 의 번호를
+     박을지 말지가 또 하나의 규칙이 되고, 찍는 사람은 그림을 보며 고르는데 손은 줄에 가 있게 된다.
+     쓰지 않는 문서는 키가 아예 안 생긴다 — 파일이 한 바이트도 안 바뀐다 */
+  const isMajor = (s) => !!s && s.major === true;
+  const anyMajor = () => SCREENS.some((sc) => (sc.specs || []).some(isMajor));
   /* 개요가 먼저, 나머지는 적은 순서 그대로 — 기획서는 하이레벨 정책을 맨 위에 둔다 (#82) */
   const inOrder = (specs) => (specs || []).slice().sort((a, b) => (isBrief(a) ? 0 : 1) - (isBrief(b) ? 0 : 1));
   function flatItems(specs) {
@@ -1265,6 +1279,15 @@ ${HL_CSS}
   function edRowDel() {
     if (!EDIT) return "";
     return '<button type="button" class="ss-rowdel ss-ui" data-ec="delitem" title="이 항목을 통째로 삭제">×</button>';
+  }
+  /* 「주요」 (#106) — 상위기획 그림에 이 번호를 박을지. 삭제(×)와 같은 자리에 두는 이유는
+     둘 다 «이 항목 전체» 에 걸리는 일이기 때문이다. 꺼져 있으면 올렸을 때만 나오고(×와 같은 규칙),
+     켜져 있으면 늘 보인다 — 그때는 단추가 아니라 «표시» 로 읽혀야 한다 */
+  function edMajor(s) {
+    if (!EDIT) return "";
+    const on = isMajor(s);
+    return '<button type="button" class="ss-rowmaj ss-ui' + (on ? " ss-on" : "") + '" data-ec="major"' +
+      ' aria-pressed="' + on + '" title="상위기획 그림에 이 번호를 박는다">주요</button>';
   }
   /* 아카이브 (#46) — 하위 요소를 «만드는 길» 을 없앴다. 사용자 개념이 아니라 데이터 개념이고,
      1a 로 쓸 것은 새 번호로 전부 된다. 기존 문서의 parts 는 그대로 렌더된다 — 읽기는 하위호환 */
@@ -1534,7 +1557,7 @@ ${HL_CSS}
       out += `<div class="ss-row ss-blk${brief ? " ss-brief" : ""}" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
         ${edGut("item")}<div class="ss-no">${brief ? "개요" : s.n}</div>
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span>${brief ? "" : '<span class="ss-nowtag">현재 미표시</span>'}${edRowDel()}</div>
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span>${brief ? "" : '<span class="ss-nowtag">현재 미표시</span>'}${brief ? "" : edMajor(s)}${edRowDel()}</div>
           <div class="ss-kids">${blocksHTML(s.defs, "plan", String(s.n))}</div>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}
         </div></div>`;
     });
@@ -2405,7 +2428,7 @@ ${HL_CSS}
       if (layer === "dev") return d.layer === "dev";
       return true;
     }
-    function prRows(layer) {
+    function prRows(layer, majorOnly) {
       let out = "";
       /* 화면 공통 개발 정의도 표의 한 행으로 — 그림 속에서는 블록보다 행이 읽기 쉽다 */
       const common = (current && current.dev) || [];
@@ -2415,6 +2438,7 @@ ${HL_CSS}
           flatten(common, null).map((n) => prLine({ b: Object.assign({}, n.b, { layer: "dev" }), depth: n.depth })).join("") + "</ul></td></tr>";
       }
       items().forEach((it) => {
+        if (majorOnly && !isMajor(it.spec)) return; /* 그림에 안 박힌 번호가 표에만 남으면 1:1 이 깨진다 (#106) */
         let li = "";
         flatten(it.spec.defs, layer === "plan" ? "plan" : layer === "dev" ? "dev" : null).forEach((n) => { li += prLine(n); });
         out += '<tr><td class="ss-pr-no">' + esc(it.label) + "</td>" +
@@ -2465,11 +2489,26 @@ ${HL_CSS}
       ".ss-toc,.ss-tip,.ss-pvbar,.ss-nav-toast,.ss-cap";
     const CAP_MARKS = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno";
 
+    /* 주요 항목만 (#106) — 번호는 «문서 전체 기준» 을 지킨다. 1·4·7 처럼 건너뛰어 박히더라도
+       상위기획과 상세기획이 같은 번호로 같은 항목을 가리키는 편이 대조에 낫다.
+       다시 매기면 두 문서가 어긋나고, 그때는 번호로 이야기할 수가 없다 */
+    function capMajorStrip(node) {
+      const keep = {}, hid = [];
+      items().forEach((it) => { if (isMajor(it.spec)) keep[it.label] = 1; });
+      node.querySelectorAll(".ss-marker").forEach((mk) => {
+        if (keep[mk.textContent.trim()]) return;
+        hid.push([mk, mk.style.display]);
+        mk.style.display = "none";
+      });
+      /* «지우지 않고 숨기는» 이유 — wrap 은 살아 있는 시트를 옮겼다 되돌린다. 떼어낸 마커는
+         placeMarkers 가 되살릴 수 없어(끊어진 노드) 뽑고 난 뒤 화면에서 번호가 영영 사라졌다.
+         숨긴 것은 placeMarkers 가 display 를 소유하므로 다음 프레임에 제 손으로 되돌린다 */
+    }
     function capBox(opt) {
       const box = h("div", { class: "ss-cap ss-ui" },
         capHeadHTML(current || {}, opt.head) + '<div class="ss-cap-body"></div>' +
         (opt.table ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
-          prRows(opt.layer || LAYER) + "</tbody></table>" + refFootPr() : "") +
+          prRows(opt.layer || LAYER, opt.major) + "</tbody></table>" + refFootPr() : "") +
         ""); /* 꼬리표는 DOM 이 아니라 캔버스에 직접 쓴다 — 밑단 잘라내기(아래) 뒤에 붙여야 간격이 안 벌어진다 */
       /* 번호 색은 이 그림에만. 문서의 accent 를 바꾸면 내보내기가 문서를 고치는 셈이 된다 (#96) */
       if (opt.accent) box.style.setProperty("--ss-accent", opt.accent);
@@ -2515,6 +2554,7 @@ ${HL_CSS}
         sheet.style.height = full + "px";
         sheet.style.overflow = "visible";
         if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
+        else if (opt.major) capMajorStrip(src.node);
         body.appendChild(src.node);
         target = src.node;
         restoreSrc = function () {
@@ -2528,6 +2568,7 @@ ${HL_CSS}
         target.querySelectorAll(CAP_DROP).forEach((n) => n.remove());
         if (opt.markers === false) target.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
         else if (src.marks) src.marks.forEach((m) => target.appendChild(document.importNode(m, true)));
+        if (opt.markers !== false && opt.major) capMajorStrip(target);
         /* 마커는 absolute 다. 기준이 될 것이 없으면 조립 상자(fixed)를 기준으로 잡혀
            머리말 높이만큼 통째로 밀린다 — 캡처 대상을 기준으로 세운다 */
         target.style.position = "relative";
@@ -2545,6 +2586,7 @@ ${HL_CSS}
       const base = (src.kind === "move" ? target.querySelector(".ss-sheet") : target).getBoundingClientRect();
       const pad = { l: 0, r: 0, t: 0, b: 0 };
       target.querySelectorAll(".ss-marker").forEach((mk) => {
+        if (!mk.getClientRects().length) return; /* 숨긴 마커(주요 항목만)는 «튀어나온 만큼» 에서 뺀다 */
         const mr = mk.getBoundingClientRect();
         pad.l = Math.max(pad.l, base.left - mr.left);
         pad.r = Math.max(pad.r, mr.right - base.right);
@@ -2676,7 +2718,7 @@ ${HL_CSS}
        팀원끼리 내보내기 취향이 서로 덮인다. 문서별이 아니라 사람별인 이유도 같다 */
     const PR_KEY = "screenspec:export";
     /* 일시를 기본에서 빼는 이유: 그림마다 달라지는 값이라 «늘 넣을 것» 이 아니다. 필요하면 그때 켠다 (PM 2026-09-03) */
-    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, table: false, dev: false, color: "", pv: false };
+    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, major: false, table: false, dev: false, color: "", pv: false };
     const PR_HEAD = ["id", "name", "path", "when"];
     /* 색은 accent 프리셋 그대로 — 여기서 베끼면 둘이 어긋난다 */
     const PR_SW_NAME = { blue: "파랑", red: "빨강", orange: "주황", green: "초록", purple: "보라" };
@@ -2715,9 +2757,17 @@ ${HL_CSS}
       prDlg.querySelector('[data-pr-k="head"]').classList.toggle("ss-off", n === 0);
       const tk = prDlg.querySelector('[data-pr-k="table"]');
       if (tk) tk.classList.toggle("ss-off", !prCfg.table);
+      /* 「주요」 로 찍은 항목이 하나도 없으면 이 선택지는 백지를 내준다 — 그때는 아예 안 보인다 */
+      const mj = prDlg.querySelector('[data-pr-k="mark"]');
+      mj.hidden = !anyMajor();
+      mj.classList.toggle("ss-off", !prCfg.mark);
       /* 미리보기 — 스케치가 설정을 그대로 따라간다 */
       PR_HEAD.forEach((k) => { prDlg.querySelector(".ss-pr-p-" + k).hidden = !prCfg[k]; });
       prDlg.querySelectorAll(".ss-pr-p-mk").forEach((el) => { el.hidden = !prCfg.mark; });
+      /* 스케치가 «건너뛴 번호» 를 보여 준다 — 2번이 빠지고 1·3 만 남는 그 모습이 결과다 */
+      const mjOn = prCfg.mark && prCfg.major && anyMajor();
+      prDlg.querySelectorAll(".ss-pr-p-mkx").forEach((el) => { if (mjOn) el.hidden = true; });
+      prDlg.querySelector(".ss-pr-p-trx").hidden = !prCfg.table || mjOn;
       prDlg.querySelector(".ss-pr-p-tbl").hidden = !prCfg.table;
       prDlg.querySelector(".ss-pr-p-dev").hidden = !prCfg.dev;
       prDlg.style.setProperty("--ss-accent", prCfg.color || "");
@@ -2741,12 +2791,12 @@ ${HL_CSS}
             '<div class="ss-pr-p-bar" style="top:34px;height:38px"></div>' +
             '<div class="ss-pr-p-bar" style="top:80px;right:74px"></div>' +
             '<div class="ss-pr-p-mk" style="top:7px;left:14px">1</div>' +
-            '<div class="ss-pr-p-mk" style="top:44px;left:120px">2</div>' +
+            '<div class="ss-pr-p-mk ss-pr-p-mkx" style="top:44px;left:120px">2</div>' +
             '<div class="ss-pr-p-mk" style="top:75px;left:22px">3</div>' +
           "</div>" +
           '<div class="ss-pr-p-tbl">' +
             '<div class="ss-pr-p-tr"><span class="ss-pr-p-tn"></span><span class="ss-pr-p-tt"></span></div>' +
-            '<div class="ss-pr-p-tr"><span class="ss-pr-p-tn"></span><span class="ss-pr-p-tt"></span></div>' +
+            '<div class="ss-pr-p-tr ss-pr-p-trx"><span class="ss-pr-p-tn"></span><span class="ss-pr-p-tt"></span></div>' +
             '<div class="ss-pr-p-tr ss-pr-p-dev"><span class="ss-pr-p-tn" style="opacity:.45"></span>' +
               '<span class="ss-pr-p-tt" style="width:60%"></span></div>' +
           "</div>" +
@@ -2768,6 +2818,11 @@ ${HL_CSS}
                 '<label><input type="checkbox" data-pr-c="when"> 일시</label>' +
               "</div>" +
               '<label><input type="checkbox" data-pr-c="mark"> 화면 위 번호</label>' +
+              /* 「주요」 는 앱이 아니라 «이 문서» 가 만드는 것이라 부팅 뒤에도 늘어난다 —
+                 anyDev 처럼 만들 때 한 번 재고 마는 것이 아니라 열 때마다 다시 본다 (#106) */
+              '<div class="ss-pr-kids" data-pr-k="mark">' +
+                '<label><input type="checkbox" data-pr-c="major"> 주요 항목만 (상위기획용)</label>' +
+              "</div>" +
               '<label><input type="checkbox" data-pr-c="table"> 기능 설명 표</label>' +
               /* 개발 정의가 없는 문서에 「개발 정의 포함」은 아무 일도 안 하는 선택지다 — 안 만든다 */
               (anyDev() ? '<div class="ss-pr-kids" data-pr-k="table">' +
@@ -2796,6 +2851,7 @@ ${HL_CSS}
           }
           else prCfg[k] = e.target.checked;
           if (k === "table" && !e.target.checked) prCfg.dev = false;
+          if (k === "mark" && !e.target.checked) prCfg.major = false;
           prSync();
         });
         prDlg.addEventListener("input", (e) => {
@@ -2820,6 +2876,7 @@ ${HL_CSS}
           PR_HEAD.forEach((k) => (head[k] = !!prCfg[k]));
           exportImage({
             markers: !!prCfg.mark,
+            major: !!(prCfg.mark && prCfg.major && anyMajor()),
             head: PR_HEAD.some((k) => prCfg[k]) ? head : false,
             table: !!prCfg.table,
             /* 「개발만」 은 없앴다 — 실제 선택은 «개발 것도 넣나» 하나였다 */
@@ -4396,6 +4453,9 @@ ${HL_CSS}
         if (i < 0 || j < 0 || j >= list.length) return;
         list.splice(j, 0, list.splice(i, 1)[0]);
         edRenumber();
+      } else if (c === "major") {
+        /* 안 쓰는 문서에는 키를 안 남긴다 — false 로 적어 두면 파일이 쓸데없이 불어난다 */
+        if (isMajor(s)) delete s.major; else s.major = true;
       } else if (c === "delitem") {
         if (!confirm("항목 " + it.label + " 「" + (s.title || "") + "」 을 통째로 지웁니다. 계속할까요?")) return;
         const i = list.indexOf(s);

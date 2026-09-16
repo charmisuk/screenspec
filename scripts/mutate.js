@@ -311,6 +311,21 @@ const MUTS = [
   { id: "base-fallback-silent", only: "[무대]", why: "모르는 baseViewport 를 조용히 무시한다 — 걷어낸 값을 쓰던 문서가 말없이 달라진다 (#105)",
     find: "    if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn(",
     to:   "    if (false && RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn(" },
+  { id: "major-toggle-dead", only: "[내보내기]", why: "「주요」 를 눌러도 안 찍힌다 — 표시가 이름만 남는다 (#106)",
+    find: "        if (isMajor(s)) delete s.major; else s.major = true;",
+    to:   "        if (isMajor(s)) delete s.major;" },
+  { id: "major-marks-all", only: "[내보내기]", why: "«주요 항목만» 인데 번호가 전부 박힌다 (#106)",
+    find: "        else if (opt.major) capMajorStrip(src.node);",
+    to:   "        else if (false) capMajorStrip(src.node);" },
+  { id: "major-table-all", only: "[내보내기]", why: "그림은 걸렀는데 표에는 전부 남는다 — 그림과 1:1 이 깨진다 (#106)",
+    find: "        if (majorOnly && !isMajor(it.spec)) return;",
+    to:   "        if (false && majorOnly && !isMajor(it.spec)) return;" },
+  { id: "major-offered-empty", only: "[내보내기]", why: "찍은 것이 없는데도 선택지를 내준다 — 켜면 백지가 나온다 (#106)",
+    find: "      mj.hidden = !anyMajor();",
+    to:   "      mj.hidden = false;" },
+  { id: "major-eats-live", only: "[내보내기]", why: "숨기는 대신 지운다 — 뽑고 나면 화면에서 번호가 사라진다 (#106 에서 잡은 결함)",
+    find: "        hid.push([mk, mk.style.display]);\n        mk.style.display = \"none\";",
+    to:   "        mk.remove();" },
 ];
 
 const argv = process.argv.slice(2);
