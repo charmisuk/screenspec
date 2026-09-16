@@ -124,6 +124,9 @@
        구분이 안 되고, 그러면 「마커를 못 찾았다」 경고가 조용히 사라진다. 사람과 에이전트가
        번갈아 고치는 문서에서는 그 모호함이 비싸다 (PM 2026-08-31) */
     overview: { label: "개요",   mech: "none" },
+    /* 섹션 (#107) — 개요처럼 화면 위를 가리키지 않지만, 개요와 «반대» 로 제 자리에 제 이름으로 선다.
+       개요는 화면당 하나·맨 위·라벨 고정이 «결정» 이라(#82) 그걸 옵션으로 열지 않고 다른 이름을 둔다 */
+    section:  { label: "섹션",   mech: "none" },
     box:    { label: "영역",   mech: "box" },
     arrow:  { label: "화살표", mech: "arrow" },
     state:  { label: "상태",   mech: "box" },
@@ -132,6 +135,24 @@
   };
   /* 옛 타입은 결과가 같던 쪽으로 읽는다 — 옛 문서는 그대로 열린다 */
   const ANNO_LEGACY = { input: "box", motion: "box", popup: "action" };
+  /* 번호 점검 (#107) — 편집기는 옮기거나 지울 때 다시 매기지만, 코드로 만들어 넣은 설정에는 그 손이
+     닿지 않는다. 그렇다고 로드 때 우리가 매기면 그쪽 문서와 화면의 번호가 어긋난다 (번호는 문서 기준 — #106).
+     그래서 «고치지 않고 말만 한다» — 화면마다 한 줄 */
+  function numCheck() {
+    SCREENS.forEach((sc) => {
+      const ns = (sc.specs || []).filter((sp) => !noMark(sp)).map((sp) => Number(sp.n)).sort((a, b) => a - b);
+      if (!ns.length) return;
+      const gaps = [], dups = [];
+      for (let i = 1, j = 0; i <= ns[ns.length - 1]; i++) {
+        if (ns[j] !== i) { gaps.push(i); continue; }
+        while (ns[j] === i) { if (ns[j + 1] === i) dups.push(i); j++; }
+      }
+      if (!gaps.length && !dups.length) return;
+      console.warn("[ScreenSpec] 화면 \"" + sc.id + "\": " + (gaps.length ? "빈 번호 " + gaps.join(",") : "") +
+        (gaps.length && dups.length ? " · " : "") + (dups.length ? "겹친 번호 " + dups.join(",") : "") +
+        " (있는 번호: " + ns.join(",") + "). 편집기 밖에서 만든 설정은 다시 매기지 않습니다. 문서 쪽에서 맞춰 주세요 (#107)");
+    });
+  }
   function annoOf(s) {
     const k = ANNO_LEGACY[s.anno] || s.anno;
     return ANNO[k] || { label: s.anno || "영역", mech: "box" };
@@ -873,6 +894,10 @@
      회색 글자가 파란 배경 위에 남아 안 보였다 (PM 2026-08-31 지적) */
   .ss-row.ss-brief.ss-active .ss-no{background:var(--ss-accent);color:#fff}
   .ss-row.ss-brief{border-bottom:1px solid var(--ss-line)}
+  /* 섹션 (#107) — 번호 칸 없이 제목이 머리다. 항목보다 한 단 굵고, 위에 숨을 둔다 */
+  .ss-row.ss-section{margin-top:14px;background:none;padding-top:10px;border-top:1px solid var(--ss-line)}
+  .ss-row.ss-section .ss-title .ss-t{font-size:14.5px}
+  .ss-row.ss-section:first-child,.ss-row.ss-brief+.ss-row.ss-section{margin-top:4px;border-top:0;padding-top:8px}
   .ss-row.ss-now-hidden .ss-nowtag{display:inline-block}
   .ss-row:hover{background:#F4F4F2}
   .ss-row.ss-active{background:var(--ss-accent-soft)}
@@ -1226,6 +1251,16 @@ ${HL_CSS}
      깊이가 필요하면 그 번호 안의 불릿이 한다. 옛 문서에 parts 가 있어도 조용히 무시한다(안 깨진다).
      key = "1" · "2" … 마커·활성화·배치·화살표·재생이 전부 이 key 로 돈다. */
   const isBrief = (s) => !!s && s.anno === "overview";
+  const isSection = (s) => !!s && s.anno === "section";
+  const noMark = (s) => isBrief(s) || isSection(s); /* 화면 위에 자리가 없는 항목 — 마커·번호·누락 경고 밖 */
+  /* 항목의 열쇠 — 번호가 곧 열쇠였는데, 섹션은 번호가 없다 (#107). 섹션에는 «그 객체» 에 붙는
+     실행 시 열쇠를 준다: 파일에는 안 남고(WeakMap), 다시 그려도 같은 객체면 같은 열쇠다 */
+  const SEC_KEY = new WeakMap(); let secSeq = 0;
+  const keyOf = (s) => {
+    if (!isSection(s)) return String(s.n);
+    if (!SEC_KEY.has(s)) SEC_KEY.set(s, "s" + (++secSeq));
+    return SEC_KEY.get(s);
+  };
   /* 상위기획 갈래 (#106) — layer(«누가 쓰나»)와 직교하는 «어느 깊이인가» 축이다.
      같은 기획 줄이라도 하나는 상위기획에 오르고 하나는 안 오르므로 layer 값을 늘려서는 안 풀린다.
      «항목» 에 찍는 이유: 그림의 번호는 항목에 붙는다. 줄에 찍으면 «한 줄만 주요한 항목» 의 번호를
@@ -1236,7 +1271,7 @@ ${HL_CSS}
   /* 개요가 먼저, 나머지는 적은 순서 그대로 — 기획서는 하이레벨 정책을 맨 위에 둔다 (#82) */
   const inOrder = (specs) => (specs || []).slice().sort((a, b) => (isBrief(a) ? 0 : 1) - (isBrief(b) ? 0 : 1));
   function flatItems(specs) {
-    return inOrder(specs).map((s) => ({ key: String(s.n), label: String(s.n), spec: s }));
+    return inOrder(specs).map((s) => ({ key: keyOf(s), label: isSection(s) ? "" : String(s.n), spec: s }));
   }
   /* 편집 모드는 «켜야 보이는» 것이다 (#37) — 꺼져 있으면 아래 함수들이 빈 문자열을 내므로
      정의서 DOM 은 편집 기능이 없던 때와 한 글자도 다르지 않다. 회귀 위험을 0 으로 두려는 배치다 */
@@ -1553,12 +1588,13 @@ ${HL_CSS}
     let out = "";
     inOrder(specs).forEach((s) => {
       const type = annoOf(s);
-      const brief = isBrief(s);
-      out += `<div class="ss-row ss-blk${brief ? " ss-brief" : ""}" id="ss-def-${s.n}" tabindex="0" data-defrow="${s.n}">
-        ${edGut("item")}<div class="ss-no">${brief ? "개요" : s.n}</div>
+      const brief = isBrief(s), sec = isSection(s), k = keyOf(s);
+      /* 섹션은 번호 칸이 없다 — 제목이 곧 머리다. 자리를 비워 두면 «번호가 빠진 항목» 으로 읽힌다 (#107) */
+      out += `<div class="ss-row ss-blk${brief ? " ss-brief" : ""}${sec ? " ss-section" : ""}" id="ss-def-${k}" tabindex="0" data-defrow="${k}">
+        ${edGut("item")}${sec ? "" : `<div class="ss-no">${brief ? "개요" : s.n}</div>`}
         <div class="ss-main">
-          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span>${brief ? "" : '<span class="ss-nowtag">현재 미표시</span>'}${brief ? "" : edMajor(s)}${edRowDel()}</div>
-          <div class="ss-kids">${blocksHTML(s.defs, "plan", String(s.n))}</div>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}
+          <div class="ss-title"><span class="ss-t"${edMark("title")}>${esc(s.title)}</span>${noMark(s) ? "" : '<span class="ss-nowtag">현재 미표시</span>'}${noMark(s) ? "" : edMajor(s)}${edRowDel()}</div>
+          <div class="ss-kids">${blocksHTML(s.defs, "plan", k)}</div>${devBlockHTML(s.defs)}${playBtnHTML(s, s.n)}${previewBtnHTML(s, s.n)}
         </div></div>`;
     });
     return out;
@@ -1728,7 +1764,7 @@ ${HL_CSS}
       ctx.markerLayer.innerHTML = "";
       markerEls = {};
       items().forEach((it) => {
-        if (isBrief(it.spec)) return; /* 개요는 화면 위 요소가 아니다 — 마커를 만들지 않는다 (#82) */
+        if (noMark(it.spec)) return; /* 개요·섹션은 화면 위 요소가 아니다 — 마커를 만들지 않는다 (#82·#107) */
         const el = h("button", { class: "ss-ui ss-marker", "aria-label": "기능 " + it.label + ": " + (it.spec.title || "") });
         if (it.label.length > 1) el.classList.add("ss-marker-sub");
         el.textContent = it.label;
@@ -1833,7 +1869,7 @@ ${HL_CSS}
         const missing = [], cond = []; /* cond = anno:"state" — 조건부 표시라 없는 게 정상일 수 있어 경고에서 제외 (#20) */
         items().forEach((it) => { /* 하위 요소도 target 이 있으면 센다 — 보고는 #1a (#25) */
           const sp = it.spec;
-          if (isBrief(sp)) return; /* 개요는 가리키는 요소가 없다 — 누락이 아니다 (#82) */
+          if (noMark(sp)) return; /* 개요·섹션은 가리키는 요소가 없다 — 누락이 아니다 (#82·#107) */
           if (!targetOf(sp)) (sp.anno === "state" || sp.optional ? cond : missing).push(it); /* optional:true — anno 와 무관하게 조건부 (#23) */
         });
         if (!missing.length) { warned[sc.id] = "clean"; return stop(); }
@@ -1915,7 +1951,7 @@ ${HL_CSS}
         /* 개요는 화면 위 요소를 안 가리킨다 — 추론의 근거에서 뺀다 (#82).
            안 빼면 개요가 있는 화면은 «어느 것인지 모르겠다» 로 판정돼 통째로 연결이 끊긴다
            (QA 하네스가 잡았다, 2026-08-31) */
-        const sps = (sc.specs || []).filter((sp) => !isBrief(sp));
+        const sps = (sc.specs || []).filter((sp) => !noMark(sp));
         if (!sps.length) return;
         const els = sps.map(loneEl).filter(Boolean);
         if (els.length !== sps.length) return;      /* 하나라도 «어느 것인지 모르겠다» 면 손대지 않는다 */
@@ -2010,7 +2046,7 @@ ${HL_CSS}
       let moved = false;
       wireMoves();
       items().forEach((it) => {
-        if (isBrief(it.spec)) return; /* 개요는 자리를 잡을 것이 없다 (#82) */
+        if (noMark(it.spec)) return; /* 개요·섹션은 자리를 잡을 것이 없다 (#82·#107) */
         const t = targetOf(it.spec), m = markerEls[it.key];
         const hidden = !t || t.getClientRects().length === 0;
         const blk = blockOf(it);
@@ -3017,6 +3053,19 @@ ${HL_CSS}
       const row = ctx.listEl.querySelector('[data-defrow="0"] .ss-kids [data-ed]');
       if (row) edBegin(row);
     }
+    /* 섹션 (#107) — 부른 항목 «다음» 에 놓는다. 개요와 달리 자리가 뜻이라 맨 위로 보내지 않는다 */
+    function edAddSection(after) {
+      if (!edGate()) return;
+      edSnap();
+      const list = specs(), sec = { anno: "section", title: "섹션", defs: [{ t: "" }] };
+      const i = after ? list.indexOf(after) : -1;
+      if (i >= 0) list.splice(i + 1, 0, sec); else list.push(sec);
+      edRenumber();
+      edTouched();
+      render();
+      const row = ctx.listEl.querySelector('[data-defrow="' + keyOf(sec) + '"] .ss-t[data-ed]');
+      if (row) edBegin(row);
+    }
     /* 전부 삭제 — 되돌릴 길(Ctrl+Z)이 있어야 물어보는 것이 형식적이지 않다 */
     function edWipeAll() {
       if (!edGate()) return;
@@ -3718,6 +3767,7 @@ ${HL_CSS}
        화면 위에 늘 떠 있는 «만들 자리» 를 두는 대신, 깔끔한 상태에서 쌓아 올리게 한다 */
     const SLASH_SCREEN = [
       { k: "brief", ico: "▤", nm: "화면 개요", key: "맨 위에" },
+      { k: "sect", ico: "▬", nm: "섹션", key: "번호 없이" },
     ];
     /* 블록 메뉴 (#97) — ⠿ 를 누르면 뜬다. 지금 항목은 «삭제» 하나다 */
     let edBlkMenu = null;
@@ -3860,6 +3910,7 @@ ${HL_CSS}
       if (kind === "bul") { edSetKind(B_BULLET); return; }
       if (kind === "why") { edSetKind(B_WHY); return; }
       if (kind === "brief") { edKillLine(); edAddBrief(); return; } /* 슬래시를 친 빈 줄은 «자리 잡던 줄» 이라 치운다 (#82) */
+      if (kind === "sect") { const sp0 = p && p.s; edKillLine(); edAddSection(sp0); return; }
       if (kind === "tbl") { edAddTable(p); return; }
     }
 
@@ -4054,7 +4105,7 @@ ${HL_CSS}
       edRenumber();
       edTouched();
       render();
-      const key = String(sp.n);
+      const key = keyOf(sp);
       edGo(key);
       edSay("번호 " + sp.n + " 을 붙였습니다. 이름을 쓰고 Enter 를 치면 설명으로 넘어갑니다");
     }
@@ -4125,7 +4176,7 @@ ${HL_CSS}
       const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-blk-mark");
       return parseFloat(v) || 16;
     }
-    function specOf(key) { return specs().find((sp) => String(sp.n) === String(key)); }
+    function specOf(key) { return specs().find((sp) => keyOf(sp) === String(key)); }
     function moveAt(arr, from, to) {
       if (from < 0 || from >= arr.length) return null;
       const x = arr.splice(from, 1)[0];
@@ -4314,8 +4365,8 @@ ${HL_CSS}
       edSnap();
       if (plan.kind === "item") {
         const list = specs();
-        const from = list.findIndex((sp) => String(sp.n) === String(drag.key));
-        const to = list.findIndex((sp) => String(sp.n) === String(edKeyOf(plan.row)));
+        const from = list.findIndex((sp) => keyOf(sp) === String(drag.key));
+        const to = list.findIndex((sp) => keyOf(sp) === String(edKeyOf(plan.row)));
         if (from < 0 || to < 0) return;
         moveAt(list, from, to + (plan.after ? 1 : 0));
         edRenumber();
@@ -4430,7 +4481,7 @@ ${HL_CSS}
 
     /* ---- 구조 바꾸기 — 줄·이유·순서·삭제 ---- */
     /* 개요는 번호를 안 가진다 (#82) — 화면에 0번 마커가 없는데 번호만 보이면 읽는 사람이 찾게 된다 */
-    function edRenumber() { let k = 0; inOrder(specs()).forEach((s) => { s.n = isBrief(s) ? 0 : ++k; }); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
+    function edRenumber() { let k = 0; inOrder(specs()).forEach((s) => { if (isSection(s)) { delete s.n; return; } s.n = isBrief(s) ? 0 : ++k; }); } /* 옮기거나 지운 뒤 번호가 비면 읽는 사람이 «빠졌나» 를 의심한다 */
     function edCmd(btn) {
       if (!edGate()) return;
       const key = edKeyOf(btn), c = btn.dataset.ec, di = Number(btn.dataset.di), si = Number(btn.dataset.si);
@@ -5597,6 +5648,7 @@ ${HL_CSS}
     if (RAW.baseViewport && !DEVICES[RAW.baseViewport]) console.warn("[ScreenSpec] baseViewport \"" + RAW.baseViewport + "\" 인식 불가: mobile 사용 (" + Object.keys(DEVICES).join(" | ") + ")");
     usePreset(base);
     if (FRAME) hideAppDom(); /* 부팅 중 앱이 body 에 더 붙였을 수 있다 */
+    numCheck();
     console.info("[ScreenSpec v0.31] " + (FRAME ? "frame" : "wrap") + " 모드 · 화면 " + SCREENS.length + "개 등록");
   }
 
@@ -5738,6 +5790,7 @@ ${HL_CSS}
     core.setCurrent(SCREENS[0]);
     detectScreen();
     updateWidth();
+    numCheck();
     console.info("[ScreenSpec v0.31] overlay 모드 · 화면 " + SCREENS.length + "개 등록 · 미등록 화면은 '정의되지 않은 화면'으로 표시");
   }
 

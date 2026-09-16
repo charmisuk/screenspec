@@ -326,6 +326,18 @@ const MUTS = [
   { id: "major-eats-live", only: "[내보내기]", why: "숨기는 대신 지운다 — 뽑고 나면 화면에서 번호가 사라진다 (#106 에서 잡은 결함)",
     find: "        hid.push([mk, mk.style.display]);\n        mk.style.display = \"none\";",
     to:   "        mk.remove();" },
+  { id: "section-lifted", only: "[섹션]", why: "섹션을 개요처럼 맨 위로 끌어올린다 — «제 자리» 가 사라진다 (#107)",
+    find: "  const inOrder = (specs) => (specs || []).slice().sort((a, b) => (isBrief(a) ? 0 : 1) - (isBrief(b) ? 0 : 1));",
+    to:   "  const inOrder = (specs) => (specs || []).slice().sort((a, b) => (noMark(a) ? 0 : 1) - (noMark(b) ? 0 : 1));" },
+  { id: "section-marker", only: "[섹션]", why: "섹션에도 마커를 만든다 — 빈 번호가 화면 위에 선다 (#107)",
+    find: "        if (noMark(it.spec)) return; /* 개요·섹션은 화면 위 요소가 아니다 — 마커를 만들지 않는다 (#82·#107) */",
+    to:   "        if (isBrief(it.spec)) return;" },
+  { id: "section-renumbered", only: "[섹션]", why: "다시 매길 때 섹션에도 번호를 준다 — 파일에 번호가 새고 다음 항목이 밀린다 (#107)",
+    find: "if (isSection(s)) { delete s.n; return; } s.n = isBrief(s) ? 0 : ++k;",
+    to:   "s.n = isBrief(s) ? 0 : ++k;" },
+  { id: "gap-silent", only: "[섹션]", why: "코드로 만든 설정의 빈 번호를 조용히 넘긴다 — 이 팀은 따로 검사기를 짜야 한다 (#107)",
+    find: "      if (!gaps.length && !dups.length) return;",
+    to:   "      return;" },
 ];
 
 const argv = process.argv.slice(2);

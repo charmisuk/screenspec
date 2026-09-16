@@ -183,7 +183,7 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("Screen·Spec 필드 " + objFields.length + "개 전부 docs/config.md에 문서화", undocObj.length === 0, "누락: " + JSON.stringify(undocObj));
 
   const annos = [...new Set([...lib.matchAll(/^ {4}(\w+): +\{ label:/gm)].map((m) => m[1]))];
-  check("anno 레지스트리 6종 추출", annos.length === 6, JSON.stringify(annos));
+  check("anno 레지스트리 7종 추출", annos.length === 7, JSON.stringify(annos));
   /* 어긋남은 «설명한 곳» 에서만 생긴다 — 타입을 설명하지 않는 문서는 검사 대상이 아니다.
      코드 예제 안의 anno:"box" 는 사용이지 설명이 아니므로 코드 블록을 걷어내고 본다 (2026-09-06) */
   [["README.md", readme], ["docs/config.md", ref]].forEach(([name, doc]) => {

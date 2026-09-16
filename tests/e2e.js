@@ -1758,6 +1758,76 @@ function check(name, ok, detail) {
     await page.setViewportSize({ width: 1440, height: 900 });
   }
 
+  /* ============ 번호 없는 섹션 (#107) ============
+     화면 위를 가리키지 않는 항목을 개요 «말고도» 둘 수 있게. 개요와 겹치는 것은 «마커 없음» 뿐이고
+     나머지는 반대다 — 제 자리에, 제 이름으로 선다. 번호가 곧 열쇠였으므로 열쇠를 번호에서 떼어냈다.
+     곁들여: 코드로 만들어 넣은 설정의 빈 번호는 «고치지 않고 말만 한다» (번호는 문서 기준 — #106) */
+  if (sec("[섹션] 번호 없는 섹션 (#107)")) {
+    const warnsS = [];
+    const onWS = (m) => { if (m.type() === "warning") warnsS.push(m.text()); };
+    page.on("console", onWS);
+    await page.goto("about:blank");
+    await page.setContent('<div id="A"><h1 data-spec="1">제목</h1><p data-spec="2">본문</p><p data-spec="3">셋</p></div>' +
+      '<script>window.SCREENSPEC={mode:"wrap",screens:[' +
+      '{id:"S-SEC",name:"s",path:["s"],specs:[' +
+      '{n:1,target:"1",title:"제목 영역",defs:[{t:"가"}]},' +
+      '{anno:"section",title:"메뉴 권한",defs:[{t:"없음 : 안 보임"},{t:"보기 : 열람"}]},' +
+      '{n:2,target:"2",title:"본문 영역",defs:[{t:"나"}]},' +
+      '{anno:"section",title:"공통 규칙",defs:[{t:"다"}]}]},' +
+      '{id:"S-GAP",name:"g",path:["g"],specs:[{n:1,target:"3",title:"하나",defs:[{t:"x"}]},{n:3,target:"3",title:"셋",defs:[{t:"y"}]}]}]}<\/script>');
+    await page.addScriptTag({ content: LIB });
+    await page.waitForTimeout(500);
+    await page.click("#ss-mDoc");
+    await page.waitForTimeout(400);
+    const rowsS = () => page.evaluate(() => [...document.querySelectorAll(".ss-defs-list [data-defrow]")]
+      .map((e) => ((e.querySelector(".ss-no") || {}).textContent || "") + "|" + (e.querySelector(".ss-t") || {}).textContent +
+        "|" + (e.classList.contains("ss-section") ? "S" : "")));
+    let r = await rowsS();
+    check("섹션은 적은 자리에 그대로 선다 (맨 위로 안 끌어올린다)",
+      JSON.stringify(r) === JSON.stringify(["1|제목 영역|", "|메뉴 권한|S", "2|본문 영역|", "|공통 규칙|S"]), JSON.stringify(r));
+    check("섹션에는 번호 칸이 없다 — 제목이 머리다", r[1] === "|메뉴 권한|S", r[1]);
+    check("화면 위 첫 번호는 1 이다 — 섹션이 번호를 먹지 않는다",
+      (await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent.trim()).join(","))) === "1,2");
+    check("섹션 둘이 서로 다른 항목으로 산다 (열쇠가 겹치지 않는다)",
+      (await page.evaluate(() => new Set([...document.querySelectorAll("[data-defrow]")].map((e) => e.dataset.defrow)).size)) === 4);
+    check("섹션은 «못 찾은 정의» 경고에 안 잡힌다", !warnsS.some((w) => /못 찾은 정의/.test(w)), warnsS);
+    /* 번호가 빈 화면 — 고치지 않고 말만 한다 */
+    check("코드로 만든 설정의 빈 번호를 한 줄로 알린다 (S-GAP 에 2 가 없다)",
+      warnsS.some((w) => /S-GAP/.test(w) && /빈 번호 2/.test(w)), warnsS);
+    check("성한 화면(S-SEC)에는 그 말이 없다", !warnsS.some((w) => /화면 "S-SEC"/.test(w)), warnsS);
+    check("알리기만 하고 번호는 손대지 않는다 (번호는 문서 기준)",
+      (await page.evaluate(() => window.SCREENSPEC.screens[1].specs.map((x) => x.n).join(","))) === "1,3");
+    /* 항목을 지우면 다시 매기되, 섹션은 번호를 받지 않는다 — 사람이 누르는 길 */
+    page.once("dialog", (d) => d.accept());
+    await page.hover("#ss-def-1");
+    await page.click("#ss-def-1 .ss-rowdel");
+    await page.waitForTimeout(400);
+    r = await rowsS();
+    check("항목을 지우면 남은 번호가 1 부터 다시 매겨지고 섹션은 여전히 번호 없이",
+      JSON.stringify(r) === JSON.stringify(["|메뉴 권한|S", "1|본문 영역|", "|공통 규칙|S"]), JSON.stringify(r));
+    check("다시 매긴 뒤에도 섹션 객체에 n 이 없다 (파일에 번호가 안 남는다)",
+      await page.evaluate(() => window.SCREENSPEC.screens[0].specs.filter((x) => x.anno === "section").every((x) => !("n" in x))));
+    /* 내보내기 표 — 세 렌더러가 같이 가야 한다 */
+    await page.evaluate(() => {
+      window.__caps = [];
+      const o = document.body.appendChild.bind(document.body);
+      document.body.appendChild = function (n) { const q = o(n); if (n.classList && n.classList.contains("ss-cap")) window.__caps.push(n); return q; };
+    });
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    await page.check('[data-pr-c="table"]');
+    await page.click('[data-pr="go"]');
+    await page.waitForTimeout(2200);
+    check("내보내기 표에서도 섹션은 번호 없이 «섹션» 으로 선다", (await page.evaluate(() => {
+      const n = window.__caps[window.__caps.length - 1];
+      return [...n.querySelectorAll(".ss-pr-table tbody tr")].map((tr) =>
+        tr.querySelector(".ss-pr-no").textContent.trim() + "/" + tr.querySelector(".ss-pr-tag").textContent.trim()).join(" ");
+    })) === "/섹션 1/영역 /섹션");
+    await page.click('[data-pr="cancel"]');
+    page.off("console", onWS);
+    check("JS 에러 0건", errors.length === 0, errors);
+  }
+
   /* ============ 창에 안 들어가면 줄인다 (#104·#105) ============
      한때 이건 「맞춤」 이라는 버튼이었고, 그 옆에 「자동」 이라는 또 다른 버튼이 있었다.
      둘 다 «프로토타입이 창을 넘는다» 는 같은 호소에 두 판에 걸쳐 붙인 답이었다.
