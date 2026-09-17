@@ -26,6 +26,7 @@
  * 23) 문서가 말하는 «e2e 섹션 N개» = 실제 섹션 수 — 판마다 늘어서 사람이 세면 어긋난다 (2026-09-01)
  * 24) README 헌장 — 분량·행 예산과 금지어(로드맵·예정·서버 계획·TODO). 예산 초과 = 현행화 신호 (#95)
  *  8) 하드코딩된 e2e 케이스 수("N케이스") 금지 — 숫자는 실행 결과로만 (2026-08-22 19↔35 드리프트)
+ * 25) 돌연변이의 «심을 자리»(find)가 screenspec.js 에 꼭 한 곳씩 있는지 — 코드를 고치면 조용히 죽는다 (2026-09-17)
  */
 const fs = require("fs");
 const path = require("path");
@@ -460,6 +461,31 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
   check("(자체검사) 행 세기가 표를 센다",
     ("| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |".match(/^\|[^\n]+\|$/gm) || []).length - 2 === 2);
   check("(자체검사) 금지어가 걸린다", /\bTODO\b/.test("이건 TODO 다"));
+}
+
+/* 25) 돌연변이의 «심을 자리» 가 실존하는가.
+   죽은 돌연변이는 «잡음 0» 이 아니라 «검사를 안 한 것» 인데, 전체 판(15분)을 돌리기 전에는 안 보인다.
+   실제 사고 (2026-09-17): #107 에서 isBrief → noMark 로 두 줄을 고치며 #82 돌연변이 둘이 죽었다.
+   그 판에서는 새 돌연변이 넷만 돌려 넘어갔고, 다음 판의 전체 실행에서야 드러났다.
+   이 검사는 브라우저가 필요 없다 — 0초에 돌므로 커밋마다 돈다. */
+{
+  const mutSrc = fs.readFileSync(path.join(REPO, "scripts", "mutate.js"), "utf8");
+  const libSrc2 = fs.readFileSync(path.join(REPO, "screenspec.js"), "utf8");
+  const MRE = /\{\s*id:\s*"([^"]+)"[\s\S]*?find:\s*("(?:[^"\\]|\\.)*")/g;
+  const dead = [];
+  let mm, cnt = 0;
+  while ((mm = MRE.exec(mutSrc))) {
+    cnt++;
+    let f = null;
+    try { f = JSON.parse(mm[2]); } catch (e) { dead.push(mm[1] + "(find 파싱 실패)"); continue; }
+    const hits = libSrc2.split(f).length - 1;
+    if (hits !== 1) dead.push(mm[1] + (hits === 0 ? "(자리 없음)" : "(여러 곳 " + hits + ")"));
+  }
+  check("돌연변이 추출기 동작 (≥40개)", cnt >= 40, cnt);
+  check("돌연변이의 심을 자리가 screenspec.js 에 꼭 한 곳씩 있다", dead.length === 0,
+    JSON.stringify(dead) + " — 코드를 고쳤으면 scripts/mutate.js 의 find 도 같이 고쳐라 (검사한 개수 " + cnt + ")");
+  /* 음성 테스트 — 없는 자리를 진짜로 잡는지 */
+  check("(자체검사) 없는 자리를 잡아낸다", "abc".split("없는자리").length - 1 === 0);
 }
 
 console.log("\nlint 결과: " + (fail ? "FAIL " + fail + "건" : "전부 통과"));

@@ -535,12 +535,23 @@ function check(name, ok, detail) {
       const w = Math.round(d.getBoundingClientRect().width);
       const cls = document.body.className, disp = cs.display, par = d.parentNode === document.body;
       d.remove();
-      return { hidden: disp === "none", disp: disp, w: w, cls: cls, par: par, ui: ui };
+      /* 툴바·무대는 «제 이름» 으로 따로 예외라 .ss-ui 예외가 죽어도 안 숨는다.
+         .ss-ui «만» 달고 body 에 붙는 우리 조각(내보내기 대화상자·연결 안내)이 진짜 시험대다 —
+         전에는 조립 상자(ss-cap ss-ui)가 우연히 이 자리를 대신 재고 있었다 (2026-09-17 돌연변이 놓침) */
+      const u = document.createElement("div");
+      u.className = "ss-ui";
+      u.textContent = "ss-ui 만 단 우리 조각";
+      document.body.appendChild(u);
+      const uiOnlyHidden = getComputedStyle(u).display === "none";
+      u.remove();
+      return { hidden: disp === "none", disp: disp, w: w, cls: cls, par: par, ui: ui, uiOnlyHidden: uiOnlyHidden };
     });
     check("액자: 부팅 뒤에 생긴 body 직속 노드도 감춰진다 (앱이 두 번 안 보인다) (#103)",
       late.hidden === true && late.w === 0, JSON.stringify(late));
     check("액자: 그 규칙이 우리 뷰어 UI 는 안 건드린다",
       late.ui === "툴바:보임 무대:보임" && /\bss-framed\b/.test(late.cls), JSON.stringify(late));
+    check("액자: .ss-ui 만 단 우리 조각(대화상자류)도 안 감춰진다",
+      late.uiOnlyHidden === false, JSON.stringify(late));
     srvF.close();
   }
 
