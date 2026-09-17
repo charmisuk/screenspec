@@ -1670,8 +1670,8 @@ function check(name, ok, detail) {
     check("폰: 1단으로 접힌다", m.col === "column");
     check("폰: 미리보기는 접어 둔다 (세로 공간이 없다)", m.folded === true);
     check("폰: 단추가 가로 전폭이고 «내보내기» 가 아래 (엄지에 가깝다)",
-      m.bt.length === 2 && m.bt[0].t === "취소" && m.bt[1].t === "내보내기" &&
-      m.bt[1].y > m.bt[0].y && m.bt[1].w > 300, JSON.stringify(m.bt));
+      m.bt.length === 3 && m.bt[0].t === "취소" && m.bt[2].t === "내보내기" &&
+      m.bt[2].y > m.bt[0].y && m.bt[2].w > 300, JSON.stringify(m.bt));
     check("폰: 아무것도 잘리지 않는다", m.fits === true);
 
     /* ── 상위기획 갈래 (#106) — «사람이 누르는 길» 로 잰다 ──
@@ -1965,6 +1965,89 @@ function check(name, ok, detail) {
     check("JS 에러 0건", errors.length === 0, errors);
     s11.close();
     await page.setViewportSize({ width: 1440, height: 900 });
+  }
+
+  /* ============ 설명을 글로 — 그림과 같은 번호로 (#108) ============
+     그림은 문서에 바로 붙는데 그 옆 설명은 사람이 다시 옮겨 적었다 — 두 벌이 되고 문장이 달라진다.
+     「그걸 또 가공하면 screenspec 을 검토할 이유가 없다」(PM). 그림과 같은 설정으로 형식만 바꾼다:
+     클립보드에 text/html(컨플·노션이 목록·표로 받는다) + text/plain(마크다운). 번호는 다시 안 매긴다. */
+  if (sec("[설명] 그림과 같은 번호로 글로 (#108)")) {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    /* 주소로 연다 — about:blank 은 원점이 없어 clipboard 도 localStorage 도 없다 */
+    const APP8 = '<meta charset="utf-8"><div data-spec="1">A</div><div data-spec="2">B</div><div data-spec="3">C</div>' +
+      '<script>window.SCREENSPEC={mode:"wrap",sources:{kps:{label:"KPS 정책",href:"https://x.example/kps"}},' +
+      'screens:[{id:"S-TX",name:"글",path:["홈","글"],dev:[{t:"GET /api/x"}],specs:[' +
+      '{n:0,anno:"overview",title:"화면 개요",defs:[{t:"이 화면은 시험이다"}]},' +
+      '{n:1,target:"1",title:"첫째",major:true,defs:[{t:"줄 하나 <strong>굵게</strong>",c:[{t:"하위 줄"},{t:"이유다",kind:"why"}]},{t:"근거 있음",ref:"kps"}]},' +
+      '{n:2,target:"2",title:"둘째",defs:[{kind:"table",head:["조건","결과"],rows:[["A","1"],["B","2"]]},{t:"개발 줄",layer:"dev"}]},' +
+      '{anno:"section",title:"메뉴 권한",defs:[{t:"없음 : 안 보임"}]},' +
+      '{n:3,target:"3",title:"셋째",major:true,defs:[{kind:"mermaid",code:"flowchart TD\\n A-->B"}]}' +
+      ']}]}<\/script><script src="/screenspec.js"><\/script>';
+    const s8 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html"); res.end(APP8);
+    });
+    await new Promise((r) => s8.listen(P(4330), r));
+    await page.goto("http://localhost:" + P(4330) + "/t.html");
+    await page.waitForTimeout(700);
+    const tx = (o) => page.evaluate((o) => window.ScreenSpec.exportText(o), o);
+    let r = await tx({ markers: true, layer: "plan", depth: "full" });
+    const h3 = (x) => (x.html.match(/<h3>[^<]*<\/h3>/g) || []).map((m) => m.slice(4, -5));
+    check("번호는 그림 마커 그대로 · 개요·섹션은 번호 없이",
+      JSON.stringify(h3(r)) === JSON.stringify(["화면 개요", "1. 첫째", "2. 둘째", "메뉴 권한", "3. 셋째"]), JSON.stringify(h3(r)));
+    check("하위 줄은 안쪽 목록이다 (html)", r.html.indexOf("<li>줄 하나 <strong>굵게</strong><ul><li>하위 줄</li>") >= 0, r.html.slice(0, 400));
+    check("하위 줄은 들여쓴 줄이다 (마크다운)", r.text.indexOf("- 줄 하나 **굵게**\n  - 하위 줄") >= 0, r.text.slice(0, 300));
+    check("이유는 ↳ 로", r.html.indexOf("<li>↳ 이유다</li>") >= 0 && r.text.indexOf("- ↳ 이유다") >= 0, r.text.slice(0, 300));
+    check("표는 표다 (html 표 · 마크다운 표)", r.html.indexOf("<table><tr><th>조건</th><th>결과</th></tr><tr><td>A</td>") >= 0 &&
+      r.text.indexOf("| 조건 | 결과 |\n|---|---|\n| A | 1 |") >= 0, r.text);
+    check("순서도는 코드 블록", r.html.indexOf('<code class="language-mermaid">flowchart TD') >= 0 && r.text.indexOf("```mermaid\nflowchart TD") >= 0);
+    check("출처는 각주 번호 + 링크", r.html.indexOf("근거 있음<sup>1</sup>") >= 0 && r.html.indexOf('<a href="https://x.example/kps">KPS 정책</a>') >= 0 &&
+      r.text.indexOf("근거 있음 (1)") >= 0 && r.text.indexOf("[KPS 정책](https://x.example/kps)") >= 0, r.text);
+    check("머리말: 화면 ID·이름·경로", r.html.indexOf("<h2>S-TX 글</h2><p>홈 › 글</p>") === 0, r.html.slice(0, 80));
+    check("기획만(기본)에는 개발 줄이 없다", r.html.indexOf("DEV") < 0 && r.html.indexOf("화면 공통") < 0);
+    r = await tx({ markers: true, layer: "all", depth: "full" });
+    check("개발 정의 포함 → DEV 표시 + 화면 공통 절", r.html.indexOf("<li>DEV 개발 줄</li>") >= 0 && r.html.indexOf("<h3>화면 공통 (개발)</h3><ul><li>DEV GET /api/x</li></ul>") >= 0, r.html);
+    r = await tx({ markers: true, major: true, layer: "plan", depth: "full" });
+    check("주요 항목만 → 1·3 만, 번호는 그대로 (2 를 건너뛴다)",
+      JSON.stringify(h3(r)) === JSON.stringify(["1. 첫째", "3. 셋째"]), JSON.stringify(h3(r)));
+    r = await tx({ markers: false, layer: "plan", depth: "full" });
+    check("화면 위 번호를 끄면 글에도 번호가 없다", JSON.stringify(h3(r)) === JSON.stringify(["화면 개요", "첫째", "둘째", "메뉴 권한", "셋째"]), JSON.stringify(h3(r)));
+    r = await tx({ markers: true, layer: "plan", depth: "brief" });
+    check("요약 = 제목 + 이유만 (하위 줄·표·순서도는 없다)",
+      r.html.indexOf("<h3>1. 첫째</h3><ul><li>↳ 이유다</li></ul><h3>2. 둘째</h3><h3>") >= 0 && r.html.indexOf("<table>") < 0 && r.html.indexOf("mermaid") < 0, r.html);
+    /* ── 대화상자 경로 — 사람이 누르는 길 ── */
+    await page.evaluate(() => {
+      window.__clip = null;
+      /* 진짜 클립보드 대신 받는 쪽만 가로채 «무엇을 썼는가» 를 잰다 */
+      navigator.clipboard.write = async (items) => { const it = items[0];
+        window.__clip = { types: it.types.slice(), html: await (await it.getType("text/html")).text(), text: await (await it.getType("text/plain")).text() }; };
+    });
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    const bt = await page.evaluate(() => [...document.querySelectorAll(".ss-prdlg-btns button")].map((b) => b.textContent));
+    check("대화상자에 「설명 복사」 — 취소와 내보내기 사이", JSON.stringify(bt) === JSON.stringify(["취소", "설명 복사", "내보내기"]), JSON.stringify(bt));
+    await page.click('[data-pr="copy"]');
+    await page.waitForTimeout(400);
+    let c = await page.evaluate(() => window.__clip);
+    check("클립보드에 두 벌 — text/html + text/plain", JSON.stringify(c.types) === JSON.stringify(["text/html", "text/plain"]), JSON.stringify(c.types));
+    check("대화상자가 낸 글 = API 가 낸 글 (같은 설정)", await page.evaluate((h) => window.ScreenSpec.exportText({ markers: true, major: false, head: { id: true, name: true, path: true, when: false }, table: false, layer: "plan", depth: "full" }).html === h, c.html));
+    check("복사했다고 말한다", /복사했습니다/.test(await page.textContent(".ss-cap-msg")));
+    await page.click('[data-pr-d="brief"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-pr="copy"]');
+    await page.waitForTimeout(400);
+    c = await page.evaluate(() => window.__clip);
+    check("요약을 고르면 요약이 복사된다", c.html.indexOf("<table>") < 0 && c.html.indexOf("↳ 이유다") >= 0, c.html);
+    check("깊이는 취향이라 남는다", await page.evaluate(() => JSON.parse(localStorage.getItem("screenspec:export") || "{}").depth === "brief"));
+    await page.evaluate(() => localStorage.setItem("screenspec:export", JSON.stringify({ depth: "everything" })));
+    await page.reload();
+    await page.waitForTimeout(700);
+    await page.click(".ss-prbtn");
+    await page.waitForTimeout(300);
+    check("성한 JSON 이라도 모르는 깊이는 「전체」로", (await page.getAttribute('[data-pr-d="full"]', "aria-pressed")) === "true");
+    await page.evaluate(() => localStorage.removeItem("screenspec:export"));
+    check("JS 에러 0건", errors.length === 0, errors);
+    s8.close();
   }
 
   /* ============ 창에 안 들어가면 줄인다 (#104·#105) ============

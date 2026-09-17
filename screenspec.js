@@ -749,6 +749,11 @@
   .ss-prdlg label{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:7px 0;cursor:pointer;user-select:none}
   .ss-prdlg input[type=checkbox]{accent-color:var(--ss-accent);width:14px;height:14px;margin:0;cursor:pointer;flex:none}
   .ss-prdlg .ss-prdlg-btns{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
+  /* 설명 글 깊이 (#108) — 툴바 세그와 같은 꼴 */
+  .ss-pr-depth{display:flex;align-items:center;gap:10px;margin:10px 0 4px;font-size:12px;color:var(--ss-ink2)}
+  .ss-pr-depth .ss-seg{display:flex;border:1px solid var(--ss-line2);border-radius:8px;padding:2px;gap:2px;background:#FAFAF9}
+  .ss-pr-depth .ss-seg button{padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ss-ink2)}
+  .ss-pr-depth .ss-seg button[aria-pressed="true"]{background:#fff;color:var(--ss-ink);box-shadow:0 1px 2px rgba(17,24,39,.12)}
   .ss-prdlg button{border:1px solid var(--ss-line2);background:#fff;color:var(--ss-ink2);font-size:12px;
     font-weight:700;padding:6px 13px;border-radius:8px;cursor:pointer;font-family:inherit}
   .ss-prdlg .ss-prdlg-go{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff}
@@ -2465,6 +2470,115 @@ ${HL_CSS}
       return '<div class="ss-pr-srcs ss-ui"><b>출처</b> ' +
         ks.map((k) => refNos[k] + ". " + esc(SOURCES[k].label)).join(" · ") + "</div>";
     }
+    /* ---- 설명을 글로 (#108) ----
+       그림은 문서에 바로 붙는데 그 옆 «설명» 은 사람이 정의서를 보고 다시 옮겨 적었다. 그러면 두 벌이 되고
+       옮기며 문장이 달라진다 — 「그걸 또 가공하면 screenspec 을 검토할 이유가 없다」(PM 실측).
+       그림과 «같은 설정» 으로, 글자는 그대로 두고 형식만 바꾼다. 컨플루언스(새 편집기)·노션은
+       클립보드의 text/html 을 목록·표로 받으므로 HTML 이 1순위, text/plain 은 마크다운.
+       번호는 그림 마커 그대로 — 「주요 항목만」 이어도 다시 매기지 않는다 (#106 과 같은 원칙).
+       깊이는 두 단: 요약(제목 + 이유) / 전체. 「제목만」 이 없는 이유 — 이유가 빠지면 상위기획 독자
+       (「왜 그렇게 정했나」 를 보는 사람)에게 문서가 안 된다 */
+    function mdOf(html) { /* rich() 가 낸 HTML → 마크다운. 살아남는 태그는 strong·a 뿐이다 */
+      const box = document.createElement("div");
+      box.innerHTML = html;
+      let out = "";
+      const walk = (node) => node.childNodes.forEach((c) => {
+        if (c.nodeType === 3) { out += c.nodeValue; return; }
+        if (c.nodeType !== 1) return;
+        if (c.tagName === "STRONG" || c.tagName === "B") { out += "**"; walk(c); out += "**"; return; }
+        if (c.tagName === "A") { out += "["; walk(c); out += "](" + (c.getAttribute("href") || "") + ")"; return; }
+        walk(c);
+      });
+      walk(box);
+      return out;
+    }
+    function prText(opt) {
+      opt = opt || {};
+      const sc = current || {};
+      const H = [], M = [];
+      const layer = opt.layer || LAYER; /* 그림(exportImage)과 같은 기본 — 안 주면 패널의 필터를 따른다 */
+      const keep = (b) => (layer === "plan" ? !b.layer : layer === "dev" ? b.layer === "dev" : true);
+      const brief = opt.depth === "brief";
+      const refSup = (b) => (b.ref && SOURCES && SOURCES[b.ref] && refNos[b.ref] ? refNos[b.ref] : 0);
+      /* 블록 하나 → (html, md). 표·순서도는 목록 «밖» 에 선다 — 목록 안 표는 붙여넣기 대상이 잘 못 받는다 */
+      const one = (b, depth) => {
+        const kind = blkKind(b), ind = "  ".repeat(depth);
+        if (kind === B_TABLE) {
+          const t = tblNorm(b);
+          const h = "<table><tr>" + t.head.map((x) => "<th>" + rich(x) + "</th>").join("") + "</tr>" +
+            t.rows.map((r) => "<tr>" + r.map((v) => "<td>" + rich(v) + "</td>").join("") + "</tr>").join("") + "</table>";
+          const m = "| " + t.head.map((x) => mdOf(rich(x))).join(" | ") + " |\n|" + t.head.map(() => "---").join("|") + "|" +
+            t.rows.map((r) => "\n| " + r.map((v) => mdOf(rich(v))).join(" | ") + " |").join("");
+          return { h: h, m: m, block: true };
+        }
+        if (kind === B_MERMAID) {
+          const code = String(b.code || "");
+          return { h: '<pre><code class="language-mermaid">' + esc(code) + "</code></pre>",
+                   m: "```mermaid\n" + code + "\n```", block: true };
+        }
+        const dev = b.layer === "dev" ? "DEV " : "", why = kind === B_WHY ? "\u21B3 " : "";
+        const n = refSup(b), body = rich(b.t);
+        return { h: "<li>" + dev + why + body + (n ? "<sup>" + n + "</sup>" : "") + "</li>",
+                 m: ind + "- " + dev + why + mdOf(body) + (n ? " (" + n + ")" : ""), block: false };
+      };
+      /* 나무를 그대로 따라 내려간다 — 층이 곧 들여쓰기다 */
+      const list = (arr, depth, H2, M2) => {
+        let open = false;
+        (arr || []).filter(keep).forEach((b) => {
+          const r = one(b, depth);
+          if (r.block) { if (open) { H2.push("</ul>"); open = false; } H2.push(r.h); M2.push(r.m); return; }
+          if (!open) { H2.push("<ul>"); open = true; }
+          M2.push(r.m);
+          if (!brief && b.c && b.c.length && (b.c || []).some(keep)) {
+            const H3 = [], M3 = [];
+            list(b.c, depth + 1, H3, M3);
+            H2.push(r.h.slice(0, -5) + H3.join("") + "</li>"); /* 하위는 이 li «안» 에 */
+            M2.push(M3.join("\n"));
+          } else H2.push(r.h);
+        });
+        if (open) H2.push("</ul>");
+      };
+      /* 요약 = 제목 + 이유. 이유(why)를 나무 전체에서 모아 한 층으로 편다 */
+      const whysOf = (arr, acc) => { (arr || []).filter(keep).forEach((b) => { if (blkKind(b) === B_WHY) acc.push(Object.assign({}, b, { c: [] })); whysOf(b.c, acc); }); return acc; };
+      const ho = opt.head && typeof opt.head === "object" ? opt.head : {};
+      const on = (k) => opt.head !== false && ho[k] !== false;
+      const ttl = [on("id") ? sc.id : "", on("name") ? sc.name : ""].filter(Boolean).join(" ");
+      if (ttl) { H.push("<h2>" + esc(ttl) + "</h2>"); M.push("## " + ttl); }
+      if (on("path") && (sc.path || []).length) { H.push("<p>" + (sc.path || []).map(esc).join(" \u203A ") + "</p>"); M.push((sc.path || []).join(" \u203A ")); }
+      items().forEach((it) => {
+        const s = it.spec;
+        if (opt.major && !isMajor(s)) return; /* 그림과 같은 항목만 — 그림과 글이 1:1 */
+        const num = opt.markers !== false && !noMark(s) && it.label ? it.label + ". " : "";
+        H.push("<h3>" + esc(num + (s.title || "")) + "</h3>"); M.push("### " + num + (s.title || ""));
+        list(brief ? whysOf(s.defs, []) : s.defs, 0, H, M);
+      });
+      const common = sc.dev || [];
+      if (common.length && layer !== "plan") {
+        H.push("<h3>화면 공통 (개발)</h3>"); M.push("### 화면 공통 (개발)");
+        list(brief ? whysOf(common, []) : common.map((d) => Object.assign({}, d, { layer: "dev" })), 0, H, M);
+      }
+      if (SOURCES) {
+        const ks = Object.keys(refNos).sort((a, b) => refNos[a] - refNos[b]);
+        if (ks.length) {
+          const src = (k) => SOURCES[k];
+          H.push("<p>출처: " + ks.map((k) => refNos[k] + ". " + (src(k).href ? '<a href="' + esc(src(k).href) + '">' + esc(src(k).label) + "</a>" : esc(src(k).label))).join(" \u00B7 ") + "</p>");
+          M.push("출처: " + ks.map((k) => refNos[k] + ". " + (src(k).href ? "[" + src(k).label + "](" + src(k).href + ")" : src(k).label)).join(" \u00B7 "));
+        }
+      }
+      return { html: H.join(""), text: M.filter((x) => x !== "").join("\n") };
+    }
+    async function prCopy() {
+      const r = prText(prOpt());
+      try {
+        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([r.html], { type: "text/html" }),
+            "text/plain": new Blob([r.text], { type: "text/plain" }) })]);
+        } else await navigator.clipboard.writeText(r.text);
+        edSay2("설명을 복사했습니다. 컨플루언스·노션에 그대로 붙여 넣으세요.");
+      } catch (e) { edSay2("복사가 막혔습니다: 콘솔에 출력했습니다."); console.log(r.text); }
+      return r;
+    }
     function prKeep(d, layer) {
       if (layer === "plan") return d.layer !== "dev";
       if (layer === "dev") return d.layer === "dev";
@@ -2766,7 +2880,7 @@ ${HL_CSS}
        팀원끼리 내보내기 취향이 서로 덮인다. 문서별이 아니라 사람별인 이유도 같다 */
     const PR_KEY = "screenspec:export";
     /* 일시를 기본에서 빼는 이유: 그림마다 달라지는 값이라 «늘 넣을 것» 이 아니다. 필요하면 그때 켠다 (PM 2026-09-03) */
-    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, major: false, table: false, dev: false, color: "", pv: false };
+    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, major: false, table: false, dev: false, color: "", pv: false, depth: "full" };
     const PR_HEAD = ["id", "name", "path", "when"];
     /* 색은 accent 프리셋 그대로 — 여기서 베끼면 둘이 어긋난다 */
     const PR_SW_NAME = { blue: "파랑", red: "빨강", orange: "주황", green: "초록", purple: "보라" };
@@ -2781,6 +2895,7 @@ ${HL_CSS}
       /* 값이 깨졌거나 없으면 조용히 기본값으로 — 키마다 따로 보는 이유는 일부만 상한 파일도 살리기 위해서다 */
       if (o && typeof o === "object") {
         Object.keys(PR_DEF).forEach((k) => { if (typeof o[k] === typeof PR_DEF[k]) out[k] = o[k]; });
+        if (out.depth !== "brief" && out.depth !== "full") out.depth = "full"; /* 성한 문자열이라도 아는 값만 (#108) */
       }
       if (out.color && !prHex(out.color)) out.color = "";
       return out;
@@ -2788,6 +2903,21 @@ ${HL_CSS}
     /* 저장 시점은 «내보내기를 누른 순간» — 열어 보고 취소한 것은 취향이 아니다 */
     function prSave() { edStore(() => localStorage.setItem(PR_KEY, JSON.stringify(prCfg))); }
 
+    /* 그림과 글이 «같은 설정» 을 쓴다 (#108) — 한 곳에서 만든다 */
+    function prOpt() {
+      const head = {};
+      PR_HEAD.forEach((k) => (head[k] = !!prCfg[k]));
+      return {
+        markers: !!prCfg.mark,
+        major: !!(prCfg.mark && prCfg.major && anyMajor()),
+        head: PR_HEAD.some((k) => prCfg[k]) ? head : false,
+        table: !!prCfg.table,
+        /* 「개발만」 은 없앴다 — 실제 선택은 «개발 것도 넣나» 하나였다 */
+        layer: prCfg.dev ? "all" : "plan",
+        accent: prCfg.color || "",
+        depth: prCfg.depth === "brief" ? "brief" : "full",
+      };
+    }
     function prFileName() {
       return ((current || {}).id || "screen") + "-" + new Date().toISOString().slice(0, 10) + ".png";
     }
@@ -2818,6 +2948,7 @@ ${HL_CSS}
       prDlg.querySelector(".ss-pr-p-trx").hidden = !prCfg.table || mjOn;
       prDlg.querySelector(".ss-pr-p-tbl").hidden = !prCfg.table;
       prDlg.querySelector(".ss-pr-p-dev").hidden = !prCfg.dev;
+      prDlg.querySelectorAll("[data-pr-d]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.prD === (prCfg.depth || "full"))));
       prDlg.style.setProperty("--ss-accent", prCfg.color || "");
       prDlg.querySelectorAll(".ss-pr-sw button").forEach((b) =>
         b.setAttribute("aria-pressed", String(b.dataset.prColor === prCfg.color)));
@@ -2876,6 +3007,11 @@ ${HL_CSS}
               (anyDev() ? '<div class="ss-pr-kids" data-pr-k="table">' +
                 '<label><input type="checkbox" data-pr-c="dev"> 개발 정의 포함</label>' +
               "</div>" : "") +
+              /* 설명 글의 깊이 (#108) — 「설명 복사」 에만 쓴다 */
+              '<div class="ss-pr-depth"><span>설명 글</span><div class="ss-seg">' +
+                '<button type="button" data-pr-d="brief" aria-pressed="false" title="제목과 이유만 : 상위기획용">요약</button>' +
+                '<button type="button" data-pr-d="full" aria-pressed="true" title="줄·하위 줄·표까지 : 상세기획용">전체</button>' +
+              "</div></div>" +
               '<details class="ss-pr-more"><summary>번호 색</summary><div class="ss-pr-sw">' +
                 Object.keys(ACCENT_PRESETS).map((k) => '<button type="button" data-pr-color="' + ACCENT_PRESETS[k] +
                   '" aria-pressed="false" style="background:' + ACCENT_PRESETS[k] + '" title="' +
@@ -2886,6 +3022,7 @@ ${HL_CSS}
           "</div>" +
           '<div class="ss-cap-msg"></div>' +
           '<div class="ss-prdlg-btns"><button type="button" data-pr="cancel">취소</button>' +
+          '<button type="button" data-pr="copy" title="그림과 같은 설정으로, 컨플루언스·노션에 붙일 글을 복사합니다">설명 복사</button>' +
           '<button type="button" data-pr="go" class="ss-prdlg-go">내보내기</button></div>');
         document.body.appendChild(prDlg);
         prDlg.addEventListener("change", (e) => {
@@ -2914,23 +3051,16 @@ ${HL_CSS}
         prDlg.addEventListener("click", (e) => {
           const sw = e.target.closest("[data-pr-color]");
           if (sw) { prCfg.color = sw.getAttribute("aria-pressed") === "true" ? "" : sw.dataset.prColor; prSync(); return; }
+          const dp = e.target.closest("[data-pr-d]");
+          if (dp) { prCfg.depth = dp.dataset.prD; prSync(); return; }
           const b = e.target.closest("[data-pr]");
           if (!b) return;
+          if (b.dataset.pr === "copy") { prSave(); prCopy(); return; } /* 글은 그림과 같은 설정으로 (#108) */
           if (b.dataset.pr !== "go") { prDlg.close(); return; }
           prSave();
           edSay2("만드는 중…");
           /* 대화상자를 열어 둔 채 결과를 알린다 — 빈칸 이미지 경고를 읽을 자리가 필요하다 */
-          const head = {};
-          PR_HEAD.forEach((k) => (head[k] = !!prCfg[k]));
-          exportImage({
-            markers: !!prCfg.mark,
-            major: !!(prCfg.mark && prCfg.major && anyMajor()),
-            head: PR_HEAD.some((k) => prCfg[k]) ? head : false,
-            table: !!prCfg.table,
-            /* 「개발만」 은 없앴다 — 실제 선택은 «개발 것도 넣나» 하나였다 */
-            layer: prCfg.dev ? "all" : "plan",
-            accent: prCfg.color || "",
-          });
+          exportImage(prOpt());
         });
       }
       edSay2("");
@@ -5063,7 +5193,7 @@ ${HL_CSS}
       edDraftOffer();
     }
 
-    return { setCurrent, setScreen, ensureRoots, soloRoots, unwiredNow: () => !!current && unwired(current), current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage };
+    return { setCurrent, setScreen, ensureRoots, soloRoots, unwiredNow: () => !!current && unwired(current), current: () => current, placeMarkers, clearActive, render, edMount, setEdit, isDirty: () => edDirty, serialize: edBlockText, prMount, lyMount, exportImage, exportText: prText };
   }
 
   /* 설정 없이 스크립트만 붙인 상태 = 가장 흔한 첫 실수.
@@ -5096,7 +5226,7 @@ ${HL_CSS}
        프로토타입이 setScreen()·refresh() 를 부르고 있을 수 있으므로 빈 껍데기만 남긴다(안 그러면 프로토타입이 깨진다). */
     if (SWITCH === "off") {
       const noop = function () {};
-      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, exportImage: noop, edit: noop, serialize: () => "", dirty: () => false };
+      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, exportImage: noop, exportText: () => ({ html: "", text: "" }), edit: noop, serialize: () => "", dirty: () => false };
       window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
       console.info("[ScreenSpec] off: 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
       return;
@@ -5674,7 +5804,7 @@ ${HL_CSS}
     requestAnimationFrame(foldFit); /* 도구가 붙은 뒤의 폭으로 다시 잰다 */
     core.edMount();
     core.lyMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", exportImage: core.exportImage, exportText: core.exportText, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
@@ -5821,7 +5951,7 @@ ${HL_CSS}
     core.prMount(pill);
     core.edMount();
     core.lyMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", exportImage: core.exportImage, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", exportImage: core.exportImage, exportText: core.exportText, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);

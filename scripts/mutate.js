@@ -353,6 +353,21 @@ const MUTS = [
   { id: "plain-keeps-viewer", only: "[프리셋]", why: "「페이지만 보기」가 정의서를 끄지 않는다 — 같은 화면이 한 번 더 열릴 뿐 (#111)",
     find: "        q.push(\"screenspec=0\");",
     to:   "        q.push(\"screenspec=1\");" },
+  { id: "text-renumbers", only: "[설명]", why: "글의 번호를 다시 매긴다 — 「주요 항목만」 이면 그림과 어긋난다 (#108)",
+    find: "        const num = opt.markers !== false && !noMark(s) && it.label ? it.label + \". \" : \"\";",
+    to:   "        const num = opt.markers !== false && !noMark(s) && it.label ? String(H.filter((x) => x.indexOf(\"<h3>\") === 0).length + 1) + \". \" : \"\";" },
+  { id: "text-drops-blocks", only: "[설명]", why: "표·순서도가 글에서 조용히 사라진다 — 이 도구에서 제일 나쁜 실패 (#108)",
+    find: "          if (r.block) { if (open) { H2.push(\"</ul>\"); open = false; } H2.push(r.h); M2.push(r.m); return; }",
+    to:   "          if (r.block) { return; }" },
+  { id: "text-ignores-major", only: "[설명]", why: "「주요 항목만」 을 글이 무시한다 — 그림과 글이 1:1 이 아니다 (#108)",
+    find: "        if (opt.major && !isMajor(s)) return; /* 그림과 같은 항목만 — 그림과 글이 1:1 */",
+    to:   "        if (false) return;" },
+  { id: "text-no-html", only: "[설명]", why: "text/html 에 마크다운을 넣는다 — 컨플·노션이 목록·표로 못 받는다 (#108)",
+    find: "            \"text/html\": new Blob([r.html], { type: \"text/html\" }),",
+    to:   "            \"text/html\": new Blob([r.text], { type: \"text/html\" })," },
+  { id: "brief-drops-why", only: "[설명]", why: "요약에서 이유가 빠진다 — 제목만 남아 문서가 안 된다 (#108)",
+    find: "        list(brief ? whysOf(s.defs, []) : s.defs, 0, H, M);",
+    to:   "        list(brief ? [] : s.defs, 0, H, M);" },
 ];
 
 const argv = process.argv.slice(2);
