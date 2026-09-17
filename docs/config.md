@@ -13,7 +13,7 @@ window.SCREENSPEC = {
   mode?:    "wrap" | "overlay" | "frame",  // 생략 = 자동 판별 (React·Next 감지 시 overlay). frame 은 명시 전용
   accent?:  string,               // "blue"|"red"|"orange"|"green"|"purple", "#7C3AED" 또는 "var(--brand)". 기본 blue
   baseViewport?: "mobile" | "pc",           // wrap·frame 시작 폭 = 이 문서가 서술하는 기준 폭. 기본 mobile
-  devices?: { mobile?: Device, pc?: Device },  // wrap·frame. 기기 프리셋 덮어쓰기
+  devices?: { [키]: Device },               // wrap·frame. 기기 프리셋 — 더하면 툴바에 버튼이 생긴다
   checklist?: string[],           // 프로젝트가 정한 상태 축. 있으면 화면마다 covers/skip 으로 커버리지 표시
   style?:   Style,                // 이 프로젝트의 «쓰는 법» — AI 가 읽는 계약. 라이브러리 렌더는 바뀌지 않는다
   off?:     boolean,              // true = 완전 정지. 원본 프로토타입 그대로 (주소에 ?screenspec=1 이면 켜진다)
@@ -248,6 +248,26 @@ window.SCREENSPEC = {
 **accent 프리셋**: `blue` #2952E3 · `red` #E5484D · `orange` #F76B15 · `green` #18794E · `purple` #8E4EC6
 
 **devices 기본값**: `mobile` 360×800 · `pc` 1920×1080. 그 사이 크기는 프레임 가장자리를 끌어 만든다
+
+### 프리셋을 늘린다 (`devices`)
+
+`devices` 에 **키를 더하면 툴바에 버튼이 생긴다.** `label` 이 버튼 글자가 되고, 버튼은 **폭이 좁은 것부터** 선다.
+
+```js
+devices: {
+  mobile: { w: 360,  h: 800 },
+  tablet: { w: 768,  h: 1024, label: "태블릿" },   // ← 더하면 버튼이 생긴다
+  pc:     { w: 1920, h: 1080 }
+}
+```
+
+**기본이 둘뿐인 이유** — 태블릿 폭은 제품마다 다르다(768 · 744 · 834). 우리가 하나를 골라 박으면 그것이 「기준」인 척하는데, 기준은 그 제품의 CSS 브레이크포인트지 라이브러리가 정할 것이 아니다. 제품이 **자기 이름·값으로 선언**하면 리뷰와 코드가 같은 말을 한다 — 「768 에서 깨진다」와 「760 에서는 괜찮다」가 갈리지 않는다.
+
+`label` 을 생략하면 `mobile`·`pc` 는 「모바일」·「PC」로, 그 밖의 키는 키 이름 그대로 나온다.
+
+### 「페이지만 보기」
+
+툴바의 이 단추는 **지금 보고 있는 그 주소에 `?screenspec=0` 을 붙여 새 탭으로 연다.** 정의서 없이 프로토타입만 보는 화면이다. 액자 모드에서는 **액자 안의 현재 주소**를 쓰므로, 화면을 옮겨 다닌 뒤에도 그 화면이 열린다. 원래 쿼리와 해시는 그대로 두고 `screenspec` 만 갈아끼운다. 새 탭이라 고치던 것·열어 둔 항목을 잃지 않는다.
 
 ```js
 devices: { mobile: { w: 390, h: 844 } }   // 지정한 값만 덮어쓴다

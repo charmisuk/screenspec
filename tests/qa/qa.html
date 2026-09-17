@@ -167,6 +167,18 @@
   <div class="card" data-spec="132"><b>줄 합치기</b><span>줄 맨 앞 Backspace = 앞 줄과 하나로</span></div>
 </section>
 
+<!-- ══ QA-17 · 그림이 앱을 그대로 담는다 (#109·#110·#111) ══ -->
+<style>@layer qa17 { .q17{ background:#1F7A4D; border:2px solid #0B3C26; color:#fff } }</style>
+<section class="scr" id="qa17">
+  <span class="tag">QA-17</span>
+  <h1 data-spec="171">그림이 앱을 그대로 담는다</h1>
+  <p class="sub">아래 <b>버튼</b>과 <b>네모</b>는 <b>같은 클래스</b>이고, 색을 <b>@layer 안에서</b> 받는다.</p>
+  <div class="card" data-spec="172"><b>버튼과 네모</b>
+    <span><button class="q17" style="padding:5px 13px;border-radius:8px;font:inherit">버튼</button>
+    <span class="q17" style="padding:5px 13px;border-radius:8px;display:inline-block">네모</span></span></div>
+  <div class="card" data-spec="173"><b>툴바</b><span>「페이지만 보기」와 폭 프리셋</span></div>
+</section>
+
 <!-- ══ QA-16 · 번호 없는 섹션 (#107) ══ -->
 <section class="scr" id="qa16">
   <span class="tag">QA-16</span>
@@ -536,6 +548,36 @@ window.SCREENSPEC = {
         { t: "확인 : 취소한 것은 기억하지 않는다 (직전에 «내보내기» 한 설정 그대로)" },
         { t: "창을 500px 이하로 좁히고 ⋯ → 내보내기" },
         { t: "확인 : 바닥에서 올라오는 시트로 뜨고, 미리보기는 접혀 있고, 단추가 가로 전폭이다" }
+      ]}
+    ]},
+    { id: "QA-17-CAPTURE", name: "그림이 앱을 그대로", path: ["QA", "그림이 앱을 그대로"], specs: [
+      { n: 1, target: "172", anno: "box", title: "앱 스타일이 그림에 산다", defs: [
+        { t: "화면에서 «버튼» 과 «네모» 가 같아 보이는지 먼저 본다 (초록 배경 · 진한 테두리)" },
+        { t: "「내보내기」 로 뽑는다 (기본 설정 그대로)" },
+        { t: "확인 : 그림에서도 둘이 같다 — 버튼만 민낯이 되지 않는다", c: [
+          { t: "조립 상자에 ss-ui 를 붙여 둔 탓에 우리 UI 규칙이 앱 사본까지 닿았다. .ss-ui :where(button) 은 «레이어 없는» 규칙이라, 앱이 @layer 안에서 정한 것을 선택자 세기와 무관하게 이긴다 — 그래서 버튼만 당했다 (#109)", kind: "why" }
+        ]},
+        { t: "확인 : 그림 속 글꼴이 화면과 같다", c: [
+          { t: "같은 뿌리의 둘째 증상이었다 — .ss-ui * 의 글꼴 강제가 버튼만이 아니라 앱 사본 전체의 글꼴을 바꾸고 있었다. 신고되기 전에 찾았다 (#109)", kind: "why" }
+        ]}
+      ]},
+      { n: 2, target: "171", anno: "box", title: "그림 속 번호에 색이 묻는다", defs: [
+        { t: "「내보내기」 를 열고 «번호 색» 을 펼쳐 빨강을 고른다" },
+        { t: "뽑고 확인 : 그림 속 번호가 빨간 원 · 흰 숫자다" },
+        { t: "색을 다시 눌러 끄고 뽑는다" },
+        { t: "확인 : 이번에는 문서 색(파랑) 원이다 — 흰 원이 아니다", c: [
+          { t: "화면에서는 «지금 고른» 마커만 색이다. 그림에는 고른 것이라는 상태가 없으니 전부 색이어야 하는데, 그 색을 읽는 규칙이 그림 안에 없었다 (#110)", kind: "why" }
+        ]}
+      ]},
+      { n: 3, target: "173", anno: "box", title: "프리셋과 페이지만 보기", defs: [
+        { t: "툴바 오른쪽 «페이지만 보기» 를 누른다" },
+        { t: "확인 : 새 탭이 열리고 툴바·액자 없이 프로토타입만 뜬다 (주소에 screenspec=0)" },
+        { t: "확인 : 원래 탭은 그대로다 — 고치던 것·열어 둔 항목을 안 잃는다" },
+        { t: "설정 블록에 devices 를 더하고 새로고침한다 : devices:{ mobile:{w:360,h:800}, tablet:{w:768,h:1024,label:\"태블릿\"}, pc:{w:1920,h:1080} }" },
+        { t: "확인 : 툴바에 «태블릿» 버튼이 생기고, 모바일 → 태블릿 → PC 순으로 선다", c: [
+          { t: "기본을 셋으로 안 늘린 이유 — 태블릿 폭은 제품마다 다르다(768·744·834). 우리가 하나를 박으면 그것이 «기준» 인 척한다. 기준은 그 제품의 CSS 브레이크포인트다 (#111)", kind: "why" }
+        ]},
+        { t: "그 버튼을 눌러 확인 : 시트가 768×1024 가 된다" }
       ]}
     ]},
     { id: "QA-16-SECTION", name: "번호 없는 섹션", path: ["QA", "번호 없는 섹션"], specs: [

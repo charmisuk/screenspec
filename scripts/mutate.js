@@ -338,6 +338,21 @@ const MUTS = [
   { id: "gap-silent", only: "[섹션]", why: "코드로 만든 설정의 빈 번호를 조용히 넘긴다 — 이 팀은 따로 검사기를 짜야 한다 (#107)",
     find: "      if (!gaps.length && !dups.length) return;",
     to:   "      return;" },
+  { id: "cap-box-ui", only: "[그림]", why: "조립 상자에 ss-ui 를 도로 붙인다 — 우리 규칙이 앱 사본의 버튼·글꼴을 덮는다 (#109)",
+    find: "      const box = h(\"div\", { class: \"ss-cap\", \"data-ss-ignore\": \"1\" },",
+    to:   "      const box = h(\"div\", { class: \"ss-cap ss-ui\" }," },
+  { id: "cap-marker-plain", only: "[그림]", why: "그림 속 번호가 고른 색을 다시 안 읽는다 — 늘 흰 원 (#110)",
+    find: "  .ss-cap .ss-marker{background:var(--ss-accent);color:#fff;border-color:var(--ss-accent)}",
+    to:   "  .ss-cap .ss-marker-off{background:var(--ss-accent)}" },
+  { id: "seg-hardcoded", only: "[프리셋]", why: "프리셋을 선언이 아니라 코드에 박는다 — 태블릿을 선언해도 안 나온다 (#111)",
+    find: "    const segHTML = Object.keys(DEVICES)",
+    to:   "    const segHTML = [\"mobile\", \"pc\"]" },
+  { id: "seg-unsorted", only: "[프리셋]", why: "프리셋을 폭 순서로 안 세운다 — 나중에 선언한 태블릿이 PC 뒤에 선다 (#111)",
+    find: "      .sort((a, b) => (DEVICES[a].w || 0) - (DEVICES[b].w || 0))",
+    to:   "      .sort(() => 0)" },
+  { id: "plain-keeps-viewer", only: "[프리셋]", why: "「페이지만 보기」가 정의서를 끄지 않는다 — 같은 화면이 한 번 더 열릴 뿐 (#111)",
+    find: "        q.push(\"screenspec=0\");",
+    to:   "        q.push(\"screenspec=1\");" },
 ];
 
 const argv = process.argv.slice(2);

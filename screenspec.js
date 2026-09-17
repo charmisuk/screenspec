@@ -815,6 +815,10 @@
   .ss-cap .ss-pr-table th{background:#F1F1F0;border:1px solid var(--ss-line2);padding:6px 8px;text-align:left;font-weight:800;font-size:11px}
   .ss-cap .ss-pr-table td{border:1px solid var(--ss-line2);padding:6px 8px;vertical-align:top;line-height:1.55}
   .ss-cap .ss-sheet{box-shadow:none}
+  /* 그림 속 번호 (#110) — 화면에서는 마커가 흰 원이고 accent 는 «지금 고른 것» 에만 쓴다.
+     그림에는 «고른 것» 이라는 상태가 없으므로 전부 색 원이다. capBox 가 상자에 --ss-accent 를 심고
+     (안 고르면 문서 색을 그대로 물려받는다) 이 규칙이 그것을 읽는다 — 전에는 읽는 쪽이 없었다 */
+  .ss-cap .ss-marker{background:var(--ss-accent);color:#fff;border-color:var(--ss-accent)}
   .ss-cap .ss-edge-r,.ss-cap .ss-edge-b{display:none}
   .ss-cap-msg{font-size:11.5px;color:var(--ss-ink2);line-height:1.6;margin-top:10px}
   .ss-cap-msg:empty{display:none}
@@ -1843,7 +1847,9 @@ ${HL_CSS}
        규칙: 앱 DOM(우리 UI 제외)에 노드 추가/삭제가 1.5초 동안 없으면 "다 그려졌다" 로 보고 센다. 변경이 계속되면 5초 상한.
              전부 찾으면 종료(clean), 못 찾은 게 있으면 그때 1회 경고. */
     const MISS_QUIET = 1500, MISS_CAP = 5000;
-    const OWN_UI = ".ss-ui,.ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-toolbar,.ss-tip";
+    /* .ss-cap 이 여기 있는 이유 (#109) — 상자는 ss-ui 를 안 달지만 «우리 것» 이다.
+       빠지면 그림을 조립하는 동안 시트가 옮겨 다니는 것을 «앱의 변경» 으로 오인해 누락 검사가 다시 돈다 */
+    const OWN_UI = ".ss-ui,.ss-cap,.ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-toolbar,.ss-tip";
     /* 우리가 «그린» 것 — 마커·주석선·툴팁. 앱을 «감싸는» 컨테이너(.ss-proto-wrap·.ss-docmode)와 구분해야 한다 */
     const OWN_DRAWN = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-tip,.ss-toc,.ss-nav-toast,.ss-pvbar";
     /* 이 변경이 «앱» 의 것인가.
@@ -2456,7 +2462,7 @@ ${HL_CSS}
       if (!SOURCES) return "";
       const ks = Object.keys(refNos).sort((a, b) => refNos[a] - refNos[b]);
       if (!ks.length) return "";
-      return '<div class="ss-pr-srcs"><b>출처</b> ' +
+      return '<div class="ss-pr-srcs ss-ui"><b>출처</b> ' +
         ks.map((k) => refNos[k] + ". " + esc(SOURCES[k].label)).join(" · ") + "</div>";
     }
     function prKeep(d, layer) {
@@ -2518,7 +2524,7 @@ ${HL_CSS}
       if (on("name") && sc.name) html += '<div class="ss-cap-name">' + esc(sc.name) + "</div>";
       if (on("path") && path) html += '<div class="ss-cap-path">' + path + "</div>";
       if (on("when")) html += '<div class="ss-cap-when">' + esc(capWhen()) + "</div>";
-      return html ? '<div class="ss-cap-head">' + html + "</div>" : "";
+      return html ? '<div class="ss-cap-head ss-ui">' + html + "</div>" : "";
     }
     /* 우리 뷰어 UI — 그림에는 «문서» 만 남고 뷰어는 빠진다 */
     const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode,.ss-proto-wrap," +
@@ -2541,9 +2547,15 @@ ${HL_CSS}
          숨긴 것은 placeMarkers 가 display 를 소유하므로 다음 프레임에 제 손으로 되돌린다 */
     }
     function capBox(opt) {
-      const box = h("div", { class: "ss-cap ss-ui" },
+      /* 상자에 ss-ui 를 «안» 붙인다 (#109). 붙이면 우리 UI 규칙이 앱 사본까지 닿는다 —
+         .ss-ui :where(button) 은 «레이어 없는» 규칙이라, 앱(Tailwind v4 등)이 @layer 안에서 정한
+         배경·테두리·글자색을 선택자 세기와 무관하게 이긴다. 그래서 그림에서만 앱 버튼이 민낯이 됐다.
+         .ss-ui * 의 글꼴 강제는 버튼만이 아니라 «앱 사본 전체» 의 글꼴을 바꾸고 있었다(신고 전 증상).
+         ss-ui 는 아래 우리 조각(머리말·표·출처)에만 붙인다. data-ss-ignore 는 액자 모드에서
+         «body 직속의 낯선 노드» 를 감추는 규칙(#103)의 탈출구다 — 상자는 우리 것이다 */
+      const box = h("div", { class: "ss-cap", "data-ss-ignore": "1" },
         capHeadHTML(current || {}, opt.head) + '<div class="ss-cap-body"></div>' +
-        (opt.table ? '<table class="ss-pr-table"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
+        (opt.table ? '<table class="ss-pr-table ss-ui"><thead><tr><th>번호</th><th>영역</th><th>유형</th><th>기능 설명</th></tr></thead><tbody>' +
           prRows(opt.layer || LAYER, opt.major) + "</tbody></table>" + refFootPr() : "") +
         ""); /* 꼬리표는 DOM 이 아니라 캔버스에 직접 쓴다 — 밑단 잘라내기(아래) 뒤에 붙여야 간격이 안 벌어진다 */
       /* 번호 색은 이 그림에만. 문서의 accent 를 바꾸면 내보내기가 문서를 고치는 셈이 된다 (#96) */
@@ -2997,6 +3009,21 @@ ${HL_CSS}
         cp.onclick = edCopyBlock;
         home.appendChild(cp);
       }
+      /* 「페이지만 보기」 (#111) — 지금 보고 있는 그 주소에 ?screenspec=0 을 붙여 새 탭으로 연다.
+         이 스위치는 소스를 읽어야 알 수 있었고, 액자 안 주소는 손으로 옮겨 적어야 했다.
+         새 탭인 이유: 고치던 것·열어 둔 항목을 잃지 않는다 */
+      const pv = h("button", { class: "ss-headbtn ss-ui", type: "button",
+        title: "정의서 없이 프로토타입만 새 탭으로 엽니다" }, "페이지만 보기");
+      pv.onclick = () => {
+        const href = (ctx.plainHref && ctx.plainHref()) || (location.pathname + location.search + location.hash);
+        const hi = href.indexOf("#"), hash = hi >= 0 ? href.slice(hi) : "";
+        const rest = hi >= 0 ? href.slice(0, hi) : href;
+        const qi = rest.indexOf("?"), path = qi >= 0 ? rest.slice(0, qi) : rest;
+        const q = (qi >= 0 ? rest.slice(qi + 1).split("&") : []).filter((x) => x && !/^screenspec(=|$)/.test(x));
+        q.push("screenspec=0");
+        window.open(path + "?" + q.join("&") + hash, "_blank", "noopener");
+      };
+      home.appendChild(pv);
       const b = h("button", { class: "ss-headbtn ss-prbtn ss-ui", type: "button" }, "내보내기");
       b.onclick = printOpen;
       home.appendChild(b);
@@ -5157,16 +5184,24 @@ ${HL_CSS}
     frame.appendChild(edgeR); frame.appendChild(edgeB); frame.appendChild(edgeC);
 
     /* ---- 툴바 ---- */
+    /* 폭 프리셋은 «선언» 에서 만든다 (#111) — devices 에 키를 더하면 툴바에 버튼이 생긴다.
+       기본을 둘로 두는 이유: 태블릿 폭은 제품마다 다르다(768·744·834). 우리가 하나를 고르면
+       그것이 «기준» 인 척하는데, 기준은 그 제품의 CSS 브레이크포인트지 우리가 정할 것이 아니다.
+       제품이 자기 이름·값으로 선언하면 리뷰와 코드가 같은 말을 한다 */
+    const SEG_LABEL = { mobile: "모바일", pc: "PC" };
+    /* 좁은 것부터 넓은 것으로 세운다 — 선언 순서를 그대로 쓰면 기본 키(mobile·pc)가 자기 자리를 지켜
+       나중에 더한 태블릿이 PC «뒤» 에 선다. 폭은 읽는 사람이 아는 순서가 있다 */
+    const segHTML = Object.keys(DEVICES)
+      .sort((a, b) => (DEVICES[a].w || 0) - (DEVICES[b].w || 0))
+      .map((k) => '<button data-w="' + esc(k) + '" aria-pressed="false">' +
+        esc(DEVICES[k].label || SEG_LABEL[k] || k) + "</button>").join("");
     const toolbar = h("header", { class: "ss-toolbar ss-ui" }, `
       <nav class="ss-modes" aria-label="보기 모드">
         <button id="ss-mProto" aria-pressed="true">프로토타입</button>
         <button id="ss-mDoc" aria-pressed="false">화면정의서</button>
       </nav>
       <div class="ss-widthsim">
-        <div class="ss-seg" id="ss-seg">
-          <button data-w="mobile" aria-pressed="true">모바일</button>
-          <button data-w="pc" aria-pressed="false">PC</button>
-        </div>
+        <div class="ss-seg" id="ss-seg">${segHTML}</div>
         <span class="ss-wpx" id="ss-wpx" title="시트 크기 · 창에 안 들어갈 때는 줄인 배율"></span>
       </div>`);
 
@@ -5435,6 +5470,8 @@ ${HL_CSS}
       /* 인쇄는 시트를 «옮겨» 간다 — 크기는 축소 전 원본 기준이어야 A4 배율을 다시 잴 수 있다 (#34) */
       /* 캡처 대상 (#40). 액자 모드는 앱이 iframe 안에 있어 옮길 수가 없다 —
          same-origin 이 조건이므로 안쪽 문서를 직접 떠서 마커만 얹는다 */
+      /* 「페이지만 보기」 가 열 주소 (#111) — 액자 모드는 «액자 안» 이 지금 보는 화면이다 */
+      plainHref: () => (FRAME ? frameHref() : null),
       capSource: () => {
         if (!FRAME) return { kind: "move", node: frame, give: (n) => { docHolder.appendChild(n); layout(); } };
         let idoc = null;

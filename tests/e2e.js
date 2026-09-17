@@ -1828,6 +1828,134 @@ function check(name, ok, detail) {
     check("JS 에러 0건", errors.length === 0, errors);
   }
 
+  /* ============ 앱 스타일이 살아서 구워진다 (#109·#110) ============
+     조립 상자에 ss-ui 를 붙여 둔 탓에 우리 UI 규칙이 «앱 사본» 까지 닿았다.
+     .ss-ui :where(button) 은 레이어 없는 규칙이라, 앱(Tailwind v4 등)이 @layer 안에서 정한
+     배경·테두리를 선택자 세기와 무관하게 이긴다 — 그림에서만 앱 버튼이 민낯이 됐다.
+     .ss-ui * 의 글꼴 강제는 버튼만이 아니라 앱 사본 «전체» 의 글꼴을 바꾸고 있었다(신고 전 증상).
+     그리고 그림 속 번호는 고른 색을 읽는 규칙이 없어 늘 흰 원이었다 (#110). */
+  if (sec("[그림] 앱 스타일이 살아서 구워진다 (#109·#110)")) {
+    const APP9 = `<meta charset="utf-8"><title>cap</title><style>
+      @layer utilities { .btn{background:rgb(204,0,0);border:2px solid rgb(0,0,255);color:#fff}
+        .ff{font-family:"Courier New",monospace} }
+      .sz{width:60px;height:40px;display:inline-grid;place-items:center;box-sizing:border-box;margin:10px}
+      body{margin:0;background:#fff}</style>
+      <div data-spec="1" class="btn sz ff">D</div><button data-spec="2" class="btn sz ff">B</button>
+      <script>window.SCREENSPEC={mode:"frame",accent:"green",screens:[{id:"S-CAP",name:"cap",specs:[
+        {n:1,target:"1",title:"div",defs:[{t:"x"}]},{n:2,target:"2",title:"btn",defs:[{t:"y"}]}]}]};<\/script>
+      <script src="/screenspec.js"><\/script>`;
+    const s9 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html"); res.end(APP9);
+    });
+    await new Promise((r) => s9.listen(P(4310), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("http://localhost:" + P(4310) + "/app.html");
+    await page.waitForTimeout(1100);
+    /* 그림은 구워지고 나면 사라진다 — 조립 상자가 «붙는 순간» 의 계산값을 가로챈다 */
+    const bake = (opt) => page.evaluate(async (o) => {
+      let cap = null;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
+        if (n.classList && n.classList.contains("ss-cap")) {
+          const q = (x) => n.querySelector(x), g = (e, k) => (e ? getComputedStyle(e)[k] : "");
+          const btn = q('.ss-cap-body [data-spec="2"]'), div = q('.ss-cap-body [data-spec="1"]'), mk = q(".ss-marker");
+          cap = { bg: g(btn, "backgroundColor"), bw: g(btn, "borderTopWidth"), bc: g(btn, "borderTopColor"),
+            bf: g(btn, "fontFamily"), df: g(div, "fontFamily"), mbg: g(mk, "backgroundColor"), mfg: g(mk, "color"),
+            hf: g(q(".ss-cap-head"), "fontFamily"), tf: g(q(".ss-pr-table"), "fontFamily") };
+        } } });
+      mo.observe(document.body, { childList: true });
+      const r = await window.ScreenSpec.exportImage(o);
+      mo.disconnect();
+      const img = new Image();
+      await new Promise((res) => { img.onload = res; img.src = r.url; });
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, img.width, img.height).data;
+      let red = 0; for (let i = 0; i < d.length; i += 4) if (d[i] === 204 && d[i + 1] === 0 && d[i + 2] === 0) red++;
+      return Object.assign({ w: img.width, red: red }, cap);
+    }, opt);
+
+    let k = await bake({ markers: true, head: true, table: true });
+    check("액자 모드에서도 그림이 백지가 아니다 (상자가 «낯선 노드» 로 안 감춰진다)",
+      k.w > 100 && k.red > 100, JSON.stringify({ w: k.w, red: k.red }));
+    check("앱 버튼의 배경이 그림에 산다 (#109)", k.bg === "rgb(204, 0, 0)", k.bg);
+    check("앱 버튼의 테두리가 그림에 산다 (#109)", k.bw === "2px" && k.bc === "rgb(0, 0, 255)", k.bw + " " + k.bc);
+    /* 버튼만의 일이 아니었다 — .ss-ui * 가 앱 사본 전체의 글꼴을 바꾸고 있었다 */
+    check("앱 글꼴이 우리 글꼴로 안 바뀐다 — 버튼도 div 도 (#109)",
+      /Courier/.test(k.bf) && /Courier/.test(k.df), JSON.stringify([k.bf, k.df]));
+    check("그래도 우리 머리말·표는 우리 글꼴 그대로 (조각에만 붙였다)",
+      /Pretendard/.test(k.hf) && /Pretendard/.test(k.tf), JSON.stringify([k.hf, k.tf]));
+    /* 화면에서는 «지금 고른» 마커만 색이다. 그림에는 고른 것이라는 상태가 없으니 전부 색이다 */
+    check("그림 속 번호가 문서 색 원 · 흰 숫자다 (#110)",
+      k.mbg === "rgb(24, 121, 78)" && k.mfg === "rgb(255, 255, 255)", JSON.stringify([k.mbg, k.mfg]));
+    k = await bake({ markers: true, head: false, table: false, accent: "#E5484D" });
+    check("「번호 색」을 고르면 그 색으로 박힌다 (#110)", k.mbg === "rgb(229, 72, 77)", k.mbg);
+    check("JS 에러 0건", errors.length === 0, errors);
+    s9.close();
+  }
+
+  /* ============ 프리셋을 선언으로 · 페이지만 보기 (#111) ============
+     폭 프리셋 버튼이 mobile·pc 로 박혀 있어, devices 에 태블릿을 선언해도 툴바에 안 나왔다.
+     기본을 셋으로 늘리지 «않는» 이유는 태블릿 폭이 제품마다 다르기 때문이다(768·744·834) —
+     우리가 하나를 고르면 그것이 기준인 척한다. 제품이 자기 이름·값으로 선언한다.
+     그리고 ?screenspec=0 은 소스를 읽어야 아는 스위치였다 — 단추로 꺼낸다. */
+  if (sec("[프리셋] 선언으로 늘린다 · 페이지만 보기 (#111)")) {
+    const mkApp = (decl, mode) => `<meta charset="utf-8"><title>p</title>
+      <div data-spec="1">본문</div>
+      <script>window.SCREENSPEC={mode:"${mode}"${decl},screens:[{id:"S-P",name:"p",specs:[
+        {n:1,target:"1",title:"본문",defs:[{t:"x"}]}]}]};<\/script>
+      <script src="/screenspec.js"><\/script>`;
+    const DECL = ',devices:{mobile:{w:360,h:800},tablet:{w:768,h:1024,label:"태블릿"},pc:{w:1920,h:1080}}';
+    const s11 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html");
+      res.end(req.url.indexOf("plain") >= 0 ? mkApp("", "wrap")
+        : mkApp(DECL, req.url.indexOf("frame") >= 0 ? "frame" : "wrap"));
+    });
+    await new Promise((r) => s11.listen(P(4320), r));
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.goto("http://localhost:" + P(4320) + "/a.html?foo=1#zz");
+    await page.waitForTimeout(900);
+    const seg = () => page.evaluate(() =>
+      [...document.querySelectorAll("#ss-seg button")].map((b) => b.dataset.w + ":" + b.textContent));
+    check("선언한 키가 툴바 버튼이 된다", (await seg()).length === 3, JSON.stringify(await seg()));
+    check("label 이 버튼 글자가 된다", (await seg())[1] === "tablet:태블릿", JSON.stringify(await seg()));
+    /* 선언 순서를 그대로 쓰면 기본 키가 자리를 지켜 태블릿이 PC «뒤» 에 선다 */
+    check("좁은 것부터 넓은 것 순서로 선다",
+      (await seg()).join(",") === "mobile:모바일,tablet:태블릿,pc:PC", JSON.stringify(await seg()));
+    await page.click('#ss-seg button[data-w="tablet"]');
+    await page.waitForTimeout(300);
+    check("그 버튼을 누르면 선언한 폭이 된다", await page.evaluate(() => {
+      const sh = document.querySelector(".ss-sheet");
+      return sh.style.width === "768px" && sh.style.height === "1024px";
+    }));
+    /* 「페이지만 보기」 — 새 탭이라 고치던 것을 안 잃는다. 여는 주소만 가로채 잰다 */
+    const opened = () => page.evaluate(() => {
+      let got = null; const ow = window.open; window.open = (u) => { got = u; return null; };
+      [...document.querySelectorAll(".ss-headbtn")].find((b) => b.textContent === "페이지만 보기").click();
+      window.open = ow; return got;
+    });
+    check("「페이지만 보기」가 ?screenspec=0 을 붙인다", /[?&]screenspec=0/.test(await opened()), await opened());
+    check("원래 쿼리와 해시를 지킨다", (await opened()) === "/a.html?foo=1&screenspec=0#zz", await opened());
+    await page.goto("http://localhost:" + P(4320) + "/a.html?screenspec=1&b=2");
+    await page.waitForTimeout(900);
+    check("이미 붙어 있던 screenspec 은 갈아끼운다 (둘이 되지 않는다)",
+      (await opened()) === "/a.html?b=2&screenspec=0", await opened());
+    /* 액자 모드는 «액자 안» 이 지금 보는 화면이다 — 바깥 주소가 달라도 안쪽을 쓴다 */
+    await page.goto("http://localhost:" + P(4320) + "/frame.html?k=9");
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => history.replaceState(null, "", "/outer-only"));
+    check("액자 모드는 액자 «안» 주소를 쓴다", (await opened()).indexOf("/frame.html") === 0, await opened());
+    /* 선언하지 않은 문서는 예전 그대로 — 기본을 늘리지 않는다 */
+    await page.goto("http://localhost:" + P(4320) + "/plain.html");
+    await page.waitForTimeout(900);
+    check("선언 안 한 문서는 버튼이 둘 그대로",
+      (await seg()).join(",") === "mobile:모바일,pc:PC", JSON.stringify(await seg()));
+    check("JS 에러 0건", errors.length === 0, errors);
+    s11.close();
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+
   /* ============ 창에 안 들어가면 줄인다 (#104·#105) ============
      한때 이건 「맞춤」 이라는 버튼이었고, 그 옆에 「자동」 이라는 또 다른 버튼이 있었다.
      둘 다 «프로토타입이 창을 넘는다» 는 같은 호소에 두 판에 걸쳐 붙인 답이었다.
