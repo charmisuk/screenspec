@@ -368,6 +368,9 @@ const MUTS = [
   { id: "brief-drops-why", only: "[설명]", why: "요약에서 이유가 빠진다 — 제목만 남아 문서가 안 된다 (#108)",
     find: "        list(brief ? whysOf(s.defs, []) : s.defs, 0, H, M);",
     to:   "        list(brief ? [] : s.defs, 0, H, M);" },
+  { id: "sheets-skip-adopted", only: "[그림]", why: "구성 스타일시트를 다시 안 걷는다 — 그 규칙이 그림에서 통째로 빠진다 (#113)",
+    find: "    const b = doc.adoptedStyleSheets || []; for (let i = 0; i < b.length; i++) out.push(b[i]);",
+    to:   "    const b = [];" },
 ];
 
 const argv = process.argv.slice(2);

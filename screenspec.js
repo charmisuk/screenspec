@@ -1238,9 +1238,18 @@ ${HL_CSS}
     setTimeout(() => t.classList.remove("ss-on"), 6000);
   }
   /* 다른 문서(액자 안)의 스타일시트를 글자로 — 캡처가 안쪽 CSS 까지 같이 실어야 그림이 맞다 */
+  /* 걷는 시트 = 문서의 styleSheets + 구성 스타일시트(adoptedStyleSheets) (#113).
+     구성 시트는 styleSheets 에 안 잡힌다 — 그것으로만 스타일을 주는 앱(일부 CSS-in-JS·웹 컴포넌트)은
+     그 규칙이 그림에서 통째로 빠졌다. div 도 button 도 가리지 않았다 */
+  function allSheets(doc) {
+    const out = [];
+    const a = doc.styleSheets; for (let i = 0; i < a.length; i++) out.push(a[i]);
+    const b = doc.adoptedStyleSheets || []; for (let i = 0; i < b.length; i++) out.push(b[i]);
+    return out;
+  }
   function cssText(doc) {
     let out = "";
-    const sheets = doc.styleSheets;
+    const sheets = allSheets(doc);
     for (let i = 0; i < sheets.length; i++) {
       try {
         const rules = sheets[i].cssRules;
@@ -2607,7 +2616,7 @@ ${HL_CSS}
 
     function capCSS(doc) {
       let css = "";
-      const sheets = (doc || document).styleSheets;
+      const sheets = allSheets(doc || document);
       for (let i = 0; i < sheets.length; i++) {
         try {
           const rules = sheets[i].cssRules;

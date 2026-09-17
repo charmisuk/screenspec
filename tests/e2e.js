@@ -1855,9 +1855,14 @@ function check(name, ok, detail) {
       <script>window.SCREENSPEC={mode:"frame",accent:"green",screens:[{id:"S-CAP",name:"cap",specs:[
         {n:1,target:"1",title:"div",defs:[{t:"x"}]},{n:2,target:"2",title:"btn",defs:[{t:"y"}]}]}]};<\/script>
       <script src="/screenspec.js"><\/script>`;
+    /* 같은 앱인데 스타일을 «구성 스타일시트» 로만 준다 — styleSheets 에는 안 잡힌다 (#113) */
+    const APP9A = APP9.replace(/<style>[\s\S]*?<\/style>/, '<script>const sh9=new CSSStyleSheet();' +
+      'sh9.replaceSync(".btn{background:rgb(204,0,0);border:2px solid rgb(0,0,255);color:#fff}' +
+      '.sz{width:60px;height:40px;display:inline-grid;place-items:center;box-sizing:border-box;margin:10px}body{margin:0;background:#fff}");' +
+      'document.adoptedStyleSheets=[sh9];<\/script>');
     const s9 = http.createServer((req, res) => {
       if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
-      res.setHeader("content-type", "text/html"); res.end(APP9);
+      res.setHeader("content-type", "text/html"); res.end(req.url.indexOf("adopted") >= 0 ? APP9A : APP9);
     });
     await new Promise((r) => s9.listen(P(4310), r));
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1901,6 +1906,11 @@ function check(name, ok, detail) {
       k.mbg === "rgb(24, 121, 78)" && k.mfg === "rgb(255, 255, 255)", JSON.stringify([k.mbg, k.mfg]));
     k = await bake({ markers: true, head: false, table: false, accent: "#E5484D" });
     check("「번호 색」을 고르면 그 색으로 박힌다 (#110)", k.mbg === "rgb(229, 72, 77)", k.mbg);
+    /* 구성 스타일시트 — 살아 있는 상자의 계산값은 바깥 문서 시트로 이미 맞으니, 그림의 «픽셀» 로 잰다 */
+    await page.goto("http://localhost:" + P(4310) + "/adopted.html");
+    await page.waitForTimeout(1100);
+    k = await bake({ markers: false, head: false, table: false });
+    check("구성 스타일시트(adoptedStyleSheets)로 준 스타일도 그림에 산다 (#113)", k.red > 100, JSON.stringify({ red: k.red }));
     check("JS 에러 0건", errors.length === 0, errors);
     s9.close();
   }
