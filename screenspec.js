@@ -5530,6 +5530,12 @@ ${HL_CSS}
       const bound = getComputedStyle(host).overflowY !== "visible" && b.h > 0;
       return Math.max(0.2, Math.min(1, b.w / sheetW, bound ? b.h / sheetH : 1));
     }
+    /* 같은 값을 다시 쓰지 않는다 (#112) — style·innerHTML 은 값이 같아도 «변경» 으로 기록된다.
+       배치는 매 프레임 도는 자리라 이 낭비가 제일 크다: 크기 표시를 프레임마다 다시 파싱했고,
+       그래서 DOM 이 영영 조용해지지 않았다. 시험의 가라앉기 대기 96회가 이것 때문에 상한까지 갔고,
+       제품 쪽으로는 마커 추적이 안 멎던 v0.30 사고와 같은 계열이다 */
+    const sty = (el, k, v) => { if (el.style[k] !== v) el.style[k] = v; };
+    const setHTML = (el, v) => { if (el.innerHTML !== v) el.innerHTML = v; };
     function layout() {
       const doc = document.body.classList.contains("ss-mode-doc");
       /* 두 모드가 «한 규칙» 을 쓴다 (#105): 넘칠 때만 줄인다.
@@ -5538,13 +5544,13 @@ ${HL_CSS}
          줄여도 잃는 정보가 없으니 판단이 아니라 규칙이고, 규칙은 버튼일 이유가 없다 */
       scale = fitScale(doc ? stage : protoWrap);
       if (scale !== 1) {
-        frame.style.transformOrigin = "top left";
-        frame.style.transform = "scale(" + scale + ")";
-        fit.style.width = sheetW * scale + "px";
-        fit.style.height = sheetH * scale + "px";
+        sty(frame, "transformOrigin", "top left");
+        sty(frame, "transform", "scale(" + scale + ")");
+        sty(fit, "width", sheetW * scale + "px");
+        sty(fit, "height", sheetH * scale + "px");
       } else {
-        frame.style.transform = "";
-        fit.style.width = ""; fit.style.height = "";
+        sty(frame, "transform", "");
+        sty(fit, "width", ""); sty(fit, "height", "");
       }
       /* 홀더는 width:max-content 라 축소해도 «원래 크기» 만큼 자리를 차지한다.
          축소한 프레임 자체는 줄어든 만큼만 자리를 먹는데(변형된 상자가 기준), 홀더는 안 줄어
@@ -5552,22 +5558,22 @@ ${HL_CSS}
          프레임을 지금 담고 있는 홀더의 자리를 줄인다 (두 모드가 같은 처리) */
       /* 프레임 폭을 시트에 못박는다 — 안 그러면 블록이라 홀더를 따라 눌린다.
          눌리면 시트가 삐져나오고, 프레임 기준으로 붙은 폭 조절 손잡이가 엉뚱한 자리로 간다 */
-      frame.style.width = sheetW + "px";
+      sty(frame, "width", sheetW + "px");
       const holder = frame.parentNode;
       if (holder && holder.classList && holder.classList.contains("ss-holder")) {
-        holder.style.width = scale === 1 ? "" : Math.ceil(sheetW * scale) + "px";
-        holder.style.height = scale === 1 ? "" : Math.ceil(sheetH * scale) + "px";
+        sty(holder, "width", scale === 1 ? "" : Math.ceil(sheetW * scale) + "px");
+        sty(holder, "height", scale === 1 ? "" : Math.ceil(sheetH * scale) + "px");
       }
       /* «지금 무슨 일이 벌어지고 있나» 를 한 줄로. 배율은 1 이 아닐 때만 — 안 줄었으면 할 말이 없다 */
-      wpx.innerHTML = sheetW + "\u00D7" + sheetH + /* 셋 다 숫자다 — 넣을 수 있는 문자열이 없다 */
-        (scale < 0.995 ? ' <span class="ss-sc">\u00B7 ' + Math.round(scale * 100) + "%</span>" : "");
+      setHTML(wpx, sheetW + "\u00D7" + sheetH + /* 셋 다 숫자다 — 넣을 수 있는 문자열이 없다 */
+        (scale < 0.995 ? ' <span class="ss-sc">\u00B7 ' + Math.round(scale * 100) + "%</span>" : ""));
       /* 드래그 핸들은 축소 배율과 무관하게 잡히는 폭 유지 (터치 기기는 더 크게·시트에 걸치게) */
       const coarse = window.matchMedia && matchMedia("(pointer:coarse)").matches;
       const hs = coarse ? 28 : 20, ho = coarse ? 10 : 20;
-      edgeR.style.width = Math.round(hs / scale) + "px";
-      edgeR.style.right = "-" + Math.round(ho / scale) + "px";
-      edgeB.style.height = Math.round(hs / scale) + "px";
-      edgeB.style.bottom = "-" + Math.round(ho / scale) + "px";
+      sty(edgeR, "width", Math.round(hs / scale) + "px");
+      sty(edgeR, "right", "-" + Math.round(ho / scale) + "px");
+      sty(edgeB, "height", Math.round(hs / scale) + "px");
+      sty(edgeB, "bottom", "-" + Math.round(ho / scale) + "px");
       core.placeMarkers();
     }
 
