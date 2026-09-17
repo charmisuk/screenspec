@@ -648,6 +648,7 @@ window.ScreenSpec.serialize()               // 지금 설정을 «window.SCREENS
 window.ScreenSpec.dirty()                   // 저장 안 된 변경이 있는가 (boolean)
 window.ScreenSpec.exportImage({ markers, major, head, table, layer, accent, scale })  // 화면을 PNG 로 내려받는다 (모든 모드)
 window.ScreenSpec.exportText({ markers, major, head, layer, depth })   // 설명을 { html, text } 로 돌려준다 — 컨플·노션에 붙일 글 (#108). depth: "brief" | "full"
+window.ScreenSpec.busy()   // 라이브러리가 미뤄 둔 일의 수 (마커 자리잡기·화면 감지·누락 판정·배치). 0 이면 가라앉은 것 — 시험이 고정 대기 대신 이것을 본다 (#112)
 // head: false = 머리말 없음 · true·생략 = 넷 다 · { id, name, path, when } = 고른 것만
 // accent: 이 그림에만 쓸 번호 색 (hex). 문서의 accent 는 안 바뀐다
 ```

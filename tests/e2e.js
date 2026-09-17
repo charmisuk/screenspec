@@ -43,6 +43,26 @@ function check(name, ok, detail) {
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  /* 가라앉기 (#112) — 고정 대기 519회·224초 중 465회·149초가 「UI 가 가라앉기를」 기다리는 ≤600ms 대기였다.
+     settle(ms) 는 «라이브러리가 미룬 일이 0 이고 DOM 이 80ms 조용하면 그때, 아니면 원래 ms» 다.
+     원래보다 느려질 수는 없고 빨라질 수만 있다. 제품의 시간(자동저장 1.2초·파일감시 3초)은 ≥700ms
+     고정 대기로 남겨 둔다 — 그건 기다려야 할 시간이지 가라앉기가 아니다.
+     페이지가 옮겨 가는 중이면 evaluate 가 죽는다 — 그때는 원래대로 기다린다 */
+  const SETTLE_STATS = process.env.SS_SETTLE_LOG ? [] : null; /* SS_SETTLE_LOG=1 이면 끝난 이유를 센다 */
+  const settle = (ms) => page.evaluate((cap) => new Promise((res) => {
+    const t0 = performance.now(); let last = t0, muts = 0, lastTgt = "";
+    const mo = new MutationObserver((rs) => { last = performance.now(); muts += rs.length;
+      const r = rs[rs.length - 1], t = r.target; lastTgt = (t.nodeType === 1 ? t.tagName + "." + String(t.className).split(" ")[0] : t.nodeName) + (r.attributeName ? "@" + r.attributeName : ""); });
+    try { mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true }); } catch (e) { /* 문서 없음 */ }
+    const busy = () => { try { return window.ScreenSpec && window.ScreenSpec.busy ? window.ScreenSpec.busy() : 0; } catch (e) { return 0; } };
+    const tick = () => {
+      const now = performance.now();
+      const quiet = now - t0 >= 60 && now - last >= 80, b = busy();
+      if (now - t0 >= cap || (quiet && b === 0)) { mo.disconnect(); return res({ t: Math.round(now - t0), cap: cap, why: now - t0 >= cap ? (b ? "busy" : (now - last < 80 ? "dom" : "?")) : "idle", muts: muts, tgt: lastTgt, b: b }); }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }), Math.max(60, ms)).then((r) => { if (SETTLE_STATS) SETTLE_STATS.push(r); }).catch(() => page.waitForTimeout(ms));
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
@@ -51,26 +71,26 @@ function check(name, ok, detail) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
     await page.waitForTimeout(1200);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("기능 설명 10행", (await page.locator(".ss-defs-list .ss-row").count()) === 10);
     await page.click("#ss-def-5");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("행 클릭 → 영역 강조", await page.evaluate(() => !!document.querySelector(".ss-hl")));
     await page.click("#ss-def-3");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("화살표(anno:arrow) 표시", await page.evaluate(() =>
       document.querySelector("#ss-line").getAttribute("visibility") === "visible"));
     await page.click('[data-play="7"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("동작 재생 → 토스트", await page.evaluate(() => document.getElementById("toast").classList.contains("show")));
     await page.click('#ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("PC 프리셋 → ss-pc 훅 + 축소", await page.evaluate(() => {
       const s = document.querySelector(".ss-sheet");
       return s.classList.contains("ss-pc") && s.style.width === "1920px";
     }));
     await page.click('#ss-seg button[data-w="mobile"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     /* 표시에는 배율이 따라붙을 수 있다 (창이 낮으면 «360×800 · 88%») — 여기서 재는 것은 «크기» 다 */
     check("모바일 복귀 360×800", await page.evaluate(() => {
       const s = document.querySelector(".ss-sheet");
@@ -121,18 +141,18 @@ function check(name, ok, detail) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/multi-screen.html");
     await page.waitForTimeout(800);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="2"]');
-    await page.waitForTimeout(500);
+    await settle(500);
     check("flow → 화면·정의서 동시 전환", await page.evaluate(() => window.ScreenSpec.current()) === "SCR-EX-DTL-002");
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="4"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("popup → 실제 모달 열림", await page.evaluate(() => document.getElementById("sheetModal").classList.contains("open")));
     await page.click("#sheetModal .ok"); /* 모달 닫고 다음 검사로 */
-    await page.waitForTimeout(200);
+    await settle(200);
     /* 화면 목록 (목차) — wrap */
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("목차 열림 + 커버리지", await page.evaluate(() => {
       const t = document.querySelector(".ss-toc");
       return t.classList.contains("ss-open") && t.textContent.includes("2/2 정의됨");
@@ -147,7 +167,7 @@ function check(name, ok, detail) {
     check("flow 버튼에 대상 화면명 표기", await page.evaluate(() =>
       (document.querySelector('[data-play="1"]') || {}).textContent?.includes("상품 목록") === true));
     await page.click('[data-toc="SCR-EX-LST-001"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("목차 행 클릭 → 정의서 전환", await page.evaluate(() => window.ScreenSpec.current()) === "SCR-EX-LST-001");
     check("화면 전환 알림 토스트", await page.evaluate(() => {
       const t = document.querySelector(".ss-nav-toast");
@@ -155,7 +175,7 @@ function check(name, ok, detail) {
     }));
     /* 공개 API setScreen — wrap은 root 표시/숨김까지 동반해야 감지가 되돌리지 않는다 */
     await page.evaluate(() => window.ScreenSpec.setScreen("SCR-EX-DTL-002"));
-    await page.waitForTimeout(500);
+    await settle(500);
     check("setScreen → 정의서·앱 화면 동시 전환", await page.evaluate(() => {
       const lst = document.querySelector('[data-ss-screen="SCR-EX-LST-001"]');
       const dtl = document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]');
@@ -163,7 +183,7 @@ function check(name, ok, detail) {
         dtl.getClientRects().length > 0 && lst.style.display === "none";
     }));
     await page.evaluate(() => window.ScreenSpec.setScreen("SCR-EX-LST-001"));
-    await page.waitForTimeout(500);
+    await settle(500);
     check("setScreen 복귀 → 목록 화면", await page.evaluate(() => {
       const lst = document.querySelector('[data-ss-screen="SCR-EX-LST-001"]');
       const dtl = document.querySelector('[data-ss-screen="SCR-EX-DTL-002"]');
@@ -172,9 +192,9 @@ function check(name, ok, detail) {
     }));
     /* 모바일: 목차 = 전체 화면 시트 */
     await page.setViewportSize({ width: 480, height: 800 });
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("모바일 목차 풀스크린", await page.evaluate(() => {
       const r = document.querySelector(".ss-toc").getBoundingClientRect();
       return Math.round(r.width) === innerWidth && r.top === 0;
@@ -188,7 +208,7 @@ function check(name, ok, detail) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
     await page.waitForTimeout(1200);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("MOA 홈 기능 설명 11행", (await page.locator(".ss-defs-list .ss-row").count()) === 11);
     /* #51: 번호는 숫자만이다 — 1a·1b 라벨도, 하위 블록도 없다 */
     check("번호는 숫자만 (1a·1b 없음)", await page.evaluate(() => {
@@ -201,23 +221,23 @@ function check(name, ok, detail) {
       return cs.paddingBottom === "0px" && cs.paddingTop === "0px";
     }));
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="8"]'); /* #51: 홈 번호가 2씩 밀렸다 (옛 1a·1b → 번호 2·3) */
-    await page.waitForTimeout(400);
+    await settle(400);
     check("쿠폰 popup → 실제 바텀시트", await page.evaluate(() => document.getElementById("couponSheet").classList.contains("open")));
     await page.click("#couponSheet .ok");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="10"]');
-    await page.waitForTimeout(500);
+    await settle(500);
     check("추천 카드 flow → 상세 + 정의서 전환", await page.evaluate(() =>
       window.ScreenSpec.current() === "SCR-MOA-PDP-002" &&
       document.querySelector('[data-ss-screen="SCR-MOA-PDP-002"]').style.display !== "none"));
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="5"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("구매 바 action → 토스트", await page.evaluate(() => document.getElementById("toast").classList.contains("show")));
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="1"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("뒤로가기 flow → 홈 복귀", await page.evaluate(() => window.ScreenSpec.current() === "SCR-MOA-HOME-001"));
     await page.click('#ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(500);
+    await settle(500);
     check("PC 반응형 훅 (그리드 4열·탭바 숨김)", await page.evaluate(() => {
       const grid = getComputedStyle(document.getElementById("recoGrid")).gridTemplateColumns.split(" ").length;
       const tab = document.querySelector(".tabbar").getClientRects().length === 0;
@@ -231,7 +251,7 @@ function check(name, ok, detail) {
      우리 툴바까지 덮는다. .ss-frame 의 transform 이 이것을 가둔다 — 두 모드·두 폭 모두에서 (v0.19.2) */
   if (sec("[wrap] floating.html (고정 요소 가둠)")) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/floating.html");
-    await page.waitForTimeout(500);
+    await settle(500);
 
     /* 시트(기기 화면) 안에 들어 있는가 — 좌우상하 전부. 여유 2px 은 그림자·반올림 */
     const inSheet = (sel) => page.evaluate((s) => {
@@ -253,22 +273,22 @@ function check(name, ok, detail) {
 
     /* 전면 모달(inset:0 · z 10000)도 폰 안에서만 덮는다 */
     await page.click("#fab");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("프로토타입 모드: 전면 시트가 기기 화면 안", (await inSheet("#sheet")) === true);
     await page.click("#sheet .dim");
-    await page.waitForTimeout(200);
+    await settle(200);
 
     /* 본문을 스크롤해도 고정 요소는 기기 화면에 붙어 있다 (진짜 폰과 같은 거동) */
     const fabBefore = await page.evaluate(() => document.querySelector(".fab").getBoundingClientRect().top);
     await page.evaluate(() => { document.querySelector(".ss-sheet").scrollTop = 300; });
-    await page.waitForTimeout(200);
+    await settle(200);
     const fabAfter = await page.evaluate(() => document.querySelector(".fab").getBoundingClientRect().top);
     check("본문 스크롤에도 FAB 고정", Math.abs(fabBefore - fabAfter) < 2, [fabBefore, fabAfter]);
     await page.evaluate(() => { document.querySelector(".ss-sheet").scrollTop = 0; });
 
     /* 화면정의서 모드 — 고정 요소가 설명 패널을 침범하지 않는다 */
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     for (const [name, sel] of [["앱바", ".appbar"], ["FAB", ".fab"], ["탭바", ".tabbar"]]) {
       check("정의서 모드: " + name + " 가 기기 화면 안", (await inSheet(sel)) === true);
     }
@@ -284,12 +304,12 @@ function check(name, ok, detail) {
 
     /* PC 폭(1920 시트 → 축소 배치)에서도 같은 규칙 */
     await page.click('#ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(500);
+    await settle(500);
     for (const [name, sel] of [["앱바", ".appbar"], ["FAB", ".fab"], ["탭바", ".tabbar"]]) {
       check("정의서 모드 PC 폭: " + name + " 가 기기 화면 안", (await inSheet(sel)) === true);
     }
     await page.click('#ss-seg button[data-w="mobile"]');
-    await page.waitForTimeout(300);
+    await settle(300);
   }
 
   /* ============ overlay: 하위경로(basePath) 환경 ============ */
@@ -322,7 +342,7 @@ function check(name, ok, detail) {
       return z(".ss-pill") >= 2147482990 && z(".ss-ov-panel") >= 2147482990 && z(".ss-pill") > z(".ss-ov-panel");
     }));
     await page.click("#ss-ovDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("설명 패널 오른쪽 고정 (좌/우 전환 버튼 없음)", await page.evaluate(() => {
       const r = document.querySelector(".ss-ov-panel").getBoundingClientRect();
       return r.right === innerWidth && getComputedStyle(document.body).paddingRight === "400px" && !document.querySelector("#ss-ovSide");
@@ -333,43 +353,43 @@ function check(name, ok, detail) {
       return t.left === 0 && m.left >= 0 && m.top >= 48;
     }));
     await page.click('[data-nav][href="./members"]'); /* 정의서 모드에서 앱 조작 */
-    await page.waitForTimeout(500);
+    await settle(500);
     check("정의서 모드에서 앱 내비 동작 + 추적", await page.evaluate(() => window.ScreenSpec.current()) === "S-09");
     await page.goBack();
-    await page.waitForTimeout(400);
+    await settle(400);
     check("뒤로가기 추적", await page.evaluate(() => window.ScreenSpec.current()) === "S-01");
     await page.evaluate(() => history.pushState({}, "", "/definitely-unmapped-xyz"));
-    await page.waitForTimeout(400);
+    await settle(400);
     check("미정의 화면 표시", await page.evaluate(() =>
       window.ScreenSpec.current() === "—" && !!document.querySelector(".ss-empty")));
     /* 목차 소프트 내비게이션 — overlay: route까지 실제 이동 */
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('[data-toc="S-09"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("화면 5개: 목차 검색 없음", (await page.locator(".ss-toc-search").count()) === 0);
     check("목차 → route 소프트 내비게이션", await page.evaluate(() =>
       window.ScreenSpec.current() === "S-09" && location.pathname === "/members" &&
       document.body.innerText.includes("이용자 명단")));
-    await page.waitForTimeout(500);
+    await settle(500);
     check("목차 이동 시 '못 찾은 정의' 오경고 없음 (앱이 그려진 뒤 판정)", !ovWarns.some((w) => w.includes("S-09") && w.includes("못 찾은 정의")), ovWarns.join(" | ").slice(0, 160));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(300);
+    await settle(300);
     check("이중 로드 가드", (await page.locator(".ss-pill").count()) === 1);
     /* 해시 라우터: #/경로 가 화면 감지에 잡히는지 */
     await page.evaluate(() => { location.hash = "#/home"; });
-    await page.waitForTimeout(400);
+    await settle(400);
     const hash1 = await page.evaluate(() => window.ScreenSpec.current());
     await page.evaluate(() => { location.hash = "#/members"; });
-    await page.waitForTimeout(400);
+    await settle(400);
     const hash2 = await page.evaluate(() => window.ScreenSpec.current());
     check("해시 라우터(#/) 감지", hash1 === "S-01" && hash2 === "S-09", hash1 + "→" + hash2);
     /* 구체 경로 우선 (#15): /members/[id] 가 먼저 선언돼 있어도 /members/invite 는 초대 화면 */
     await page.evaluate(() => { location.hash = ""; history.pushState({}, "", "/members/invite"); });
-    await page.waitForTimeout(400);
+    await settle(400);
     const spec1 = await page.evaluate(() => window.ScreenSpec.current());
     await page.evaluate(() => history.pushState({}, "", "/members/123"));
-    await page.waitForTimeout(400);
+    await settle(400);
     const spec2 = await page.evaluate(() => window.ScreenSpec.current());
     check("라우트 구체성 우선 (선언 순서 무관)", spec1 === "S-11" && spec2 === "S-10", spec1 + "/" + spec2);
     /* 등록됐지만 specs 가 빈 화면 — 백지 대신 다음 할 일 안내 (#19). 현재 /members/123 = S-10(specs []) */
@@ -382,17 +402,17 @@ function check(name, ok, detail) {
         document.querySelector("#ss-ovCnt").textContent === "항목 0개";
     }));
     await page.evaluate(() => history.pushState({}, "", "/members"));
-    await page.waitForTimeout(400);
+    await settle(400);
     /* 라우트 없는 root 화면(패널) — 열리면 자동 전환, 닫히면 라우트 화면 복귀 (여기서 현재 화면은 S-09) */
     await page.click("tbody tr:first-child .rowbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("패널 열림 → 라우트 없는 root 화면 감지", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
     await page.click("#detailPanel .pclose");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("패널 닫힘 → 라우트 화면 복귀", await page.evaluate(() => window.ScreenSpec.current()) === "S-09");
     /* setScreen 후 DOM이 계속 변해도 감지가 되돌리지 않는다 */
     await page.click("tbody tr:first-child .rowbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-03"));
     for (let i = 0; i < 4; i++) {
       await page.evaluate(() => {
@@ -401,23 +421,23 @@ function check(name, ok, detail) {
         document.body.appendChild(d);
         setTimeout(() => d.remove(), 60);
       });
-      await page.waitForTimeout(250);
+      await settle(250);
     }
     check("setScreen 유지 (DOM 변경 1초)", await page.evaluate(() => window.ScreenSpec.current()) === "S-03");
     await page.click("#detailPanel .pclose");
-    await page.waitForTimeout(300);
+    await settle(300);
     /* 앱 폭 표시 + overlay 반응형 훅 (#17 최소안). 현재 정의서 모드·패널 우측(400px) */
     const vw = async () => page.evaluate(() => ({ t: document.getElementById("ss-ovVw").textContent, pc: document.body.classList.contains("ss-pc"), nr: document.body.classList.contains("ss-narrow") }));
-    await page.waitForTimeout(200);
+    await settle(200);
     const w1 = await vw();
     await page.setViewportSize({ width: 1600, height: 900 });
-    await page.waitForTimeout(300);
+    await settle(300);
     const w2 = await vw();
     await page.setViewportSize({ width: 480, height: 800 });
-    await page.waitForTimeout(300);
+    await settle(300);
     const w3 = await vw();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.waitForTimeout(300);
+    await settle(300);
     check("헤더 앱 폭 표시 (뷰포트 − 패널)", w1.t === "1040px" && w2.t === "1200px" && w3.t === "480px", JSON.stringify([w1, w2, w3]));
     check("overlay body 반응형 훅 .ss-pc/.ss-narrow", !w1.pc && !w1.nr && w2.pc && !w3.pc && w3.nr, JSON.stringify([w1, w2, w3]));
     page.off("console", onOvMsg);
@@ -483,32 +503,32 @@ function check(name, ok, detail) {
       return { w: f.clientWidth, dir: f.contentWindow.getComputedStyle(f.contentDocument.querySelector(".gnb")).flexDirection };
     });
     await page.click('#ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(600);
+    await settle(600);
     const fPc = await widthOf();
     await page.click('#ss-seg button[data-w="mobile"]');
-    await page.waitForTimeout(600);
+    await settle(600);
     const fMo = await widthOf();
     check("툴바 모바일/PC → 액자 폭 + 앱 미디어쿼리 실제 발화", fPc.w === 1920 && fPc.dir === "row" && fMo.w === 360 && fMo.dir === "column", JSON.stringify([fPc, fMo]));
     await inFrame().locator('[data-nav][href="./members"]').click();
-    await page.waitForTimeout(600);
+    await settle(600);
     const fNav = await state();
     check("액자 안 내비 → 화면 추적 + 바깥 주소 미러링", fNav.cur === "S-09" && fNav.inner.endsWith("/members") && fNav.outer === fNav.inner, JSON.stringify(fNav));
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('[data-toc="S-01"]');
-    await page.waitForTimeout(600);
+    await settle(600);
     const fToc = await state();
     check("목차 → 액자 안 경로 이동", fToc.cur === "S-01" && fToc.inner.endsWith("/home"), JSON.stringify(fToc));
     await inFrame().locator('[data-nav][href="./members"]').click();
-    await page.waitForTimeout(600);
+    await settle(600);
     await inFrame().locator("tbody tr:first-child .rowbtn").click();
-    await page.waitForTimeout(500);
+    await settle(500);
     check("액자 안 패널 열림 → 라우트 없는 root 화면 감지", (await state()).cur === "S-03");
     await inFrame().locator("#detailPanel .pclose").click();
-    await page.waitForTimeout(500);
+    await settle(500);
     check("액자 안 패널 닫힘 → 라우트 화면 복귀", (await state()).cur === "S-09");
     await page.click('.ss-defs-list [data-play="3"]');
-    await page.waitForTimeout(500);
+    await settle(500);
     check("▶ 재생이 액자 안 요소를 클릭", await page.evaluate(() => {
       const b = document.querySelector("iframe[data-ss-frame]").contentDocument.querySelector(".invite");
       return !!b && b.dataset.opened === "1";
@@ -568,12 +588,12 @@ function check(name, ok, detail) {
     await page.waitForTimeout(800);
     check("빠른 시작: 모드 토글 생성", (await page.locator("#ss-mDoc").count()) === 1);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("빠른 시작: 화면 ID 헤더", await page.evaluate(() => document.body.innerText.includes("SCR-RPT-001")));
     check("빠른 시작: 기능 설명 2행", (await page.locator(".ss-defs-list .ss-row").count()) === 2);
     check("빠른 시작: 마커 2개", (await page.locator(".ss-marker").count()) === 2);
     await page.evaluate((s) => document.querySelector(s).click(), '[data-play="2"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("빠른 시작: 동작 재생이 실제로 동작", await page.evaluate(() => document.getElementById("save").textContent === "저장됨"));
   }
 
@@ -586,12 +606,12 @@ function check(name, ok, detail) {
     await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-X",name:"x"},specs:[' +
       '{n:1,target:"1",title:"있음",defs:[{t:"사양 한 줄",why:"근거 한 줄"}]},{n:2,target:"2",title:"없음"},{n:3,target:"3",title:"조건부",anno:"state"},{n:4,target:"4",title:"없음2"},{n:5,target:"5",title:"조건부 버튼",anno:"action",optional:true}]}</script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
     /* 못 찾은 게 있으면 경고는 상한(5초)에 나온다 — 조용해졌다고 다 온 것은 아니므로 (#23 개정).
        고정 대기 대신 «도착할 때까지» 로 잡는다 (경합 방지) */
     const missW = () => warns.filter((x) => x.includes("못 찾은 정의"));
-    for (let i = 0; i < 80 && missW().length === 0; i++) await page.waitForTimeout(100);
+    for (let i = 0; i < 80 && missW().length === 0; i++) await settle(100);
     const w = missW();
     check("지금 화면에 없는 정의는 패널에서 '현재 미표시' (#27)", await page.evaluate(() => {
       const c = (n) => document.querySelector('[data-defrow="' + n + '"]').classList.contains("ss-now-hidden");
@@ -613,7 +633,7 @@ function check(name, ok, detail) {
     await page.setContent('<div data-spec="1">A</div><script>window.SCREENSPEC={screen:{id:"S-Y",name:"y"},specs:[' +
       '{n:1,target:"1",title:"있음"},{n:2,target:"2",title:"조건부",anno:"state"}]}</script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(1700); /* 판정은 앱 DOM 이 1.5초 조용한 뒤 (#23) */
     check("state 만 누락이면 경고 없음", !warns2.some((x) => x.includes("못 찾은 정의")), warns2.join(" | ").slice(0, 200));
@@ -631,14 +651,14 @@ function check(name, ok, detail) {
       '{n:1,target:"1",title:"본문"},{n:2,target:"2",title:"버튼"},{n:9,target:"9",title:"진짜 누락"}]};' +
       'setTimeout(()=>{document.getElementById("app").innerHTML=\'<div data-spec="1">본문</div><button data-spec="2">저장</button>\';},' + 지연 + ');</script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
     const miss = () => warns3.filter((x) => x.includes("못 찾은 정의"));
     /* 데이터가 오기 전에는 경고가 없어야 한다 (조용해졌다고 성급히 판정하면 안 된다) */
     await page.waitForTimeout(지연 + 300);
     check("비동기 " + 라벨 + ": 데이터 도착 전에는 경고 없음", miss().length === 0, miss().join(" | ").slice(0, 160));
     /* 상한까지 기다린다 — 고정 대기가 아니라 도착할 때까지 (경합 방지) */
-    for (let i = 0; i < 80 && miss().length === 0; i++) await page.waitForTimeout(100);
+    for (let i = 0; i < 80 && miss().length === 0; i++) await settle(100);
     const late = miss();
     check("비동기 " + 라벨 + ": 진짜 누락 #9 만 경고 · 늦게 온 #1·#2 는 제외",
       late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes('#1 ') && !late[0].includes('#2 '),
@@ -657,9 +677,9 @@ function check(name, ok, detail) {
       '{n:1,target:"1",title:"상단 타이틀 영역",defs:[{t:"화면 상단에 고정"}],parts:[' +
       '{title:"뱃지",target:"1a",defs:[{t:"숫자 표시"}]}]}]};<' + "/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("번호: 옛 parts 문서를 열어도 깨지지 않는다", await page.evaluate(() => !!window.ScreenSpec));
     check("번호: 마커는 숫자 하나뿐 (1a 없음)", await page.evaluate(() => {
       const l = [...document.querySelectorAll(".ss-marker")].map((m) => m.textContent);
@@ -676,11 +696,11 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent('<style>:root{--brand:#123456}</style><div data-spec="1">A</div><script>window.SCREENSPEC={accent:"var(--brand)",screen:{id:"S-V",name:"v"},specs:[{n:1,target:"1",title:"a",anno:"arrow"}]}</script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click(".ss-marker");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("accent var(--brand) → 토큰 대입 + 화살표 stroke 실제 색", await page.evaluate(() => {
       const v = getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim();
       const st = getComputedStyle(document.getElementById("ss-line")).stroke;
@@ -696,12 +716,12 @@ function check(name, ok, detail) {
       '{n:1,target:"1",title:"입력",anno:"input"},{n:2,target:"2",title:"모션",anno:"motion"},' +
       '{n:3,target:"3",title:"팝업",anno:"popup",play:{selector:"button",label:"팝업 열기"}}]}</script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("옛 input·motion·popup → 마커 3개 전부 선다", await page.locator(".ss-marker").count() === 3);
     await page.locator(".ss-marker").nth(2).click();
-    await page.waitForTimeout(300);
+    await settle(300);
     check("옛 popup → ▶ 버튼이 선다 (action 과 동일)", await page.locator(".ss-play").count() >= 1);
   }
 
@@ -728,11 +748,11 @@ function check(name, ok, detail) {
       await page.addInitScript({ content: "" });
       await page.evaluate(fakePicker(fileName, fileText));
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(400);
+      await settle(400);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(300);
+      await settle(300);
       await page.click(".ss-svbtn");
-      await page.waitForTimeout(500);
+      await settle(500);
       return page.evaluate(() => ({
         written: window.__written,
         msg: (document.querySelector(".ss-edmsg") || {}).textContent || "",
@@ -768,9 +788,9 @@ function check(name, ok, detail) {
       '{n:0,anno:"overview",title:"화면 개요",defs:[{t:"이 화면이 무엇인가"}]}]},' +
       '{id:"S-OV2",name:"p",path:["p"],specs:[{n:1,target:"3",title:"둘째 영역",defs:[{t:"다"}]}]}]}<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     const rows = () => page.evaluate(() => [...document.querySelectorAll(".ss-defs-list [data-defrow]")]
       .map((e) => (e.querySelector(".ss-no") || {}).textContent + "|" + (e.querySelector(".ss-t") || {}).textContent));
     check("개요는 적은 순서와 무관하게 맨 위에 온다 (#82)",
@@ -793,24 +813,24 @@ function check(name, ok, detail) {
       '<script>window.SCREENSPEC={screen:{id:"S-OV2",name:"o"},specs:[' +
       '{n:1,target:"1",title:"제목 영역",defs:[{t:"가"}]}]}<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     /* 만드는 손짓은 «빈 줄에서 슬래시» 하나로 통일한다 (PM 2026-08-31: 「노션처럼 깔끔한 상태에서
        쌓아나가는 것이 철학에 더 맞다」). 화면에 늘 떠 있는 «만들 자리» 는 두지 않는다 */
     await page.locator('[data-defrow="1"] .ss-kids [data-ed]').first().click();
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.type("/");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("빈 줄에서 슬래시를 치면 «화면» 묶음에 화면 개요가 있다 (#82)",
       (await page.locator('.ss-slash [data-sl="brief"]').count()) === 1 &&
       (await page.locator(".ss-slash .ss-slash-g").nth(1).textContent()) === "화면",
       await page.locator(".ss-slash").textContent());
     await page.locator('.ss-slash [data-sl="brief"]').click();
-    await page.waitForTimeout(400);
+    await settle(400);
     check("골라서 만들면 맨 위에 개요가 생긴다 (#82)",
       (await rows())[0] === "개요|화면 개요", JSON.stringify(await rows()));
     check("슬래시를 친 빈 줄은 남지 않는다 (#82)",
@@ -821,19 +841,19 @@ function check(name, ok, detail) {
     check("기존 항목 번호는 그대로 1부터다 (#82)", (await rows())[1] === "1|제목 영역", JSON.stringify(await rows()));
     /* 화면당 하나 — 이미 있으면 메뉴에 안 나온다 */
     await page.locator('[data-defrow="1"] .ss-kids [data-ed]').first().click();
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.type("/");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("개요가 이미 있으면 슬래시에 «화면 개요» 가 안 나온다 (#82)",
       (await page.locator('.ss-slash [data-sl="brief"]').count()) === 0);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    await settle(200);
     /* 고른 상태에서 딱지가 «파란 배경 + 회색 글자» 로 남으면 안 읽힌다 (PM 2026-08-31 지적) */
     await page.locator('[data-defrow="0"] .ss-t').click();
-    await page.waitForTimeout(300);
+    await settle(300);
     check("개요를 고르면 딱지가 번호와 같은 대비를 갖는다 (#82)",
       await page.evaluate(() => {
         const no = document.querySelector('[data-defrow="0"] .ss-no');
@@ -852,12 +872,12 @@ function check(name, ok, detail) {
      사람도 AI 도 못 본다. 그래서 «고치기 전에» 붙잡는다. 단 로컬 파일로 열었을 때만이다 */
   if (sec("[편집] 파일에 연결 안 되면 붙잡는다 (#68)")) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     const cell = page.locator("[data-ed]").first();
     await cell.click();
-    await page.waitForTimeout(200);
+    await settle(200);
     check("로컬 파일: 연결 전에는 글자가 안 고쳐진다",
       (await cell.getAttribute("contenteditable")) !== "true");
     check("로컬 파일: 파일 연결 레이어가 뜬다 (#78)",
@@ -872,22 +892,22 @@ function check(name, ok, detail) {
         return !!(l && l.closest(".ss-defs"));
       }));
     await page.locator(".ss-lay-later").click();
-    await page.waitForTimeout(200);
+    await settle(200);
     check("「나중에 하기」 를 누르면 내려간다 (#78)", await page.locator(".ss-lay.ss-show").count() === 0);
     await cell.click();
-    await page.waitForTimeout(250);
+    await settle(250);
     check("그래도 고치려 하면 다시 뜬다 (#78)", await page.locator(".ss-lay.ss-show").count() === 1);
     /* 주소로 받아 온 문서는 쓸 파일이 애초에 없다 — 막지 않는다 (「설명 복사」가 유일한 길) */
     await page.goto("about:blank");
     await page.setContent('<h1 data-spec="1">A</h1><script>window.SCREENSPEC={screen:{id:"S-G",name:"g"},' +
       'specs:[{n:1,target:"1",title:"제목",defs:[{t:"정의"}]}]}<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     const cell2 = page.locator("[data-ed]").first();
     await cell2.click();
-    await page.waitForTimeout(200);
+    await settle(200);
     check("파일이 아닌 문서는 그대로 고쳐진다", (await cell2.getAttribute("contenteditable")) === "true");
     /* 막지는 않되 «어디로 옮겨야 하는지» 를 한 번은 말해 준다 (#84) —
        조작하는 곳(패널 안)과 「자동저장 안 됨」 표시(툴바 구석)가 떨어져 있어 눈에 안 들어온다 */
@@ -897,11 +917,11 @@ function check(name, ok, detail) {
       (await page.locator(".ss-nofile").textContent()).indexOf("설명 복사") >= 0,
       await page.locator(".ss-nofile").textContent());
     await page.locator('.ss-nofile [data-nc="close"]').click();
-    await page.waitForTimeout(200);
+    await settle(200);
     check("닫으면 내려간다 (#84)", await page.locator(".ss-nofile.ss-show").count() === 0);
     await cell2.click();
     await page.keyboard.type("가");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("한 번만 알린다 — 다시 고쳐도 또 안 뜬다 (#84)",
       await page.locator(".ss-nofile.ss-show").count() === 0);
   }
@@ -920,15 +940,15 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(hookDoc("window.__wrote=t;"));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("훅이 있으면 «자동저장 꺼짐» 이 아니다 — 이미 쓸 곳이 있다",
       (await stat()).indexOf("저장") === 0 && (await stat()).indexOf("꺼짐") < 0, await stat());
     check("훅 경로 : 쓸 곳이 이미 있으므로 「자동저장 켜기」가 아니다",
       (await page.locator(".ss-svbtn").textContent()) !== "자동저장 켜기");
     await page.click(row);
-    await page.waitForTimeout(200);
+    await settle(200);
     check("훅이 있으면 그 자리에서 바로 고쳐진다 (파일을 안 고른다)",
       (await page.locator(row).getAttribute("contenteditable")) === "true");
     check("«파일에 못 쓴다» 안내가 안 뜬다 (#84 와 갈린다)",
@@ -951,9 +971,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(hookDoc('throw new Error("개발 서버가 안 떠 있습니다");'));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click(row);
     await page.keyboard.press("End");
     await page.keyboard.type(" 가");
@@ -996,9 +1016,9 @@ function check(name, ok, detail) {
       };
     });
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
 
     check("설정에 쓴 표가 뷰어에 표로 나온다", await page.evaluate(() => {
       const t = document.querySelector(".ss-tbl");
@@ -1016,7 +1036,7 @@ function check(name, ok, detail) {
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("고침");
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("셀을 고치면 설정에 남는다 (t 가 비어도 안 지워진다)", await page.evaluate(() => {
       const s = window.ScreenSpec.serialize();
       return s.indexOf("고침") >= 0 && /kind:\s*"table"/.test(s);
@@ -1024,20 +1044,20 @@ function check(name, ok, detail) {
 
     await page.click('.ss-tcell[data-r="0"][data-c="0"]');
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("Tab 으로 다음 칸으로 간다", await page.evaluate(() => {
       const a = document.activeElement;
       return !!a && a.dataset.ed === "cell" && a.dataset.r === "0" && a.dataset.c === "1";
     }), await page.evaluate(() => { const a = document.activeElement; return a ? a.dataset.r + "/" + a.dataset.c : "none"; }));
     await page.click('.ss-tcell[data-r="1"][data-c="1"]');
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("마지막 칸에서 Enter 면 행이 는다", await page.evaluate(() =>
       document.querySelectorAll(".ss-tbl tbody tr").length === 3));
 
     /* PNG — 그리는 곳 둘째. 빠지면 그림에서만 내용이 사라진다 */
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(1200);
@@ -1047,18 +1067,18 @@ function check(name, ok, detail) {
       cap.indexOf("ss-pr-in-tbl") >= 0 && cap.indexOf("고침") >= 0 && cap.indexOf("상태") >= 0,
       "길이 " + cap.length + " · in-tbl " + (cap.indexOf("ss-pr-in-tbl") >= 0) + " · 고침 " + (cap.indexOf("고침") >= 0));
     await page.click('[data-pr="cancel"]');
-    await page.waitForTimeout(200);
+    await settle(200);
 
     /* 슬래시로 만들기 */
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.press("/");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("슬래시 메뉴에 «표» 가 있다", (await page.locator('.ss-slash [data-sl="tbl"]').count()) === 1);
     await page.click('.ss-slash [data-sl="tbl"]');
-    await page.waitForTimeout(500);
+    await settle(500);
     check("슬래시로 표가 생긴다", await page.evaluate(() =>
       document.querySelectorAll('.ss-b[data-kind="table"]').length === 2));
     check("만들면 첫 머리칸에 커서가 간다 — 만들자마자 쓴다", await page.evaluate(() => {
@@ -1071,26 +1091,26 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(TDOC);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     /* 빈 행에서 Backspace → 그 행만 */
     await page.click('.ss-tcell[data-r="1"][data-c="0"]');
     await page.keyboard.press(MOD + "+a"); await page.keyboard.press("Delete");
     await page.keyboard.press("Tab");
     await page.keyboard.press(MOD + "+a"); await page.keyboard.press("Delete");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("Backspace");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("빈 행에서 Backspace 면 그 행이 지워진다 (#97)", await page.evaluate(() =>
       document.querySelectorAll(".ss-tbl tbody tr").length === 1),
       await page.evaluate(() => document.querySelectorAll(".ss-tbl tbody tr").length));
     /* ⠿ → 메뉴 → 삭제 */
     await page.click('.ss-b[data-kind="table"] .ss-g-grip');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("⠿ 를 누르면 블록 메뉴가 뜬다 (#97)", (await page.locator(".ss-blkmenu").count()) === 1);
     await page.click('.ss-blkmenu [data-bm="del"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("메뉴의 삭제로 표가 통째로 사라진다 (#97)", await page.evaluate(() =>
       document.querySelectorAll('.ss-b[data-kind="table"]').length === 0 &&
       window.ScreenSpec.serialize().indexOf('kind: "table"') < 0));
@@ -1098,9 +1118,9 @@ function check(name, ok, detail) {
       window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") >= 0));
     /* 같은 길이 글자 블록에도 통한다 — 표만의 특례를 만들지 않는다 */
     await page.click('.ss-b:not([data-kind="table"]) .ss-g-grip');
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('.ss-blkmenu [data-bm="del"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     check("글자 블록도 같은 메뉴로 지워진다 (#97)", await page.evaluate(() =>
       window.ScreenSpec.serialize().indexOf("버튼 문구로 현재 상태 표시") < 0));
   }
@@ -1119,7 +1139,7 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(two + cfg(""));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     check("추론은 그대로 돈다 (_rootEl 이 진짜 요소다)", await page.evaluate(() =>
       window.SCREENSPEC.screens.every((s) => s._rootEl && s._rootEl.nodeType === 1)));
     check("저장 텍스트에 _rootEl 이 안 실린다", await page.evaluate(() =>
@@ -1133,11 +1153,11 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(two + cfg(',_rootEl:{}'));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-02"));
-    await page.waitForTimeout(400);
+    await settle(400);
     check("오염된 파일(_rootEl:{})에서도 화면 전환이 안 죽는다", errs2.length === 0, errs2.slice(0, 2));
     check("오염된 값은 청소하고 추론을 다시 돌린다", await page.evaluate(() =>
       window.SCREENSPEC.screens.every((s) => !s._rootEl || s._rootEl.nodeType === 1)));
@@ -1175,9 +1195,9 @@ function check(name, ok, detail) {
       };
     });
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
 
     check("줄 끝에 각주가 선다 — 같은 출처는 같은 번호, 첫 등장 순서", await page.evaluate(() => {
       const ns = [...document.querySelectorAll(".ss-ref .ss-ref-n")].map((a) => a.textContent);
@@ -1223,7 +1243,7 @@ function check(name, ok, detail) {
       await page.keyboard.press("End");
       await page.keyboard.type("!");
       await page.keyboard.press("Escape");
-      await page.waitForTimeout(250);
+      await settle(250);
     }
     check("두 번 고쳐도 각주가 글자에 안 섞인다 · ref 는 산다", await page.evaluate(() => {
       const t = window.ScreenSpec.serialize();
@@ -1237,7 +1257,7 @@ function check(name, ok, detail) {
 
     /* PNG — 번호와 출처 절이 그림에 같이 실린다 */
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(1200);
@@ -1272,9 +1292,9 @@ function check(name, ok, detail) {
       };
     });
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("설정의 머메이드 블록이 그려진다 (코드는 숨는다)", await page.evaluate(() => {
       const svg = document.querySelector('.ss-mm-svg svg[data-fake]');
       const code = document.querySelector(".ss-mm-code");
@@ -1286,7 +1306,7 @@ function check(name, ok, detail) {
     }), (await page.evaluate(() => window.ScreenSpec.serialize())).slice(0, 200));
     /* PNG — 뷰어가 그려 둔 svg 를 재사용한다 */
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(1200);
@@ -1295,9 +1315,9 @@ function check(name, ok, detail) {
     await page.click('[data-pr="cancel"]');
     /* ⠿ 로 지워진다 — 표와 같은 길 */
     await page.click('.ss-b[data-kind="mermaid"] .ss-g-grip');
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.click('.ss-blkmenu [data-bm="del"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("⠿ 메뉴로 지워진다 (표와 같은 길)", await page.evaluate(() =>
       !document.querySelector('.ss-b[data-kind="mermaid"]') &&
       window.ScreenSpec.serialize().indexOf("mermaid") < 0));
@@ -1312,9 +1332,9 @@ function check(name, ok, detail) {
       window.mermaid = { initialize() {}, render: async () => { throw new Error("문법이 틀렸다"); } };
     });
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("실패하면 코드 블록이 바닥이다 — 내용이 사라지지 않는다", await page.evaluate(() => {
       const code = document.querySelector(".ss-mm-code");
       return !!code && code.hidden !== true && code.textContent === "graph TD; A-->B" &&
@@ -1330,7 +1350,7 @@ function check(name, ok, detail) {
   if (sec("[모바일] 폰 폭에서 툴바가 접힌다 (#94)")) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
-    await page.waitForTimeout(600);
+    await settle(600);
     check("«화면정의서» 버튼이 다른 버튼 아래 깔리지 않는다", await page.evaluate(() => {
       const b = document.getElementById("ss-mDoc"), r = b.getBoundingClientRect();
       const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
@@ -1352,22 +1372,22 @@ function check(name, ok, detail) {
       return !!more && more.getClientRects().length > 0 && sv && !sv.getClientRects().length;
     }));
     await page.click(".ss-more");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("⋯ 를 누르면 도구가 펼쳐진다", await page.evaluate(() => {
       const sv = document.querySelector(".ss-svbtn"), pr = document.querySelector(".ss-prbtn");
       return sv && sv.getClientRects().length > 0 && pr && pr.getClientRects().length > 0;
     }));
     await page.click("body", { position: { x: 200, y: 500 } });
-    await page.waitForTimeout(200);
+    await settle(200);
     check("바깥을 누르면 닫힌다", await page.evaluate(() =>
       !document.querySelector(".ss-toolbar").classList.contains("ss-tools-open")));
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("폰 폭에서 문서 모드 전환이 «탭으로» 된다", await page.evaluate(() =>
       document.body.classList.contains("ss-mode-doc")));
     /* 넓은 폭으로 돌아오면 전과 같다 */
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.waitForTimeout(300);
+    await settle(300);
     check("넓은 폭: ⋯ 는 없고 도구가 한 줄로 보인다", await page.evaluate(() => {
       const more = document.querySelector(".ss-more");
       const pr = document.querySelector(".ss-prbtn");
@@ -1390,16 +1410,16 @@ function check(name, ok, detail) {
       await page.goto("about:blank");
       await page.setContent(DOC);
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(400);
+      await settle(400);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(300);
+      await settle(300);
       await page.click(line);
       await page.keyboard.press("End");
     };
 
     await fresh();
     await page.keyboard.press("/");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("글자가 있는 줄에서도 / 로 열린다", (await open()) === 1);
     check("«넣기» 셋은 그대로 나온다",
       (await page.locator('.ss-slash [data-sl="num"], .ss-slash [data-sl="bul"], .ss-slash [data-sl="why"]').count()) === 3,
@@ -1408,7 +1428,7 @@ function check(name, ok, detail) {
     check("글자가 있는 줄에는 «화면 개요» 를 안 준다",
       (await page.locator('.ss-slash [data-sl="brief"]').count()) === 0);
     await page.click('.ss-slash [data-sl="why"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("고르면 «/» 가 글에 안 남는다",
       (await page.locator(line).textContent()).indexOf("/") < 0,
       await page.locator(line).textContent());
@@ -1419,23 +1439,23 @@ function check(name, ok, detail) {
     /* 이어 친 글자로 걸러진다 — 노션과 같다 */
     await fresh();
     await page.keyboard.press("/");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.type("불");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("이어 친 글자로 걸러진다", (await page.locator(".ss-slash [data-sl]").count()) === 1 &&
       (await page.locator(".ss-slash [data-sl]").getAttribute("data-sl")) === "bul",
       await page.locator(".ss-slash [data-sl]").allTextContents());
     await page.click('.ss-slash [data-sl="bul"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("고르면 «/» 와 거르려고 친 글자까지 걷힌다",
       (await page.locator(line).textContent()) === "첫 줄", await page.locator(line).textContent());
 
     /* 걸리는 것이 없으면 «/» 는 그냥 글자다 */
     await fresh();
     await page.keyboard.press("/");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.type("결제수단");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("안 걸리면 메뉴가 닫힌다", (await open()) === 0);
     check("안 걸리면 «/» 는 그냥 글자로 남는다",
       (await page.locator(line).textContent()) === "첫 줄/결제수단",
@@ -1444,13 +1464,13 @@ function check(name, ok, detail) {
     /* 빈 줄에서는 «화면» 묶음이 그대로 붙는다 (#82 와 갈리지 않는다) */
     await fresh();
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("/");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("빈 줄에서는 «화면 개요» 가 그대로 나온다 (#82)",
       (await page.locator('.ss-slash [data-sl="brief"]').count()) === 1);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("Esc 로 닫힌다", (await open()) === 0);
 
     /* 슬래시가 낀 «그냥 글» 을 빠르게 쳐도 한 글자도 안 사라진다.
@@ -1460,7 +1480,7 @@ function check(name, ok, detail) {
     await page.keyboard.press("End");
     await page.keyboard.type(" POST /api/items");
     await page.keyboard.press("Shift+Enter");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("슬래시가 낀 글을 빨리 쳐도 안 잘린다 (#85)",
       (await page.locator(line).textContent()) === "첫 줄 POST /api/items",
       await page.locator(line).textContent());
@@ -1469,10 +1489,10 @@ function check(name, ok, detail) {
     /* 메뉴가 떠 있어도 Shift+Enter 는 «여기서 그만» 이다 — 어디서나 같은 뜻이어야 한다 */
     await fresh();
     await page.keyboard.press("/");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("메뉴가 떠 있는 것을 확인하고", (await open()) === 1);
     await page.keyboard.press("Shift+Enter");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("Shift+Enter 를 메뉴가 가로채지 않는다 (#85)",
       (await page.locator(line).textContent()) === "첫 줄/" &&
       (await page.locator(".ss-pickbar, .ss-picking").count()) === 0,
@@ -1526,7 +1546,7 @@ function check(name, ok, detail) {
     const go = async () => { await page.click('[data-pr="go"]'); await page.waitForTimeout(2200); };
 
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     let d = await dlg();
     check("UX 라이팅: 제목이 확장자가 아니라 사람의 말이다",
       (await page.textContent(".ss-prdlg h3")) === "그림으로 내보내기");
@@ -1539,37 +1559,37 @@ function check(name, ok, detail) {
     check("기본 한 벌은 «일부» 가 아니다 — 부모가 중간 상태로 안 보인다", d.head === "v", d.head);
     check("스케치에 번호가 서 있다", d.pvMk === true);
     await page.uncheck('[data-pr-c="mark"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("«화면 위 번호» 를 끄면 스케치에서 번호가 «정말» 사라진다", (await dlg()).pvMk === false);
     await page.check('[data-pr-c="mark"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("머리말이 켜져 있으면 그 자식은 흐리지 않다", d.headKidsOff === false);
     /* 이 문서에는 개발 정의가 없다 — 아무 일도 안 하는 선택지는 아예 만들지 않는다 (옛 「레이어」 와 같은 규칙) */
     check("개발 정의가 없는 문서에는 «개발 정의 포함» 을 안 만든다", d.devBox === false, JSON.stringify(d));
 
     /* ── 뎁스 ── */
     await page.uncheck('[data-pr-c="path"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     d = await dlg();
     check("자식 하나를 빼면 부모가 중간 상태", d.head === "-" && d.path === "x", JSON.stringify(d));
     check("미리보기가 설정을 따라간다 (경로가 스케치에서 사라진다)", d.pvPath === false);
     await page.click('[data-pr-c="head"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     d = await dlg();
     check("부모를 누르면 자식 전부 꺼진다", d.head === "x" && d.id === "x" && d.headKidsOff === true, JSON.stringify(d));
     await page.click('[data-pr-c="head"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     d = await dlg();
     check("다시 누르면 «기본 한 벌» 이 켜진다 — 안 쓰던 일시가 따라오지 않는다",
       d.id === "v" && d.name === "v" && d.path === "v" && d.when === "x", JSON.stringify(d));
     await page.check('[data-pr-c="when"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("일시는 손으로 켠다", (await dlg()).when === "v");
     await page.check('[data-pr-c="table"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("표를 켜면 미리보기에도 표가 선다", (await dlg()).pvTbl === true);
     await page.uncheck('[data-pr-c="table"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("표를 끄면 미리보기에서도 사라진다", (await dlg()).pvTbl === false);
 
     /* ── 실제 캡처로 검증 ── */
@@ -1586,9 +1606,9 @@ function check(name, ok, detail) {
 
     /* ── 색: 이 그림에만 ── */
     await page.click(".ss-pr-more summary");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.click('[data-pr-color="#E5484D"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("색은 accent 프리셋을 그대로 쓴다 (베끼지 않는다)",
       (await page.evaluate(() => document.querySelectorAll(".ss-pr-sw button").length)) === 5);
     await go();
@@ -1597,19 +1617,19 @@ function check(name, ok, detail) {
     check("문서의 accent 는 그대로다 — 내보내기가 문서를 고치면 안 된다",
       b.docAccent === "#2952E3", b.docAccent);
     await page.click('[data-pr-color="#E5484D"]');
-    await page.waitForTimeout(120);
+    await settle(120);
     check("같은 색을 다시 누르면 문서 색으로 돌아간다", (await dlg()).accent === "");
     await page.fill(".ss-pr-hex", "#00AA88");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("hex 직접 입력도 받는다", (await dlg()).accent === "#00AA88");
     await page.fill(".ss-pr-hex", "빨강");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("hex 가 아니면 무시한다 (깨진 값이 그림까지 안 간다)", (await dlg()).accent === "#00AA88");
 
     /* ── 기억: 사람 취향이라 파일이 아니라 localStorage ── */
     /* 한 번도 안 뽑은 색으로 재야 «지금 저장됐나» 를 앞 단계와 구분할 수 있다 */
     await page.fill(".ss-pr-hex", "#00AA88");
-    await page.waitForTimeout(120);
+    await settle(120);
     check("열어 보기만 한 것은 아직 취향이 아니다 (저장은 «내보내기» 때)", await page.evaluate(() => {
       const raw = localStorage.getItem("screenspec:export");
       return !raw || JSON.parse(raw).color !== "#00AA88";
@@ -1624,7 +1644,7 @@ function check(name, ok, detail) {
     await page.reload();
     await page.waitForTimeout(900);
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     d = await dlg();
     check("다시 열면 지난 설정 그대로", d.path === "x" && d.when === "x" && d.accent === "#00AA88", JSON.stringify(d));
     const reopen = async (raw) => {
@@ -1632,7 +1652,7 @@ function check(name, ok, detail) {
       await page.reload();
       await page.waitForTimeout(900);
       await page.click(".ss-prbtn");
-      await page.waitForTimeout(300);
+      await settle(300);
       return dlg();
     };
     d = await reopen("{망가진");
@@ -1648,9 +1668,9 @@ function check(name, ok, detail) {
     await page.reload();
     await page.waitForTimeout(900);
     await page.click(".ss-more");
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(400);
+    await settle(400);
     const m = await page.evaluate(() => {
       const d = document.querySelector(".ss-prdlg"), r = d.getBoundingClientRect();
       const bt = [...d.querySelectorAll(".ss-prdlg-btns button")].map((x) => {
@@ -1710,30 +1730,30 @@ function check(name, ok, detail) {
     const maj = async (n) => {
       await page.hover("#ss-def-" + n);
       await page.click("#ss-def-" + n + " .ss-rowmaj");
-      await page.waitForTimeout(250);
+      await settle(250);
     };
     /* 항목 줄은 화면정의서 모드에서만 선다 — 찍는 사람도, 그림을 뽑는 사람도 거기 있다.
        프로토타입 모드는 마커를 감추므로(그림에는 나온다) «보이는 번호» 를 재려면 여기여야 한다 */
     const majs = async () => { await maj(1); await maj(3); };
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(350);
+    await settle(350);
     d = await dlg();
     check("찍은 것이 없으면 «주요 항목만» 을 아예 안 내준다 (켜면 백지가 나온다)",
       d.mjVis === false, JSON.stringify(d));
     await page.click('[data-pr="cancel"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.click("#ss-mDoc"); await page.waitForTimeout(700);
     await majs();
     check("항목에 찍으면 표시가 남는다",
       (await page.getAttribute("#ss-def-1 .ss-rowmaj", "aria-pressed")) === "true");
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(350);
+    await settle(350);
     d = await dlg();
     check("찍은 뒤 열면 «주요 항목만» 이 나온다 (만들 때 한 번 재고 마는 것이 아니다)",
       d.mjVis === true && d.major === "x", JSON.stringify(d));
     await page.check('[data-pr-c="major"]');
     await page.check('[data-pr-c="table"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     d = await dlg();
     check("스케치가 «건너뛴 번호» 를 보여 준다 (2번이 빠지고 1·3 만 남는다)",
       d.pvMk === true && d.pvMk2 === false, JSON.stringify(d));
@@ -1747,20 +1767,20 @@ function check(name, ok, detail) {
     check("뽑고 나면 화면의 번호는 전부 돌아온다 (살아 있는 시트를 지우지 않는다)",
       allMarks > 2 && (await liveMarks()) === allMarks, [allMarks, await liveMarks()]);
     await page.uncheck('[data-pr-c="mark"]');
-    await page.waitForTimeout(200);
+    await settle(200);
     check("부모(«화면 위 번호»)를 끄면 «주요 항목만» 도 같이 꺼진다 (표→개발 과 같은 규칙)",
       (await dlg()).major === "x");
     await page.check('[data-pr-c="mark"]');
-    await page.waitForTimeout(200);
+    await settle(200);
     await go();
     check("«주요 항목만» 이 꺼지면 번호가 전부 박힌다", (await bakedMarks()).length === allMarks, JSON.stringify(await bakedMarks()));
     await page.click('[data-pr="cancel"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     await majs();
     check("다시 누르면 표시가 지워진다 (안 쓰는 문서에는 키가 안 남는다)",
       (await page.getAttribute("#ss-def-1 .ss-rowmaj", "aria-pressed")) === "false");
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(350);
+    await settle(350);
     check("표시가 없어지면 선택지도 도로 사라진다", (await dlg()).mjVis === false);
     await page.click('[data-pr="cancel"]');
     sM.close();
@@ -1787,9 +1807,9 @@ function check(name, ok, detail) {
       '{anno:"section",title:"공통 규칙",defs:[{t:"다"}]}]},' +
       '{id:"S-GAP",name:"g",path:["g"],specs:[{n:1,target:"3",title:"하나",defs:[{t:"x"}]},{n:3,target:"3",title:"셋",defs:[{t:"y"}]}]}]}<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     const rowsS = () => page.evaluate(() => [...document.querySelectorAll(".ss-defs-list [data-defrow]")]
       .map((e) => ((e.querySelector(".ss-no") || {}).textContent || "") + "|" + (e.querySelector(".ss-t") || {}).textContent +
         "|" + (e.classList.contains("ss-section") ? "S" : "")));
@@ -1812,7 +1832,7 @@ function check(name, ok, detail) {
     page.once("dialog", (d) => d.accept());
     await page.hover("#ss-def-1");
     await page.click("#ss-def-1 .ss-rowdel");
-    await page.waitForTimeout(400);
+    await settle(400);
     r = await rowsS();
     check("항목을 지우면 남은 번호가 1 부터 다시 매겨지고 섹션은 여전히 번호 없이",
       JSON.stringify(r) === JSON.stringify(["|메뉴 권한|S", "1|본문 영역|", "|공통 규칙|S"]), JSON.stringify(r));
@@ -1825,7 +1845,7 @@ function check(name, ok, detail) {
       document.body.appendChild = function (n) { const q = o(n); if (n.classList && n.classList.contains("ss-cap")) window.__caps.push(n); return q; };
     });
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.check('[data-pr-c="table"]');
     await page.click('[data-pr="go"]');
     await page.waitForTimeout(2200);
@@ -1945,7 +1965,7 @@ function check(name, ok, detail) {
     check("좁은 것부터 넓은 것 순서로 선다",
       (await seg()).join(",") === "mobile:모바일,tablet:태블릿,pc:PC", JSON.stringify(await seg()));
     await page.click('#ss-seg button[data-w="tablet"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("그 버튼을 누르면 선언한 폭이 된다", await page.evaluate(() => {
       const sh = document.querySelector(".ss-sheet");
       return sh.style.width === "768px" && sh.style.height === "1024px";
@@ -2033,19 +2053,19 @@ function check(name, ok, detail) {
         window.__clip = { types: it.types.slice(), html: await (await it.getType("text/html")).text(), text: await (await it.getType("text/plain")).text() }; };
     });
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     const bt = await page.evaluate(() => [...document.querySelectorAll(".ss-prdlg-btns button")].map((b) => b.textContent));
     check("대화상자에 「설명 복사」 — 취소와 내보내기 사이", JSON.stringify(bt) === JSON.stringify(["취소", "설명 복사", "내보내기"]), JSON.stringify(bt));
     await page.click('[data-pr="copy"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     let c = await page.evaluate(() => window.__clip);
     check("클립보드에 두 벌 — text/html + text/plain", JSON.stringify(c.types) === JSON.stringify(["text/html", "text/plain"]), JSON.stringify(c.types));
     check("대화상자가 낸 글 = API 가 낸 글 (같은 설정)", await page.evaluate((h) => window.ScreenSpec.exportText({ markers: true, major: false, head: { id: true, name: true, path: true, when: false }, table: false, layer: "plan", depth: "full" }).html === h, c.html));
     check("복사했다고 말한다", /복사했습니다/.test(await page.textContent(".ss-cap-msg")));
     await page.click('[data-pr-d="brief"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.click('[data-pr="copy"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     c = await page.evaluate(() => window.__clip);
     check("요약을 고르면 요약이 복사된다", c.html.indexOf("<table>") < 0 && c.html.indexOf("↳ 이유다") >= 0, c.html);
     check("깊이는 취향이라 남는다", await page.evaluate(() => JSON.parse(localStorage.getItem("screenspec:export") || "{}").depth === "brief"));
@@ -2053,7 +2073,7 @@ function check(name, ok, detail) {
     await page.reload();
     await page.waitForTimeout(700);
     await page.click(".ss-prbtn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("성한 JSON 이라도 모르는 깊이는 「전체」로", (await page.getAttribute('[data-pr-d="full"]', "aria-pressed")) === "true");
     await page.evaluate(() => localStorage.removeItem("screenspec:export"));
     check("JS 에러 0건", errors.length === 0, errors);
@@ -2097,7 +2117,7 @@ function check(name, ok, detail) {
     });
 
     await page.click('.ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     let z = await zs();
     /* 버튼이 없다는 것 자체가 이 판의 고침이다 — 프리셋 둘, 배율 버튼 0 (#105) */
     check("크기를 정하는 자리가 둘뿐이다 (자동·맞춤 버튼이 없다)", z.knobs === 2, JSON.stringify(z));
@@ -2125,22 +2145,22 @@ function check(name, ok, detail) {
 
     const was = (await zs()).scale;
     await page.setViewportSize({ width: 900, height: 620 });
-    await page.waitForTimeout(500);
+    await settle(500);
     z = await zs();
     check("창을 줄이면 배율이 따라온다", z.scale < was && z.scrollX === 0, JSON.stringify({ was: was, now: z }));
     /* 넉넉한 창에서는 아무것도 안 한다 — «넘칠 때만» 이 규칙의 전부다 */
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.click('.ss-seg button[data-w="mobile"]');
-    await page.waitForTimeout(400);
+    await settle(400);
     z = await zs();
     check("들어가는 크기는 안 줄인다 (모바일 시트는 실물 크기)", z.scale === 1, JSON.stringify(z));
     check("안 줄었으면 배율을 말하지 않는다", z.wpx === "360×800", z.wpx);
     await page.click('.ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(400);
+    await settle(400);
 
     /* ── 정의서 모드 ── */
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(700);
     z = await zs();
@@ -2150,23 +2170,23 @@ function check(name, ok, detail) {
     /* 배율 1 인 창 → 축소된 창. 마커–대상 거리가 시트 좌표로 같아야 한다.
        PC 시트는 어느 창에서도 폭에 걸려 배율 1 이 안 나오므로 모바일 시트로 잰다 */
     await page.click('.ss-seg button[data-w="mobile"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.waitForTimeout(600);
+    await settle(600);
     const at1 = await zs(), gaps1 = await markerGaps();
     await page.setViewportSize({ width: 1280, height: 700 });
-    await page.waitForTimeout(600);
+    await settle(600);
     const at2 = await zs(), gaps2 = await markerGaps();
     check("전제: 한쪽은 실물 크기, 한쪽은 축소된 상태다", at1.scale === 1 && at2.scale < 1,
       JSON.stringify({ a: at1.scale, b: at2.scale }));
     check("정의서: 축소가 마커 좌표계를 깨지 않는다 (마커–대상 거리가 시트 좌표로 같다)",
       gaps1 === gaps2 && gaps1.length > 0, JSON.stringify({ 실물: gaps1, 축소: gaps2 }));
     await page.click('.ss-seg button[data-w="pc"]'); /* 아래 둘은 긴 시트라야 뜻이 있다 */
-    await page.waitForTimeout(300);
+    await settle(300);
 
     /* 세로가 짧은 창 — 폭은 넉넉한데 높이가 모자라면 «높이» 를 따라야 한 화면에 들어온다 */
     await page.setViewportSize({ width: 1900, height: 620 });
-    await page.waitForTimeout(600);
+    await settle(600);
     const tall = await page.evaluate(() => {
       const st = document.querySelector(".ss-stage"), cs = getComputedStyle(st);
       const iw = st.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -2180,7 +2200,7 @@ function check(name, ok, detail) {
 
     /* 좁은 폭에서는 무대가 흐름 배치라 높이가 내용을 따라간다 — 그걸 기준 삼으면 배율이 제 꼬리를 문다 */
     await page.setViewportSize({ width: 900, height: 600 });
-    await page.waitForTimeout(600);
+    await settle(600);
     const flow = await page.evaluate(() => {
       const st = document.querySelector(".ss-stage"), cs = getComputedStyle(st);
       const iw = st.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -2258,7 +2278,7 @@ function check(name, ok, detail) {
     /* ⑤ 문법: 크기는 프리셋과 손잡이만 바꾼다 — 창 크기 변경은 «배율» 만 건드린다 (#105) */
     const was = m.size;
     await page.setViewportSize({ width: 1100, height: 700 });
-    await page.waitForTimeout(400);
+    await settle(400);
     check("창을 줄여도 시트 크기는 그대로다 (줄어드는 것은 배율이다)", (await box()).size === was, [was, (await box()).size]);
     check("그래도 창 안에 들어온다", (await box()).wrapX === 0 && (await box()).wrapY === 0, await box());
     const er = await page.locator(".ss-edge-r").boundingBox();
@@ -2266,26 +2286,26 @@ function check(name, ok, detail) {
     await page.mouse.down();
     await page.mouse.move(er.x - 120, er.y + er.height / 2, { steps: 5 });
     await page.mouse.up();
-    await page.waitForTimeout(250);
+    await settle(250);
     const dragged = (await box()).size;
     check("손잡이로 끈 크기가 남는다", dragged !== was, [was, dragged]);
     await page.setViewportSize({ width: 1320, height: 840 });
-    await page.waitForTimeout(400);
+    await settle(400);
     check("끌어서 정한 크기는 다음 창 크기 변경에 지워지지 않는다",
       (await box()).size === dragged, [dragged, (await box()).size]);
     check("프리셋은 «누르면 돌아갈 자리» 로 남는다",
       (await page.getAttribute('.ss-seg button[data-w="pc"]', "aria-pressed")) === "true");
     await page.click('.ss-seg button[data-w="pc"]');
-    await page.waitForTimeout(350);
+    await settle(350);
     check("다시 누르면 기준 폭으로 돌아온다", (await box()).size === "1920×1080", (await box()).size);
 
     /* ⑥ 정의서는 기준 폭을 지킨다 — 여기서 폭이 창을 따라가면 «16열이 다 보인다» 가 검증할 대상을 잃는다 */
     const beforeDoc = (await box()).size;
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("정의서 모드로 가도 기준 폭은 그대로다", (await box()).size === beforeDoc, [beforeDoc, (await box()).size]);
     await page.setViewportSize({ width: 1100, height: 700 });
-    await page.waitForTimeout(400);
+    await settle(400);
     check("정의서에서는 창을 줄여도 기준 폭이 안 따라간다", (await box()).size === beforeDoc, await box());
 
     /* ⑦ 프리셋은 둘뿐이다 — 그 사이는 손잡이로 끈다 (#105) */
@@ -2334,13 +2354,13 @@ function check(name, ok, detail) {
     let a = await fst();
     check("frame·API: 액자가 따라간다 — 접두(basePath)를 도로 붙여서", a.inner === "/screenspec/examples/members" && a.cur === "S-09", a);
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('[data-toc="S-01"]');
     await page.waitForTimeout(1300);
     a = await fst();
     check("frame·목차: 같은 길이라 같이 고쳐졌다 (#74 의 교훈)", a.inner === "/screenspec/examples/home" && a.cur === "S-01", a);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-10"));
-    await page.waitForTimeout(600);
+    await settle(600);
     a = await fst();
     check("frame·패턴 라우트: 갈 주소가 없다 — 문서만 바꾸고 콘솔로 말한다",
       a.cur === "S-10" && a.inner === "/screenspec/examples/home" && infos.some((t) => t.indexOf("패턴이라") >= 0),
@@ -2398,14 +2418,14 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(two);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     const shows = () => page.evaluate(() => ["A", "B"].map((i) => document.getElementById(i).getClientRects().length > 0));
     check("처음 모습은 프로토타입의 것 (아무것도 숨기지 않는다)", JSON.stringify(await shows()) === "[true,true]");
     await page.evaluate(() => window.ScreenSpec.setScreen("S-02"));
-    await page.waitForTimeout(300);
+    await settle(300);
     check("root 를 안 적어도 두 번째 화면으로 전환된다", JSON.stringify(await shows()) === "[false,true]");
     await page.evaluate(() => window.ScreenSpec.setScreen("S-01"));
-    await page.waitForTimeout(300);
+    await settle(300);
     check("되돌아온다", JSON.stringify(await shows()) === "[true,false]");
     /* 정의서 모드는 «지금 설명하는 화면» 만 보인다 (#75). 새로 띄워 «둘 다 보이는» 데서 시작해야
        좁혔는지를 잴 수 있다 — 앞의 setScreen 이 이미 하나를 숨겨 둔 상태에서 재면 늘 통과한다
@@ -2413,24 +2433,24 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(two);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     const before75 = JSON.stringify(await shows());
     check("정의서 모드로 들어가기 전에는 둘 다 보인다 (#75 시험의 전제)", before75 === "[true,true]", before75);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("정의서 모드: 설명하는 화면만 보인다 (#75)", JSON.stringify(await shows()) === "[true,false]",
       JSON.stringify(await shows()));
     await page.click("#ss-mProto");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("프로토타입 모드로 돌아가면 들어오기 직전 모습 그대로 (#75)", JSON.stringify(await shows()) === before75,
       before75 + " → " + JSON.stringify(await shows()));
     /* 사람이 실제로 누르는 길로 잰다 (#74) — setScreen 만 재면 목차의 제 경로가 안 잡힌다 */
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.locator(".ss-toc-btn").first().click({ force: true });
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.locator("[data-toc='S-02']").first().click({ force: true });
-    await page.waitForTimeout(500);
+    await settle(500);
     check("목차에서 골라도 프로토타입이 바뀐다 (#74)", JSON.stringify(await shows()) === "[false,true]",
       JSON.stringify(await shows()));
     check("고른 화면이 유지된다 (화면 감지가 되돌리지 않는다)",
@@ -2444,7 +2464,7 @@ function check(name, ok, detail) {
       '<div id="B"><h1 data-spec="1">B</h1><p data-spec="2">b</p></div>' +
       '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "1", "2") + ']}<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     page.off("console", onMsg);
     check("모호하면 조용히 넘어가지 않는다 (연결 안 된 화면을 콘솔로 알린다)",
       warns.some((t) => t.includes("연결되지 않은 화면")));
@@ -2456,11 +2476,11 @@ function check(name, ok, detail) {
       '<div id="B"><h1 data-spec="9">B</h1><p data-spec="9">b</p></div>' +
       '<script>window.SCREENSPEC={mode:"wrap",screens:[' + scr("S-01", "1", "2") + ',' + scr("S-02", "9", "9") + ']}<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.locator(".ss-toc-btn").first().click({ force: true });
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.locator("[data-toc='S-02']").first().click({ force: true });
     await page.waitForTimeout(900);
     check("연결 안 된 화면도 고른 대로 남는다 (감지가 뒤집지 않는다) (#77)",
@@ -2477,21 +2497,21 @@ function check(name, ok, detail) {
        ["S-09","프로필",["홈","설정","프로필"]],["S-10","로그",["홈","로그"]]]
         .map(([id,name,path]) => JSON.stringify({ id, name, path, specs: [{ n: 1, target: "1", title: "t" }], viewports: id === "S-10" ? ["pc"] : undefined })).join(",") + '],baseViewport:"pc"}</script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("화면 10개: 목차 검색 입력 존재", (await page.locator(".ss-toc-search input").count()) === 1);
     check("viewports:['pc'] → 목차 'PC 전용' 배지 (#17)", await page.evaluate(() => document.querySelector('[data-toc="S-10"] .ss-toc-vp')?.textContent === "PC 전용" && !document.querySelector('[data-toc="S-01"] .ss-toc-vp')));
     check("baseViewport:'pc' → 시작 폭 PC (#17)", await page.evaluate(() => document.querySelector('#ss-seg button[data-w="pc"]').getAttribute("aria-pressed") === "true" && document.querySelector(".ss-sheet").style.width === "1920px" /* 정의서 모드는 화면에 맞춰 축소되므로 설정값으로 */));
     await page.fill(".ss-toc-search input", "초대");
-    await page.waitForTimeout(200);
+    await settle(200);
     const vis = () => page.evaluate(() => [...document.querySelectorAll(".ss-toc-body > *")].filter((r) => r.style.display !== "none").map((r) => r.dataset.toc || "grp:" + r.textContent.trim()));
     const v1 = await vis();
     check("검색 '초대' → 매칭 행 + 조상(홈 화면·이용자 그룹)만", v1.length === 3 && v1[0] === "S-01" && v1[1] === "grp:이용자" && v1[2] === "S-03", JSON.stringify(v1));
     await page.fill(".ss-toc-search input", "");
-    await page.waitForTimeout(200);
+    await settle(200);
     const v2 = await vis();
     check("검색 비우면 전부 복원", v2.filter((x) => !x.startsWith("grp:")).length === 10, String(v2.length));
     await page.click(".ss-toc-x");
@@ -2517,15 +2537,15 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(covHtml('checklist:["빈 상태","로딩","오류"],'));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("커버리지: 다 채운 화면 → 아무것도 안 뜬다 (체크리스트는 다 채우면 사라진다)", await page.evaluate(() => {
       const el = document.querySelector(".ss-cov");
       return !el;
     }));
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("커버리지: 미정의 0인 화면은 목차 배지 없음 (조용히)", await page.evaluate(() =>
       !document.querySelector('[data-toc="S-A"] .ss-toc-cov')));
     check("커버리지: 목차 배지 '⚠ 로딩 · 오류 미정의'", await page.evaluate(() =>
@@ -2535,9 +2555,9 @@ function check(name, ok, detail) {
       return t === "⚠ 빈 상태 · 로딩 · 오류 미정의";
     }));
     await page.click(".ss-toc-x");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-B"));
-    await page.waitForTimeout(300);
+    await settle(300);
     check("커버리지: 패널 ⚠ 줄이 미정의 축을 나열", await page.evaluate(() => {
       const el = document.querySelector(".ss-cov");
       const miss = el && el.querySelector(".ss-cov-miss");
@@ -2558,16 +2578,16 @@ function check(name, ok, detail) {
     await page.setContent(covHtml('checklist:["빈 상태",{name:"로딩",common:"공통 컴포넌트가 처리"},' +
       '{name:"오류",common:"공통 컴포넌트가 처리"}],'));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-B"));
-    await page.waitForTimeout(300);
+    await settle(300);
     check("공통 처리: 화면마다 안 적어도 경고가 안 난다 (#89)",
       (await page.locator(".ss-cov").count()) === 0,
       await page.locator(".ss-cov").allInnerTexts());
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("공통 처리: 목차 배지도 안 붙는다 (#89)",
       (await page.locator('[data-toc="S-B"] .ss-toc-cov').count()) === 0);
     /* 축이 사라지는 것이 아니다 — 문서에 «한 번» 남는다 */
@@ -2581,7 +2601,7 @@ function check(name, ok, detail) {
       ((document.querySelector('[data-toc="S-C"] .ss-toc-cov') || {}).textContent || "") === "⚠ 빈 상태 미정의"),
       await page.locator('[data-toc="S-C"] .ss-toc-cov').allTextContents());
     await page.click(".ss-toc-x");
-    await page.waitForTimeout(200);
+    await settle(200);
     page.off("console", onKMsg);
 
     /* 사유 없는 common → 보통 축 + 경고 */
@@ -2591,18 +2611,18 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(covHtml('checklist:["빈 상태","로딩",{name:"오류",common:true}],'));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("공통 처리: 사유가 없으면 보통 축이다 (#89)", await page.evaluate(() =>
       ((document.querySelector('[data-toc="S-B"] .ss-toc-cov') || {}).textContent || "") === "⚠ 로딩 · 오류 미정의"),
       await page.locator('[data-toc="S-B"] .ss-toc-cov').allTextContents());
     check("공통 처리: 그때는 왜인지 말해 준다 (#89)",
       jWarns.some((w) => w.includes("common 에 사유")), jWarns.join(" | ").slice(0, 200));
     await page.click(".ss-toc-x");
-    await page.waitForTimeout(200);
+    await settle(200);
     page.off("console", onJMsg);
 
     /* checklist 가 없으면 아무 것도 달라지지 않는다 */
@@ -2612,11 +2632,11 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(covHtml(""));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click(".ss-toc-btn");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("checklist 없으면 커버리지 UI 자체가 없음 (.ss-cov · .ss-toc-cov 0개)", await page.evaluate(() =>
       document.querySelectorAll(".ss-cov").length === 0 && document.querySelectorAll(".ss-toc-cov").length === 0));
     check("checklist 없으면 covers·skip 경고도 없음", !nWarns.some((w) => w.includes("covers") || w.includes("skip")), nWarns.join(" | ").slice(0, 160));
@@ -2630,9 +2650,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(covHtml("checklist:[],"));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("checklist 가 빈 배열 → 경고 + 기능 꺼짐", await page.evaluate(() => document.querySelectorAll(".ss-cov").length === 0) &&
       bWarns.some((w) => w.includes("checklist 는 문자열 또는 { name, common } 의 배열이어야 합니다")), bWarns.join(" | ").slice(0, 160));
     page.off("console", onBMsg);
@@ -2657,9 +2677,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(BODY + "<script>" + CFG + LISTENER + "<\/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 스위치 라벨(기호 없음) + ss-play 액센트 상속", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       return !!b && b.textContent.trim() === "빈 상태 보기" && b.dataset.pvlabel === "빈 상태 보기" &&
@@ -2677,7 +2697,7 @@ function check(name, ok, detail) {
       return !!bar && getComputedStyle(bar).display === "none";
     }));
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 앱이 실제로 상태를 만든다 + 버튼 눌린 상태", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       return document.getElementById("list").hidden === true && document.getElementById("empty").hidden === false &&
@@ -2687,8 +2707,10 @@ function check(name, ok, detail) {
     /* ② 되돌리는 방법이 그 자리에 있어야 한다 — 켜지면 라벨이 「원래대로」 */
     check("preview: 켜지면 라벨이 「원래대로」 (되돌리는 법이 그 자리에)", await page.evaluate(() =>
       document.querySelector('[data-preview="9"]').textContent.trim() === "원래대로"));
-    check("preview: 켜지면 노브가 오른쪽으로 간다", await page.evaluate(() =>
-      getComputedStyle(document.querySelector('[data-preview="9"]'), "::after").transform === "matrix(1, 0, 0, 1, 9, 0)"));
+    /* 노브는 CSS 전환으로 움직인다 — 전환은 DOM 을 안 흔들어 settle 이 못 본다. «자리에 닿았나» 를 조건으로 기다린다 (#112) */
+    check("preview: 켜지면 노브가 오른쪽으로 간다", await page.waitForFunction(() =>
+      getComputedStyle(document.querySelector('[data-preview="9"]'), "::after").transform === "matrix(1, 0, 0, 1, 9, 0)", null, { timeout: 2000 })
+      .then(() => true).catch(() => false));
     /* ③ 앱만 보는 사람에게도 가짜 상태임이 보여야 한다 — 앱 위 띠 */
     check("preview: 켜진 동안 앱 위에 재현 중 띠 (항목명 포함)", await page.evaluate(() => {
       const bar = document.querySelector(".ss-pvbar");
@@ -2697,7 +2719,7 @@ function check(name, ok, detail) {
         bar.textContent.includes("「목록 공백 상태」 재현 중") && bar.textContent.includes("실제 데이터가 아닙니다");
     }));
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 다시 누르면 on:false → 원래 화면 복귀", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       return document.getElementById("list").hidden === false && document.getElementById("empty").hidden === true &&
@@ -2709,9 +2731,9 @@ function check(name, ok, detail) {
       getComputedStyle(document.querySelector(".ss-pvbar")).display === "none"));
     /* 띠의 「끄기」 = 스위치를 끄는 것과 같은 경로 (앱은 on:false 를 받는다) */
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click(".ss-pvbar-x");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 띠의 「끄기」로도 꺼진다 (앱에 on:false + 띠 숨김)", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       return window.__pv.slice(-1)[0] === "9:false:S-PV:목록 공백 상태" &&
@@ -2729,7 +2751,7 @@ function check(name, ok, detail) {
       return !!tag && !tag.hasAttribute("role") && !tag.hasAttribute("tabindex");
     }));
     await page.click("#ss-def-9 .ss-nowtag");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 배지를 누르면 스위치와 같은 경로로 켜진다", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       return window.__pv.slice(-1)[0] === "9:true:S-PV:목록 공백 상태" &&
@@ -2738,7 +2760,7 @@ function check(name, ok, detail) {
         getComputedStyle(document.querySelector(".ss-pvbar")).display !== "none";
     }));
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(200);
+    await settle(200);
 
     /* 2) 아무도 안 듣는 앱 — 죽은 버튼이 아니라 「앱이 아직 못 만든다」로 읽혀야 한다 */
     const infos = [];
@@ -2747,11 +2769,11 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(BODY + "<script>" + CFG + "<\/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 듣는 앱이 없으면 행에 안내 + 버튼은 안 켜짐", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="9"]');
       const n = document.querySelector(".ss-preview-none");
@@ -2771,15 +2793,15 @@ function check(name, ok, detail) {
       '{n:10,target:"10",anno:"state",title:"오류",preview:{label:"오류 보기"}}]};' +
       'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on);e.detail.handled=true;});<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: label 생략 시 「{title} 보기」", await page.evaluate(() =>
       document.querySelector('[data-preview="9"]').textContent.trim() === "공백 보기"));
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click('[data-preview="10"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 두 번째를 켜면 첫 번째가 먼저 꺼진다 (동시에 하나만)", await page.evaluate(() =>
       window.__pv.join("|") === "9:true|9:false|10:true" &&
       document.querySelector('[data-preview="9"]').getAttribute("aria-pressed") === "false" &&
@@ -2798,13 +2820,13 @@ function check(name, ok, detail) {
       '{id:"S-2",name:"둘",root:"[data-ss-screen=\'S-2\']",specs:[{n:1,target:"1",title:"본문"}]}]};' +
       'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.screen+"/"+e.detail.n+":"+e.detail.on);e.detail.handled=true;});<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-2"));
-    await page.waitForTimeout(400);
+    await settle(400);
     check("preview: 화면이 바뀌면 앱에 on:false 가 간다", await page.evaluate(() =>
       window.__pv.join("|") === "S-1/9:true|S-1/9:false" && window.ScreenSpec.current() === "S-2"));
     check("preview: 화면이 바뀌면 재현 중 띠도 사라진다", await page.evaluate(() =>
@@ -2818,15 +2840,15 @@ function check(name, ok, detail) {
       'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on+":"+e.detail.title);' +
       'if(e.detail.n==="2"){document.querySelector("[data-spec=\'1a\']").textContent=e.detail.on?"0":"3";e.detail.handled=true;}});<' + "/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: 그 번호의 행에 스위치가 붙는다", await page.evaluate(() => {
       const b = document.querySelector('[data-preview="2"]');
       return !!b && b.closest(".ss-row").dataset.defrow === "2" && !document.querySelector('[data-preview="1"]');
     }));
     await page.click('[data-preview="2"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     /* 띠가 정의서 헤더를 덮지 않는다 — 뜨면 그 높이(28px)만큼 아래를 민다 (#29 QA 실측) */
     check("preview: 재현 중 띠가 정의서 헤더를 덮지 않는다", await page.evaluate(() => {
       const bar = document.querySelector(".ss-pvbar").getBoundingClientRect();
@@ -2845,11 +2867,11 @@ function check(name, ok, detail) {
       '{n:1,target:"1",title:"목록 영역"},{n:9,target:"9",anno:"state",title:"공백",preview:{}}]};' +
       'window.__pv=[];addEventListener("screenspec:preview",function(e){window.__pv.push(e.detail.n+":"+e.detail.on);e.detail.handled=true;});<\/script>');
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-ovDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click('[data-preview="9"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: overlay 도 띠가 헤더 아래(48px)에 · 패널 아래 대역", await page.evaluate(() => {
       const cs = getComputedStyle(document.querySelector(".ss-pvbar"));
       const hz = +getComputedStyle(document.querySelector(".ss-ov-header")).zIndex;
@@ -2857,7 +2879,7 @@ function check(name, ok, detail) {
         document.querySelector(".ss-pvbar").getBoundingClientRect().right <= innerWidth - 400;
     }));
     await page.click(".ss-pvbar-x");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("preview: overlay 의 「끄기」도 실제로 눌린다", await page.evaluate(() =>
       window.__pv.join("|") === "9:true|9:false" &&
       getComputedStyle(document.querySelector(".ss-pvbar")).display === "none"));
@@ -2872,7 +2894,7 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent("<h1 id='own'>내 프로토타입</h1>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(600);
+    await settle(600);
     check("설정 없음: DOM 불변 (감싸지 않음)", await page.evaluate(() =>
       !document.querySelector(".ss-sheet") && document.getElementById("own").parentElement === document.body));
     check("설정 없음: 안내 카드 노출", await page.evaluate(() => document.body.innerText.includes("설정이 없습니다")));
@@ -2891,7 +2913,7 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(BODY + "<script>" + CFG + "</script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(600);
+    await settle(600);
     check("off: UI 0개 (토글·마커·시트·안내카드)", await page.evaluate(() =>
       !document.querySelector(".ss-toolbar,.ss-pill,.ss-sheet,.ss-marker,.ss-ov-panel,.ss-ui")));
     check("off: 주입 CSS 없음 + body 클래스 불변", await page.evaluate(() =>
@@ -2940,9 +2962,9 @@ function check(name, ok, detail) {
       await page.goto("about:blank");
       await page.setContent(html);
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(400);
+      await settle(400);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(400);
+      await settle(400);
       const rows = await page.locator(".ss-defs-list .ss-row").count();
       page.off("console", on);
       return { st: warns.filter((x) => x.includes("style")), rows };
@@ -2983,9 +3005,9 @@ function check(name, ok, detail) {
     await new Promise((r) => srv.listen(P(4197), r));
     const open = async (p) => {
       await page.goto("http://localhost:" + P(4197) + "" + (p || "/"));
-      await page.waitForTimeout(500);
+      await settle(500);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(300);
+      await settle(300);
     };
 
     /* --- 진입 --- */
@@ -3012,7 +3034,7 @@ function check(name, ok, detail) {
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("고친 머리");
     await page.keyboard.press("Shift+Enter"); /* 0-6: 제목에서 Enter 를 치면 아래에 새 설명 줄이 생긴다 */
-    await page.waitForTimeout(200);
+    await settle(200);
     check("편집: 항목명이 설정에 들어간다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "고친 머리"));
     check("편집: 화면에도 그대로", await page.evaluate(() => document.querySelector('[data-defrow="1"] .ss-t').textContent === "고친 머리"));
     check("편집: 미저장 표시가 글자로 뜬다", await page.evaluate(() =>
@@ -3025,7 +3047,7 @@ function check(name, ok, detail) {
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("고친 첫 줄");
     await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 가 «여기서 그만» */
-    await page.waitForTimeout(200);
+    await settle(200);
     check("편집: 설명 줄도 고쳐진다", await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t === "고친 첫 줄"));
 
     /* --- Esc 는 «여기서 그만» (PM 2026-08-29) ---
@@ -3035,12 +3057,12 @@ function check(name, ok, detail) {
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("바꾼 값");
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("편집: Esc 는 쓴 것을 지우지 않는다", await page.evaluate(() => window.SCREENSPEC.specs[1].title === "바꾼 값"),
       await page.evaluate(() => window.SCREENSPEC.specs[1].title));
     check("편집: Esc 는 그 칸에서 빠져나온다", await page.evaluate(() => !document.querySelector(".ss-ed-on")));
     await page.keyboard.press(MOD + "+z");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("편집: Ctrl+Z 한 번이 그 칸 전체를 되돌린다 (글자 하나씩 X)",
       await page.evaluate(() => window.SCREENSPEC.specs[1].title === "몸통"),
       await page.evaluate(() => window.SCREENSPEC.specs[1].title));
@@ -3049,20 +3071,20 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="2"] [data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.type("보탠 줄");
     await page.keyboard.press("Shift+Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("편집: Enter 로 줄 추가", await page.evaluate(() => window.SCREENSPEC.specs[1].defs.length === 2));
     /* 지우기 버튼은 없앴다 (PM 2026-08-30) — 빈 줄에서 Backspace 가 그 일을 한다 */
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     /* Control+a 는 «문서 전체» 를 고른다 — 그 줄만 비운다 */
     await page.keyboard.press("Home");
     await page.keyboard.press("Shift+End");
     await page.keyboard.press("Delete");
     await page.keyboard.press("Backspace");
-    await page.waitForTimeout(250);
+    await settle(250);
     /* 옛 문서(why·subs)는 부팅 때 «평평한 블록» 으로 펴진다 (#55): 첫 줄 · 근거(↳) · 둘째 줄 · 하위 */
     /* 옛 문서(why·subs)는 부팅 때 트리로 선다: 첫 줄 > 근거(↳) · 둘째 줄 > 하위.
        첫 줄을 지우면 그 하위(근거)는 «있던 자리» 로 올라온다 — 딸린 것이 사라지면 안 된다 */
@@ -3073,12 +3095,12 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="1"] [data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press(">");
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.keyboard.type("근거 한 줄");
     await page.keyboard.press("Shift+Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("편집: «>» 로 화살표 블록 붙이기 (#57)", await page.evaluate(() => {
       const seen = [];
       (function w(l) { (l || []).forEach((b) => { seen.push(b); w(b.c); }); })(window.SCREENSPEC.specs[0].defs);
@@ -3096,14 +3118,14 @@ function check(name, ok, detail) {
       dst.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: dt, clientY: r.top + 2, clientX: r.left + 5 }));
       src.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: dt }));
     });
-    await page.waitForTimeout(300);
+    await settle(300);
     check("편집: 순서 바꾸기", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "몸통"));
     check("편집: 순서를 바꾸면 번호를 1부터 다시 매긴다", await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n).join() === "1,2"));
     check("편집: 마커 번호도 따라온다", await page.evaluate(() => [...document.querySelectorAll(".ss-marker")].map((x) => x.textContent).join() === "1,2"));
 
     /* --- 편집 중에도 문서는 살아 있다 --- */
     await page.click('.ss-defs-list [data-play="1"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     check("편집 중에도 ▶ 재생이 동작한다", (await page.locator(".ss-marker").count()) === 2 && await page.evaluate(() => document.body.classList.contains("ss-editing")));
 
     /* --- 직렬화 (공개 API) --- */
@@ -3134,7 +3156,7 @@ function check(name, ok, detail) {
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("종료 시도 <" + "/script><" + "script>alert(1)");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     const esc = await page.evaluate(() => {
       const txt = window.ScreenSpec.serialize();
       const w = {};
@@ -3165,9 +3187,9 @@ function check(name, ok, detail) {
     });
     await new Promise((r) => srv2.listen(P(4196), r));
     await page.goto("http://localhost:" + P(4196) + "/");
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("내려받기: 산출물을 열면 고친 내용이 뜬다", await page.evaluate(() => document.body.innerText.includes("고친 머리")));
     check("내려받기: 산출물도 정상 부팅 (마커 2개)", (await page.locator(".ss-marker").count()) === 2);
     srv2.close();
@@ -3178,20 +3200,20 @@ function check(name, ok, detail) {
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("초안만 고침");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("초안: 고치면 브라우저에 자동으로 깔린다", await page.evaluate(() =>
       Object.keys(localStorage).some((k) => k.indexOf("screenspec:draft") === 0)));
     await open(); /* 저장 없이 떠났다가 다시 온다 */
     check("초안: 다시 열면 배너가 뜬다", await page.evaluate(() => document.querySelector(".ss-draft").classList.contains("ss-show")));
     check("초안: 배너가 뜨기만 하고 설정을 멋대로 바꾸지는 않는다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "머리"));
     await page.click('.ss-draft [data-dc="take"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     check("초안: 「이어서」 를 누르면 되살아난다", await page.evaluate(() => window.SCREENSPEC.specs[0].title === "초안만 고침"));
     check("초안: 되살리면 화면에도 뜬다", await page.evaluate(() => document.body.innerText.includes("초안만 고침")));
     check("초안: 되살리면 편집 모드로 들어간다", await page.evaluate(() => document.body.classList.contains("ss-editing")));
     await open();
     await page.click('.ss-draft [data-dc="drop"]');
-    await page.waitForTimeout(200);
+    await settle(200);
     check("초안: 「버리기」 를 누르면 지워진다", await page.evaluate(() =>
       !Object.keys(localStorage).some((k) => k.indexOf("screenspec:draft") === 0)));
 
@@ -3222,7 +3244,7 @@ function check(name, ok, detail) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
     await page.waitForTimeout(1000);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("내보내기: 툴바에 있다 (패널이 아니라 화면 전체에 작용하므로)", await page.evaluate(() => {
       const b = document.querySelector(".ss-prbtn");
       return !!b && !!b.closest(".ss-toolbar") && !b.closest(".ss-defs");
@@ -3270,7 +3292,7 @@ function check(name, ok, detail) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
     await page.waitForTimeout(1000);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     const rem = await shoot({});
     check("wrap: 바깥에서 불러오는 이미지 개수를 알려 준다 (빈칸으로 나오므로)", rem.ok === true && rem.remote >= 1, JSON.stringify(rem));
     check("wrap: 주석에 «--» 가 있는 프로토타입도 캡처된다 (XML 이 안 깨진다)", rem.ok === true, JSON.stringify(rem));
@@ -3286,7 +3308,7 @@ function check(name, ok, detail) {
     await page.goto("http://localhost:" + P(4192) + "/");
     await page.waitForTimeout(1000);
     await page.click("#ss-ovDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("내보내기(overlay): 버튼이 모드 알약에 있다", await page.evaluate(() =>
       !!document.querySelector(".ss-pill .ss-prbtn")));
     const ov = await shoot({ markers: true, head: true });
@@ -3325,9 +3347,9 @@ function check(name, ok, detail) {
       await page.goto("about:blank");
       await page.setContent(html);
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(400);
+      await settle(400);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(300);
+      await settle(300);
     };
     const disp = (sel) => page.evaluate((s) => {
       const el = document.querySelector(s);
@@ -3360,13 +3382,13 @@ function check(name, ok, detail) {
     }));
 
     await page.click('[data-ly="plan"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("레이어: 「기획」 을 고르면 개발 블록이 안 보인다", (await disp('[data-defrow="1"] .ss-dev')) === "none");
     check("레이어: 「기획」 이어도 기획 줄은 그대로", (await disp('[data-defrow="1"] .ss-kids')) !== "none");
     check("레이어: 「기획」 이면 화면 공통(개발)도 숨는다", (await disp(".ss-dev-common")) === "none");
 
     await page.click('[data-ly="dev"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("레이어: 「개발」 을 고르면 기획 줄이 안 보인다", (await disp('[data-defrow="1"] .ss-kids')) === "none");
     check("레이어: 「개발」 이면 개발 블록이 보인다", (await disp('[data-defrow="1"] .ss-dev')) !== "none");
     check("레이어: 필터가 마커·행·항목 수에 영향이 없다 (CSS 전용)", await page.evaluate((b) =>
@@ -3377,17 +3399,17 @@ function check(name, ok, detail) {
       [...document.querySelectorAll(".ss-row")].every((r) => getComputedStyle(r).display !== "none")));
 
     await page.click('[data-ly="all"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("레이어: 「전체」 로 돌아온다", await page.evaluate(() =>
       !document.querySelector(".ss-defs-list").hasAttribute("data-layer")));
 
     /* 편집 — 걸러도 원래 인덱스에 쓴다 */
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click('[data-defrow="1"] .ss-dev [data-ed="b"]');
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type("POST /api/items");
     await page.keyboard.press("Shift+Enter"); /* 0-6: Enter 는 새 줄 · Shift+Enter 는 여기서 그만 */
-    await page.waitForTimeout(200);
+    await settle(200);
     check("레이어: 개발 줄 편집이 «그 자리» 에 정확히 들어간다", await page.evaluate(() =>
       window.SCREENSPEC.specs[0].defs.map((d) => (d.layer || "plan") + ":" + d.t).join("|") ===
       "plan:기획 한 줄|dev:POST /api/items|plan:기획 둘째 줄"),
@@ -3432,7 +3454,7 @@ function check(name, ok, detail) {
       return d.querySelector('[data-pr-k="table"]').classList.contains("ss-off");
     }));
     await page.check('.ss-prdlg [data-pr-c="table"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     check("레이어: 기능 설명을 켜면 「개발 정의 포함」이 살아난다", await page.evaluate(() => {
       const d = document.querySelector(".ss-prdlg");
       const ok = !d.querySelector('[data-pr-k="table"]').classList.contains("ss-off") &&
@@ -3471,9 +3493,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(HTMLF);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     const defs = () => page.evaluate(() => JSON.parse(JSON.stringify(window.SCREENSPEC.specs[0].defs)));
     const caretIn = () => page.evaluate(() => {
       const sel = getSelection();
@@ -3496,42 +3518,42 @@ function check(name, ok, detail) {
     /* ── 화살표가 흐른다 ── */
     await caretTo("0", 2);
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(120);
+    await settle(120);
     await page.keyboard.type("X");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("↓ 는 아랫줄로 가고 가로 위치를 지킨다", (await caretIn()).text === "일이X삼사오", await caretIn());
     await page.keyboard.press("ArrowUp");
-    await page.waitForTimeout(120);
+    await settle(120);
     await page.keyboard.type("Z");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("↑ 는 윗줄로 돌아간다 — X 를 친 «지금» 자리를 지킨다", (await caretIn()).text === "가나다Z라마", await caretIn());
     await page.evaluate(() => { const s = getSelection(), el = document.querySelector('[data-defrow="1"] .ss-b[data-path="0"] [data-ed]');
       const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); s.removeAllRanges(); s.addRange(r); });
     await page.keyboard.press("ArrowRight");
-    await page.waitForTimeout(120);
+    await settle(120);
     await page.keyboard.type("A");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("줄 끝의 → 는 다음 줄 «처음» 으로", (await caretIn()).text === "A일이X삼사오", await caretIn());
     await page.keyboard.press("Backspace"); /* A 지움 — 방금 그 자리라 커서 확인 겸 */
     await caretTo("1", 0);
     await page.keyboard.press("ArrowLeft");
-    await page.waitForTimeout(120);
+    await settle(120);
     await page.keyboard.type("B");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("줄 처음의 ← 는 앞 줄 «끝» 으로", (await caretIn()).text === "가나다Z라마B", await caretIn());
     await page.keyboard.press("Backspace"); /* B 지움 */
-    await page.waitForTimeout(120);
+    await settle(120);
     await caretTo("0", 0);
     await page.keyboard.press("ArrowUp");
-    await page.waitForTimeout(120);
+    await settle(120);
     check("첫 줄의 ↑ 는 항목 이름으로", (await caretIn()).ed === "title", await caretIn());
 
     /* ── 경계 병합 ── */
     await caretTo("1", 0);
     await page.keyboard.press("Backspace");
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.keyboard.type("Y");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("줄 맨 앞 Backspace = 앞 줄과 합쳐지고 커서는 이음매에", (await caretIn()).text === "가나다Z라마Y일이X삼사오", await caretIn());
     let d = await defs();
     check("합친 결과가 설정에 남는다", d[0].t === "가나다Z라마Y일이X삼사오" && d.length === 4, d.map((b) => b.t || b.kind));
@@ -3541,7 +3563,7 @@ function check(name, ok, detail) {
     await page.evaluate(() => { const s = getSelection(), el = document.querySelector('[data-defrow="1"] .ss-b[data-path="0"] [data-ed]');
       const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); s.removeAllRanges(); s.addRange(r); });
     await page.keyboard.press("Delete");
-    await page.waitForTimeout(250);
+    await settle(250);
     d = await defs();
     check("줄 끝 Delete = 뒷줄을 끌어 붙인다", d[0].t === "가나다Z라마Y일이X삼사오하위 한 줄" && d.length === 3, d.map((b) => b.t || b.kind));
 
@@ -3549,22 +3571,22 @@ function check(name, ok, detail) {
     await caretTo("1", 0); /* 이제 1번 자리가 표 다음의 «표 아래 줄» ... 아니, 표가 1, 그 줄이 2 */
     await caretTo("2", 0);
     await page.keyboard.press("Backspace");
-    await page.waitForTimeout(250);
+    await settle(250);
     d = await defs();
     check("표 바로 아래 줄의 Backspace 는 표를 안 건드린다", d.length === 3 && d[1].kind === "table" && d[2].t === "표 아래 줄",
       d.map((b) => b.t || b.kind));
     await page.keyboard.press("ArrowUp");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("↑ 는 표의 «같은 열» 칸으로 들어간다", (await caretIn()).ed === "cell" && (await caretIn()).text === "오류", await caretIn());
     await page.keyboard.press("ArrowUp");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("칸에서 ↑ 는 윗줄 같은 열로", (await caretIn()).text === "정상", await caretIn());
 
     /* ── 항목 사이도 흐른다 ── */
     await caretTo("2", 4); /* «표 아래 줄» 끝 */
     await page.keyboard.press("End");
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(200);
+    await settle(200);
     const over = await caretIn();
     check("마지막 줄의 ↓ 는 다음 항목으로 흐른다", !!over && over.text.indexOf("다음 영역") === 0, over);
     check("커서로 넘어간 항목이 «고른 것» 으로 활성된다", await page.evaluate(() =>
@@ -3576,11 +3598,11 @@ function check(name, ok, detail) {
     await caretTo("2", 4);
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.keyboard.press("Backspace");
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.keyboard.type("Q");
-    await page.waitForTimeout(150);
+    await settle(150);
     d = await defs();
     check("빈 줄 Backspace: 줄이 지워지고 커서는 앞 줄 끝에", d.length === 3 && d[2].t === "표 아래 줄Q", d.map((b) => b.t || b.kind));
     check("JS 에러 0건", errors.length === 0, errors);
@@ -3596,66 +3618,66 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(HTML2);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
-    await page.waitForTimeout(200);
+    await settle(300);
+    await settle(200);
     const defs = () => page.evaluate(() => JSON.parse(JSON.stringify(window.SCREENSPEC.specs[0].defs)));
 
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.type("둘째 줄");
     await page.click("#ss-mDoc"); /* 바깥을 누르면 반영 */
-    await page.waitForTimeout(150);
+    await settle(150);
     check("에디터: Enter 로 같은 층에 새 줄", (await defs()).length === 2, await defs());
 
     await page.click('.ss-dt[data-ed="b"][data-di="1"]');
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(200);
+    await settle(200);
     let c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
     check("에디터: Tab 으로 한 단 들어간다", c === "0첫 줄,1둘째 줄", c);
 
     await page.keyboard.type("셋째");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.type("넷째");
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(200);
+    await settle(200);
     c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
     check("에디터: 2단까지 들어간다 (더는 안 들어간다)", c === "0첫 줄,1둘째 줄셋째,2넷째", c);
     check("에디터: 2단 블록도 같은 글머리표로 그린다", (await page.locator(".ss-b.ss-in2").count()) === 1 &&
       (await page.locator(".ss-no").count()) >= 1);
 
     await page.keyboard.press("Shift+Tab");
-    await page.waitForTimeout(200);
+    await settle(200);
     c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
     check("에디터: Shift+Tab 으로 한 단 나온다", c === "0첫 줄,1둘째 줄셋째,1넷째", c);
 
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.press("Delete");
     await page.keyboard.press("Backspace");
-    await page.waitForTimeout(200);
+    await settle(200);
     c = await page.evaluate(FLAT + "(window.SCREENSPEC.specs[0].defs)");
     check("에디터: 빈 줄에서 Backspace 면 그 줄이 사라진다", c === "0첫 줄,1둘째 줄셋째", c);
 
     await page.keyboard.press(MOD + "+z");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press(MOD + "+z");
-    await page.waitForTimeout(150);
+    await settle(150);
     const undone = await defs();
     check("에디터: Ctrl+Z 는 여러 걸음 돌아간다", JSON.stringify(undone) !== JSON.stringify(c), undone);
     await page.keyboard.press(MOD + "+Shift+z");
-    await page.waitForTimeout(150);
+    await settle(150);
     check("에디터: Ctrl+Shift+Z 로 다시 앞으로", JSON.stringify(await defs()) !== JSON.stringify(undone), await defs());
 
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("/");
-    await page.waitForTimeout(200);
+    await settle(200);
     /* «넣기» 묶음은 셋이다 (번호·불릿·화살표). 개요가 없는 화면에서는 «화면» 묶음이 하나 더 붙는다 (#82) */
     check("에디터: 빈 줄에서 / 를 치면 «넣기» 셋을 고른다 (번호·불릿·화살표)",
       (await page.locator('.ss-slash [data-sl="num"], .ss-slash [data-sl="bul"], .ss-slash [data-sl="why"]').count()) === 3,
@@ -3663,7 +3685,7 @@ function check(name, ok, detail) {
     check("에디터: 오른쪽에 마크다운 단축키가 보인다",
       (await page.locator(".ss-sl-key").allTextContents()).join(",").includes("-"));
     await page.click('.ss-slash [data-sl="why"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     check("에디터: / 메뉴의 «화살표» 가 화살표 블록을 만든다 (#57)", (await page.locator('.ss-b[data-kind="why"]').count()) > 0);
 
     /* #46 아카이브 + #50: 만드는 길도 없고 오른쪽 유형 라벨 표시도 뺐다 (데이터·동작은 그대로) */
@@ -3671,7 +3693,7 @@ function check(name, ok, detail) {
     check("에디터: 오른쪽 유형 라벨도 보이지 않는다 (#50)", (await page.locator(".ss-tag").count()) === 0);
 
     /* #58 — 끄고 켜는 상태가 없다. 대신 손잡이가 «흐름 배치» 라 화면을 가리지 않는 것이 전제다 */
-    await page.waitForTimeout(200);
+    await settle(200);
     check("에디터: 손잡이가 고정(fixed) 요소를 만들지 않는다", await page.evaluate(() =>
       [...document.querySelectorAll(".ss-gut")].every((g) => getComputedStyle(g).position === "absolute")));
 
@@ -3681,9 +3703,9 @@ function check(name, ok, detail) {
       "<script>window.SCREENSPEC={screen:{id:'S-B',name:'b'}," +
       "specs:[{n:1,target:'1',title:'영역',defs:[{t:'줄',subs:['가','나']}]}]};<" + "/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("에디터: 문자열 subs 만 쓰는 옛 문서가 한 단 들어간 블록으로 펴진다 (#55)",
       (await page.locator(".ss-b.ss-in1").count()) === 2 && (await page.locator(".ss-b.ss-in2").count()) === 0);
   }
@@ -3698,10 +3720,10 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(BLK_HTML);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
-    await page.waitForTimeout(250);
+    await settle(300);
+    await settle(250);
 
     check("블록: 거터가 블록마다 있다", (await page.locator(".ss-gut").count()) >= 3,
       await page.locator(".ss-gut").count());
@@ -3718,12 +3740,12 @@ function check(name, ok, detail) {
     /* 거터는 마우스를 올려야 보인다(opacity 0 → 1). 클릭 판정에 걸리므로 이벤트로 직접 누른다 */
     await page.evaluate(() => document.querySelector(".ss-b .ss-gut [data-add]")
       .dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })));
-    await page.waitForTimeout(400);
+    await settle(400);
     check("블록: ＋ 가 슬래시와 같은 메뉴를 연다",
       (await page.locator('.ss-slash [data-sl="num"], .ss-slash [data-sl="bul"], .ss-slash [data-sl="why"]').count()) === 3,
       await page.locator(".ss-slash [data-sl]").allTextContents());
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(150);
+    await settle(150);
 
     /* 폭 조절 (#53) — 저장은 localStorage 라 file:/about:blank 이 아닌 곳에서 봐야 한다 */
     check("폭: 손잡이가 있고 기본은 화면의 절반 (PM 2026-08-29)", await page.evaluate(() =>
@@ -3743,7 +3765,7 @@ function check(name, ok, detail) {
     await page.mouse.down();
     await page.mouse.move(rz.x - 120, rz.y + 60, { steps: 8 });
     await page.mouse.up();
-    await page.waitForTimeout(250);
+    await settle(250);
     check("폭: 끌면 넓어진다", await page.evaluate(() =>
       document.querySelector(".ss-defs").getBoundingClientRect().width > 540));
     /* 폭이 이미 바뀌었으니 손잡이 위치를 «다시» 잰다 — 옛 좌표로 끌면 엉뚱한 곳을 잡는다 */
@@ -3752,7 +3774,7 @@ function check(name, ok, detail) {
     await page.mouse.down();
     await page.mouse.move(rz2.x - 900, rz2.y + 60, { steps: 10 });
     await page.mouse.up();
-    await page.waitForTimeout(250);
+    await settle(250);
     /* 상한은 화면의 90% — 프로토타입이 완전히 사라지지는 않게 (PM 2026-08-29) */
     check("폭: 상한은 화면의 90%", await page.evaluate(() =>
       Math.abs(document.querySelector(".ss-defs").getBoundingClientRect().width - window.innerWidth * 0.9) <= 2),
@@ -3803,18 +3825,18 @@ function check(name, ok, detail) {
         "{n:1,target:'1',title:'첫 항목',defs:" + mk(a) + "}," +
         "{n:2,target:'2',title:'둘째 항목',defs:" + mk(b) + "}]};<" + "/script>");
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(400);
+      await settle(400);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(300);
+      await settle(300);
     };
 
     await page.goto("about:blank");
     await page.setContent(DND_HTML);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
-    await page.waitForTimeout(250);
+    await settle(300);
+    await settle(250);
 
     check("옮기기: ↑↓ 버튼이 없다", (await page.locator('[data-ec="up"],[data-ec="down"]').count()) === 0);
     check("옮기기: 뜻 모를 ⋮ 가 없다", !(await page.locator(".ss-defs-list").textContent()).includes("⋮"));
@@ -3827,7 +3849,7 @@ function check(name, ok, detail) {
     }));
 
     await dragTo('[data-defrow="1"] .ss-b[data-di="0"] .ss-g-grip', '[data-defrow="1"] .ss-b[data-di="2"]', true);
-    await page.waitForTimeout(300);
+    await settle(300);
     check("옮기기: 줄을 잡아 옮기면 순서가 바뀐다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join(""))) === "BCA",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t)));
@@ -3945,7 +3967,7 @@ function check(name, ok, detail) {
     check("위계: 어디를 가리켜도 가장 가까운 자리가 잡힌다", rowDrop === true);
 
     await dragTo('[data-defrow="1"] > .ss-gut .ss-g-grip', '[data-defrow="2"]', true);
-    await page.waitForTimeout(350);
+    await settle(350);
     check("옮기기: 항목을 옮기면 번호를 1부터 다시 매긴다",
       (await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n + ":" + s.title).join(","))) === "1:둘째 항목,2:첫 항목",
       await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.n + ":" + s.title)));
@@ -3963,18 +3985,18 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(RICH_HTML);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
-    await page.waitForTimeout(200);
+    await settle(300);
+    await settle(200);
 
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.press(MOD + "+b");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("Shift+Enter");
-    await page.waitForTimeout(250);
+    await settle(250);
     const t1 = await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t);
     check("서식: 굵게가 <strong> 으로 저장된다 (<b> 아님)",
       t1.indexOf("<strong>") >= 0 && t1.indexOf("<b>") < 0, t1);
@@ -3988,7 +4010,7 @@ function check(name, ok, detail) {
       el.innerHTML = '<i>기울임</i> <u>밑줄</u> <span style="color:red">빨강</span> 남는글자';
     });
     await page.click('[data-defrow="1"] .ss-t');
-    await page.waitForTimeout(300);
+    await settle(300);
     const t2 = await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t);
     check("서식: 기울임·밑줄·색은 글자만 남는다",
       !/<i|<u|<span/.test(t2) && t2.indexOf("남는글자") >= 0, t2);
@@ -4003,7 +4025,7 @@ function check(name, ok, detail) {
       el.innerHTML = '<a href="https://example.com/문서">문서</a> 와 <a href="javascript:alert(1)">위험</a>';
     });
     await page.click('[data-defrow="1"] .ss-t');
-    await page.waitForTimeout(300);
+    await settle(300);
     const tL = await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t);
     check("서식: 이미 있는 <a href> 는 살아남는다", /<a href="https:\/\/example\.com/.test(tL), tL);
     check("서식: javascript: 주소는 글자만 남는다", tL.indexOf("javascript:") < 0, tL);
@@ -4020,17 +4042,17 @@ function check(name, ok, detail) {
        원인은 «글자 이스케이프» 와 «HTML 살균» 을 한 함수가 겸한 것 — 이제 언제나 HTML 로 읽어서 다시 쓴다 */
     const QT = '마감(00:00:00) 시 타이머를 "오늘 딜 종료"로 교체';
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"]');
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press(MOD + "+a");
     await page.keyboard.type(QT);
     await page.keyboard.press("Shift+Enter");
-    await page.waitForTimeout(250);
+    await settle(250);
     /* 들락거려도 한 겹씩 쌓이지 않아야 한다 */
     for (let i = 0; i < 3; i++) {
       await page.click('[data-defrow="1"] .ss-dt[data-ed="b"]');
-      await page.waitForTimeout(120);
+      await settle(120);
       await page.keyboard.press("Shift+Enter");
-      await page.waitForTimeout(150);
+      await settle(150);
     }
     check("서식: 따옴표가 편집을 거듭해도 늘어나지 않는다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t)) === QT,
@@ -4052,36 +4074,36 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(PICK_HTML);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
-    await page.waitForTimeout(200);
+    await settle(300);
+    await settle(200);
 
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("/");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click('.ss-slash [data-sl="num"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("찍기: 슬래시 「번호」 로 찍기 모드에 들어간다",
       await page.evaluate(() => document.body.classList.contains("ss-picking")));
 
     await page.hover(".tiny");
-    await page.waitForTimeout(250);
+    await settle(250);
     const tip1 = await page.locator(".ss-pick-tip").textContent();
     check("찍기: 작은 글자에 올려도 잡을 만한 것으로 넓혀 잡는다 (이름표에 크기)", /\d+×\d+/.test(tip1), tip1);
 
     await page.keyboard.press("ArrowUp");
-    await page.waitForTimeout(200);
+    await settle(200);
     const tip2 = await page.locator(".ss-pick-tip").textContent();
     check("찍기: ↑ 로 부모까지 넓어진다", tip2 !== tip1, { tip1: tip1, tip2: tip2 });
 
     await page.hover("#target");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.click("#target", { force: true });
-    await page.waitForTimeout(400);
+    await settle(400);
     const after = await page.evaluate(() => ({
       picking: document.body.classList.contains("ss-picking"),
       specs: window.SCREENSPEC.specs.length,
@@ -4102,15 +4124,15 @@ function check(name, ok, detail) {
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("/");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click('.ss-slash [data-sl="num"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.hover("#a");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.click("#a", { force: true });
-    await page.waitForTimeout(350);
+    await settle(350);
     check("찍기: 이미 번호가 있는 곳은 새로 만들지 않는다",
       await page.evaluate(() => window.SCREENSPEC.specs.length === 2),
       await page.evaluate(() => window.SCREENSPEC.specs.map((s) => s.target)));
@@ -4119,13 +4141,13 @@ function check(name, ok, detail) {
     await page.click('.ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(150);
+    await settle(150);
     await page.keyboard.press("/");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click('.ss-slash [data-sl="num"]');
-    await page.waitForTimeout(250);
+    await settle(250);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("찍기: Esc 로 취소하면 모드만 끝나고 항목은 그대로",
       await page.evaluate(() => !document.body.classList.contains("ss-picking") && window.SCREENSPEC.specs.length === 2));
   }
@@ -4144,9 +4166,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(MOVE_HTML);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     const spot = () => page.evaluate(() => {
       const m = document.querySelector(".ss-marker");
       const t = document.querySelector('[data-spec="two"]');
@@ -4156,7 +4178,7 @@ function check(name, ok, detail) {
     const a = await spot();
     check("추적: 처음엔 마커가 대상 위에 있다", !!a && Math.abs(a.m - a.t) < 30, a);
     await page.evaluate(() => { document.getElementById("track").style.transform = "translateX(-200px)"; });
-    await page.waitForTimeout(180); /* 0.4초 전환의 한가운데 */
+    await settle(180); /* 0.4초 전환의 한가운데 */
     const mid = await spot();
     check("추적: 전환 «도중에도» 마커가 붙어 있다 (끝에서 한 번 튀는 게 아니라)",
       !!mid && Math.abs(mid.m - mid.t) < 30 && Math.abs(mid.m - a.m) > 20, { a: a, mid: mid });
@@ -4188,20 +4210,20 @@ function check(name, ok, detail) {
     await page.setContent('<h1 id="t">쇼핑몰 홈</h1><button id="buy" style="margin:40px">구매하기</button>' +
       "<script>window.SCREENSPEC={screen:{id:'S-1',name:'홈'},specs:[]};<" + "/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
 
     check("FTUE: 빈 화면이 «번호 찍기» 를 준다", await page.locator('[data-ftue="pick"]').isVisible());
     await page.click('[data-ftue="pick"]');
-    await page.waitForTimeout(300);
+    await settle(300);
     check("FTUE: 누르면 찍기 모드로 들어간다", await page.evaluate(() => document.body.classList.contains("ss-picking")));
     const bb = await page.locator("#buy").boundingBox();
     await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
-    await page.waitForTimeout(250);
+    await settle(250);
     check("FTUE: 겨눈 곳에 조준틀이 뜬다", (await page.locator(".ss-pick-box").count()) > 0);
     await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
-    await page.waitForTimeout(450);
+    await settle(450);
     check("FTUE: 코드를 안 고쳐도 번호가 붙는다", await page.evaluate(() =>
       window.SCREENSPEC.specs.length === 1 && document.querySelectorAll(".ss-marker").length === 1));
     /* 「새 영역」 이 진짜 글자로 박혀 있으면 타이핑이 그 뒤에 붙는다 (PM 2026-08-29) */
@@ -4213,7 +4235,7 @@ function check(name, ok, detail) {
       (document.activeElement || {}).dataset && document.activeElement.dataset.ed === "title"));
     await page.keyboard.type("구매 버튼");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(350);
+    await settle(350);
     check("FTUE: 이름이 그대로 들어간다 (앞에 «새 영역» 이 안 붙는다)",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].title)) === "구매 버튼",
       await page.evaluate(() => window.SCREENSPEC.specs[0].title));
@@ -4224,18 +4246,18 @@ function check(name, ok, detail) {
     /* 여기가 2026-08-29 에 PM 이 잡은 버그다 — 「바깥을 누르면 반영」 이 패널 목록 «안» 에서만 돌았다 */
     await page.keyboard.type("누르면 결제 화면으로");
     await page.click(".ss-defs-head h2");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("FTUE: 패널 머리를 눌러도 쓴 글이 남는다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs[0].t)) === "누르면 결제 화면으로",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.keyboard.type("- ");
     await page.keyboard.type("불릿 줄");
     await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
-    await page.waitForTimeout(400);
+    await settle(400);
     check("FTUE: 프로토타입을 눌러도 쓴 글이 남는다",
       (await page.evaluate(() => window.SCREENSPEC.specs[0].defs.map((d) => d.t).join("|"))) === "누르면 결제 화면으로|불릿 줄",
       await page.evaluate(() => window.SCREENSPEC.specs[0].defs));
@@ -4260,9 +4282,9 @@ function check(name, ok, detail) {
     await page.setContent('<h1 id="t">쇼핑몰 홈</h1><button id="buy" style="margin:40px">구매하기</button>' +
       "<script>" + cfg + "<" + "/script>");
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
     check("FTUE: 저장본을 다시 열어도 마커가 살아 있다", await page.evaluate(() =>
       document.querySelectorAll(".ss-marker").length === 1 &&
       !document.querySelector('[data-defrow="1"]').classList.contains("ss-now-hidden")));
@@ -4285,16 +4307,16 @@ function check(name, ok, detail) {
       await page.setContent('<div id="a" data-spec="1">가</div>' +
         "<script>window.SCREENSPEC={screen:{id:'S-T',name:'위계'},specs:[{n:1,target:'1',title:'T',defs:" + mk(defs) + "}]};<" + "/script>");
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(400);
+      await settle(400);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(300);
+      await settle(300);
     };
     const now = () => page.evaluate(() =>
       (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[0].defs, 0).join(","));
     const tab = async (di, shift) => {
       await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="' + di + '"]');
       await page.keyboard.press(shift ? "Shift+Tab" : "Tab");
-      await page.waitForTimeout(250);
+      await settle(250);
     };
     const said = () => page.locator(".ss-edmsg").textContent();
 
@@ -4428,9 +4450,9 @@ function check(name, ok, detail) {
       await page.setContent('<div id="a" data-spec="1">가</div>' +
         "<script>window.SCREENSPEC={screen:{id:'S-G',name:'g'},specs:[{n:1,target:'1',title:'T',defs:" + defs + "}]};<" + "/script>");
       await page.addScriptTag({ content: LIB });
-      await page.waitForTimeout(300);
+      await settle(300);
       await page.click("#ss-mDoc");
-      await page.waitForTimeout(200);
+      await settle(200);
       for (let di = 0; di < fx.l.length; di++) {
         for (const half of ["top", "bottom"]) {
           for (const dx of [-1, 0, 1, 2]) {
@@ -4466,7 +4488,7 @@ function check(name, ok, detail) {
             /* 상태가 바뀌었으면 되돌려서 다음 케이스가 같은 판에서 시작하게 한다 */
             if (after !== same) {
               await page.keyboard.press(MOD + "+z");
-              await page.waitForTimeout(60);
+              await settle(60);
               const back = await page.evaluate(() =>
                 (function w(l,d){return (l||[]).reduce(function(o,b){return o.concat([d+b.t], w(b.c,d+1));},[]);})(window.SCREENSPEC.specs[0].defs, 0).join(","));
               if (back !== same) { bad.push("[" + same + "] 되돌리기 실패: " + back); break; }
@@ -4508,9 +4530,9 @@ function check(name, ok, detail) {
       }];
     }, PROTO);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(400);
+    await settle(400);
 
     const st = () => page.locator(".ss-savest").textContent();
     const writes = () => page.evaluate(() => window.__writes);
@@ -4519,7 +4541,7 @@ function check(name, ok, detail) {
       (await page.locator(".ss-savest").isVisible()) === false,
       await page.locator(".ss-svbtn").textContent());
     await page.click(".ss-svbtn");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("자동저장: 파일을 한 번 고르면 켜진다 (글줄만 남고 단추는 사라진다)",
       (await st()).indexOf("저장됨") === 0 &&
       (await page.locator(".ss-svbtn").isVisible()) === false && (await writes()) === 1, await st());
@@ -4527,7 +4549,7 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.type(" 추가한 글");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("자동저장: 치는 동안 «저장» 단추가 나온다",
       (await page.locator(".ss-svbtn").isVisible()) === true &&
       (await page.locator(".ss-svbtn").textContent()) === "저장",
@@ -4609,7 +4631,7 @@ function check(name, ok, detail) {
     /* ③ 잃을 것이 없으면 안 묻는다 — 조용히 새로 읽는다 (#83).
        페이지를 다시 읽으므로 이 판이 끝난다. 그래서 이 섹션의 «맨 끝» 에 둔다 */
     await page.click('.ss-outside [data-oc="reload"]').catch(() => {});
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.goto("about:blank");
     await page.setContent(PROTO);
     await page.evaluate((src) => {
@@ -4622,11 +4644,11 @@ function check(name, ok, detail) {
       }];
     }, PROTO);
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click(".ss-svbtn");
-    await page.waitForTimeout(600);
+    await settle(600);
     check("조용히 반영: 전제 — 연결됐고 미저장이 없다 (#83)",
       (await page.locator(".ss-savest").textContent()).indexOf("저장됨") === 0,
       await page.locator(".ss-savest").textContent());
@@ -4659,7 +4681,7 @@ function check(name, ok, detail) {
     check("인라인: screenspec.js 를 바깥에서 받지 않음",
       !blocked.some((u) => /screenspec/i.test(u)), JSON.stringify(blocked.slice(0, 3)));
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
     check("인라인: 화면정의서 모드 정상", (await page.locator(".ss-defs-list .ss-row").count()) === 11);
     await page.unroute("**");
     fs.unlinkSync(out);
@@ -4692,15 +4714,15 @@ function check(name, ok, detail) {
     });
     const go = async (w) => {
       await page.setViewportSize({ width: w, height: 860 });
-      await page.waitForTimeout(400);
+      await settle(400);
       return look();
     };
 
     await page.setViewportSize({ width: 1440, height: 860 });
     await page.goto(F);
-    await page.waitForTimeout(500);
+    await settle(500);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(500);
+    await settle(500);
 
     /* 아이패드 세로 · 폴드 펼침 · 폰까지 — 640 하나로 꺾던 시절 깨지던 구간을 포함한다 */
     const WS = [1440, 1024, 900, 884, 820, 768, 700, 653, 640, 600, 540, 412, 390, 360, 320];
@@ -4731,13 +4753,13 @@ function check(name, ok, detail) {
     /* 접힌 뒤에도 도구는 ⋯ 로 닿는다 */
     await go(390);
     await page.click(".ss-more");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("접혀도 도구는 ⋯ 안에서 쓸 수 있다",
       (await page.locator(".ss-toolbar .ss-tools").isVisible()) === true &&
       (await page.locator(".ss-toolbar .ss-tools .ss-headbtn").count()) >= 2);
 
     await page.setViewportSize({ width: 1280, height: 860 });
-    await page.waitForTimeout(300);
+    await settle(300);
   }
 
   if (sec("[chip] 저장 칩 — 상태 여섯 갈래")) {
@@ -4777,16 +4799,16 @@ function check(name, ok, detail) {
     await page.setContent(PROTO2);
     await mockPicker();
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     let c = await chip();
     check("1 미연결 : 단추 「자동저장 켜기」 하나만", c.단추 === "자동저장 켜기" && c.글줄 === null, c);
     check("1 미연결 : 물음표는 안 보인다 (이 브라우저는 쓸 수 있다)", c.물음표 === false, c);
 
     /* --- 2 다 저장됨 : 글줄만 --- */
     await page.click(".ss-svbtn");
-    await page.waitForTimeout(600);
+    await settle(600);
     c = await chip();
     check("2 다 저장됨 : 글줄만 · 누를 수 없는 단추가 없다", c.글줄 !== null && c.글줄.indexOf("저장됨") === 0 && c.단추 === null, c);
     check("2 다 저장됨 : 초록 점",
@@ -4798,7 +4820,7 @@ function check(name, ok, detail) {
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.type(" 고침");
-    await page.waitForTimeout(250);
+    await settle(250);
     c = await chip();
     check("3 고침 있음 : 단추 「저장」", c.단추 === "저장" && c.글줄 === null, c);
 
@@ -4821,7 +4843,7 @@ function check(name, ok, detail) {
 
     /* --- 접혀서 칩이 ⋯ 안으로 들어가도 «봐야 할 상태» 는 점으로 보인다 --- */
     await page.setViewportSize({ width: 380, height: 820 });
-    await page.waitForTimeout(500);
+    await settle(500);
     const dot = () => page.evaluate(() => {
       const more = document.querySelector(".ss-toolbar .ss-more");
       const tb = document.querySelector(".ss-toolbar");
@@ -4835,30 +4857,30 @@ function check(name, ok, detail) {
     check("접힘 : 저장할 것이 없으면 점도 없다", d.보임 === false, d);
     await page.evaluate(() => { window.__block = true; });
     await page.click(".ss-more");
-    await page.waitForTimeout(200);
+    await settle(200);
     await page.click('[data-defrow="1"] .ss-dt[data-ed="b"][data-di="0"]');
     await page.keyboard.press("End");
     await page.keyboard.type(" 좁은 화면에서 고침");
-    await page.waitForTimeout(400);
+    await settle(400);
     d = await dot();
     check("접힘 : 저장할 것이 있으면 ⋯ 위에 점이 뜬다", d.보임 === true, d);
     await page.evaluate(() => { window.__block = false; });
     await page.setViewportSize({ width: 1280, height: 820 });
-    await page.waitForTimeout(500);
+    await settle(500);
 
     /* --- 6 브라우저가 못 씀 : 단추 「내려받기」 + 물음표, 긴 설명은 툴바 밖 --- */
     await page.goto("about:blank");
     await page.setContent(PROTO2);
     await page.evaluate(() => { try { delete window.showOpenFilePicker; } catch (e) { window.showOpenFilePicker = undefined; } });
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     c = await chip();
     check("6 브라우저가 못 씀 : 단추 「내려받기」 + 물음표", c.단추 === "내려받기" && c.물음표 === true && c.글줄 === null, c);
     check("6 : 긴 설명이 툴바에 상시로 있지 않다", c.툴바에긴설명 === false, c);
     await page.click(".ss-savewhy");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("6 : 물음표를 누르면 까닭이 나온다",
       (await page.locator(".ss-savewhytxt").isVisible()) === true);
 
@@ -4866,9 +4888,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(PROTO2.replace("};<", ",save:{async write(t){window.__hookGot=t;}}};<"));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     c = await chip();
     check("훅이 있으면 「자동저장 켜기」가 안 뜬다", c.단추 !== "자동저장 켜기", c);
 
@@ -4876,9 +4898,9 @@ function check(name, ok, detail) {
     await page.goto("about:blank");
     await page.setContent(PROTO2.replace("window.SCREENSPEC={", "window.SCREENSPEC={readonly:true,"));
     await page.addScriptTag({ content: LIB });
-    await page.waitForTimeout(400);
+    await settle(400);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("readonly 전달본 : 저장 칩이 아예 없다",
       (await page.locator(".ss-savest").count()) === 0 && (await page.locator(".ss-svbtn").count()) === 0);
   }
@@ -4889,7 +4911,7 @@ function check(name, ok, detail) {
     await page.goto(F);
     await page.evaluate(() => { try { localStorage.removeItem("screenspec:guide-seen"); } catch (e) {} });
     await page.reload();
-    await page.waitForTimeout(400);
+    await settle(400);
 
     const brand = page.locator(".ss-toolbar .ss-brand");
     check("마크가 툴바에 있다", (await brand.count()) === 1);
@@ -4912,14 +4934,14 @@ function check(name, ok, detail) {
     const lit = () => page.evaluate(() => document.querySelector(".ss-brand-hint").classList.contains("ss-on"));
     check("첫 진입 전에는 강조 없음", !(await lit()));
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("첫 진입에 강조가 뜬다", await lit());
     check("강조 문구", (await page.locator(".ss-brand-hint").textContent()).indexOf("처음") >= 0);
     /* «한 번» 은 브라우저당 한 번이다 — 다시 열어도 안 뜬다 (같은 세션 안에서 켜져 있는 것은 6초 뒤 스스로 꺼진다) */
     await page.goto(F);
-    await page.waitForTimeout(300);
+    await settle(300);
     await page.click("#ss-mDoc");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("다시 열면 강조 없음 (브라우저당 한 번)", !(await lit()));
     check("그래도 마크는 그대로 있다", (await page.locator(".ss-toolbar .ss-brand").count()) === 1);
 
@@ -4933,7 +4955,7 @@ function check(name, ok, detail) {
       });
     });
     await page.goto(F);
-    await page.waitForTimeout(400);
+    await settle(400);
     check("brand:false 면 마크가 없다", (await page.locator(".ss-brand").count()) === 0);
     check("brand:false 여도 툴바는 정상", (await page.locator(".ss-toolbar .ss-modes button").count()) === 2);
   }
@@ -4943,7 +4965,7 @@ function check(name, ok, detail) {
     /* 시험이 바깥 서버(계수기)에 기대지 않게 막는다 — 없어도 페이지는 똑같이 동작해야 한다 */
     await page.route("**", (r) => (/^https?:/i.test(r.request().url()) ? r.abort() : r.continue()));
     await page.goto(G);
-    await page.waitForTimeout(300);
+    await settle(300);
     const shown = () => page.evaluate(() =>
       [].slice.call(document.querySelectorAll(".sl")).filter((x) => !x.hidden).map((x) => x.dataset.n).join(","));
     check("여섯 장", (await page.locator(".sl").count()) === 6);
@@ -4951,25 +4973,25 @@ function check(name, ok, detail) {
     check("1장에는 「이전」이 없다", await page.evaluate(() => document.getElementById("prev").hidden));
     check("1장 단추는 「시작하기」", (await page.locator("#next").textContent()).indexOf("시작하기") >= 0);
     await page.click("#next");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("클릭으로 2장", (await shown()) === "2");
     check("주소에 장 번호", (await page.evaluate(() => location.hash)) === "#2");
     await page.keyboard.press("ArrowRight");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("키보드로 3장", (await shown()) === "3");
     /* 뒤로가기는 «직전 동작» 을 되돌린다 — 장을 옮길 때마다 방문 기록이 하나 쌓이기 때문이다 */
     await page.goBack();
-    await page.waitForTimeout(300);
+    await settle(300);
     check("뒤로가기가 직전 장으로", (await shown()) === "2");
     await page.keyboard.press("ArrowLeft");
-    await page.waitForTimeout(200);
+    await settle(200);
     check("키보드로 1장", (await shown()) === "1");
     await page.goto(G + "#4");
-    await page.waitForTimeout(300);
+    await settle(300);
     check("주소로 바로 열기", (await shown()) === "4");
     check("진행 점 6개", (await page.locator(".dots button").count()) === 6);
     await page.locator(".dots button").nth(5).click();
-    await page.waitForTimeout(200);
+    await settle(200);
     check("진행 점으로 이동", (await shown()) === "6");
     check("6장에는 「다음」이 없다", await page.evaluate(() => document.getElementById("next").hidden));
     /* Pages 는 .md 를 글자 그대로 준다 — 링크가 그리로 가면 사용자에게 코드가 보인다 */
@@ -4979,9 +5001,9 @@ function check(name, ok, detail) {
     const raw = outs.filter((h) => h.split("?")[0].split("#")[0].endsWith(".md") && h.indexOf("github.com") < 0);
     check("마무리 링크가 글자 그대로의 .md 로 가지 않는다", outs.length === 3 && raw.length === 0, raw);
     await page.click("#again");
-    await page.waitForTimeout(250);
+    await settle(250);
     check("「처음부터 다시」 가 1장으로", (await shown()) === "1");
-    await page.waitForTimeout(600);
+    await settle(600);
     check("여섯 액자에 그림이 붙어 있다",
       await page.evaluate(() => [].slice.call(document.querySelectorAll(".fr")).every((f) => !f.classList.contains("na"))));
     check("그림이 빠지면 장면 설명이 대신 뜬다", await page.evaluate(() => {
@@ -5003,6 +5025,10 @@ function check(name, ok, detail) {
 
   await browser.close();
   if (LIST) { console.log("섹션 " + SECS.length + "개:"); SECS.forEach((n) => console.log("  " + n)); return; }
+  if (SETTLE_STATS) { const by = {}; SETTLE_STATS.forEach((r) => { by[r.why] = by[r.why] || { n: 0, t: 0, cap: 0 }; by[r.why].n++; by[r.why].t += r.t; by[r.why].cap += r.cap; });
+    console.log("\n[settle] " + Object.keys(by).map((k) => k + " " + by[k].n + "회 · 실제 " + Math.round(by[k].t / 1000) + "s / 원래 " + Math.round(by[k].cap / 1000) + "s").join(" · "));
+    const tg = {}; SETTLE_STATS.filter((r) => r.why === "dom").forEach((r) => { tg[r.tgt] = (tg[r.tgt] || 0) + 1; });
+    console.log("[settle] DOM 을 흔든 마지막 표적: " + JSON.stringify(Object.entries(tg).sort((a, b) => b[1] - a[1]).slice(0, 6))); }
   console.log("\n결과: PASS " + pass + " / FAIL " + fail +
     (ONLY ? "  ← 부분 실행 (--only " + ONLY + " · 섹션 " + SECS.filter((n) => n.indexOf(ONLY) >= 0).length +
       "/" + SECS.length + "). 전체는 CI 가 돈다" : ""));

@@ -100,6 +100,14 @@
   /* 저장은 «원본 HTML 의 설정 블록만» 갈아끼운다. 지금 DOM 은 라이브러리가 이미 손댄 뒤라 원본이 아니므로,
      손대기 전 사본을 부팅 직전에 떠 둔다 — file:// 처럼 fetch 가 막힌 자리에서는 이게 유일한 원본이다 */
   let SRC_SNAPSHOT = null;
+  /* 미룬 일 세기 (#112) — 시험이 「가라앉았나」 를 고정 대기 대신 이 수로 잰다.
+     마커 자리잡기·화면 감지·누락 판정·배치처럼 «곧 할 일» 만 센다. 자동저장(1.2초)·파일감시(3초)·
+     토스트 같은 «제품의 시간» 은 안 센다 — 그건 기다려야 할 시간이지 가라앉기가 아니다 */
+  const PEND = new Map();
+  function ssDefer(fn, ms) { const id = setTimeout(() => { PEND.delete(id); fn(); }, ms); PEND.set(id, 1); return id; }
+  function ssFrame(fn) { const id = requestAnimationFrame(() => { PEND.delete("r" + id); fn(); }); PEND.set("r" + id, 1); return id; }
+  function ssClear(id) { if (id == null) return; if (PEND.delete(id)) clearTimeout(id); if (PEND.delete("r" + id)) cancelAnimationFrame(id); }
+  const ssBusy = () => PEND.size;
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
     : [Object.assign({ id: "SCR-000", name: "화면명 미정", path: [] }, RAW.screen || {}, { specs: RAW.specs || [] })];
@@ -1901,6 +1909,7 @@ ${HL_CSS}
           (cond.length ? " · 조건부(state·optional) " + cond.length + "건은 제외" : ""));
         stop();
       };
+      /* 누락 판정은 «제품의 시간»(1.5초 조용함·5초 상한)이라 미룬 일로 안 센다 — 세면 settle 이 5초씩 잡힌다 (#112 실측) */
       const stop = () => { if (missMo) missMo.disconnect(); missMo = null; clearTimeout(missTimer); clearTimeout(missCap); };
       missMo = new MutationObserver((recs) => {
         if (!recs.some((r) => isAppChange(r.target))) return; /* 우리가 그린 것의 변경은 무시 */
@@ -2130,7 +2139,10 @@ ${HL_CSS}
     function drawArrow() {
       const act = activeKey == null ? null : itemOf(activeKey);
       const s = act && act.spec;
-      if (!s || annoOf(s).mech !== "arrow") { ctx.annoLine.setAttribute("visibility", "hidden"); return; }
+      /* 바뀔 때만 쓴다 (#112) — 같은 값이라도 setAttribute 는 변경 기록을 남겨, 매 프레임 쓰면 DOM 이
+         영영 «조용» 해지지 않는다. 시험의 settle 이 지시선 있는 화면에서 늘 상한까지 잡힌 원인 (실측 152회) */
+      const put = (k, v) => { v = String(v); if (ctx.annoLine.getAttribute(k) !== v) ctx.annoLine.setAttribute(k, v); };
+      if (!s || annoOf(s).mech !== "arrow") { put("visibility", "hidden"); return; }
       const t = targetOf(s);
       if (!t) return;
       const A = ctx.rectOf(t);
@@ -2138,7 +2150,7 @@ ${HL_CSS}
       let from, to;
       if (s.arrowTo) {
         const bEl = appDoc().querySelector(s.arrowTo);
-        if (!bEl) { ctx.annoLine.setAttribute("visibility", "hidden"); return; }
+        if (!bEl) { put("visibility", "hidden"); return; }
         const B = ctx.rectOf(bEl);
         from = clampPt((B.l + B.r) / 2, (B.t + B.b) / 2, A);
         to = clampPt(C.x, C.y, B);
@@ -2152,9 +2164,9 @@ ${HL_CSS}
         to = { x: C.x + dx * tEdge, y: C.y + dy * tEdge };
         from = { x: C.x + dx * (tEdge + ARROW_STANDOFF), y: C.y + dy * (tEdge + ARROW_STANDOFF) };
       }
-      ctx.annoLine.setAttribute("x1", from.x); ctx.annoLine.setAttribute("y1", from.y);
-      ctx.annoLine.setAttribute("x2", to.x); ctx.annoLine.setAttribute("y2", to.y);
-      ctx.annoLine.setAttribute("visibility", "visible");
+      put("x1", from.x); put("y1", from.y);
+      put("x2", to.x); put("y2", to.y);
+      put("visibility", "visible");
     }
     function showTip(it, m) {
       const s = it.spec;
@@ -5235,7 +5247,7 @@ ${HL_CSS}
        프로토타입이 setScreen()·refresh() 를 부르고 있을 수 있으므로 빈 껍데기만 남긴다(안 그러면 프로토타입이 깨진다). */
     if (SWITCH === "off") {
       const noop = function () {};
-      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, exportImage: noop, exportText: () => ({ html: "", text: "" }), edit: noop, serialize: () => "", dirty: () => false };
+      window.ScreenSpec = { setScreen: noop, refresh: noop, current: () => null, mode: "off", off: true, exportImage: noop, exportText: () => ({ html: "", text: "" }), edit: noop, serialize: () => "", dirty: () => false, busy: () => 0 };
       window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
       console.info("[ScreenSpec] off: 프로토타입 원본 그대로입니다. 화면정의서를 보려면 주소 끝에 ?screenspec=1 (또는 #screenspec)");
       return;
@@ -5443,7 +5455,7 @@ ${HL_CSS}
       sheet.style.height = sheetH + "px";
       sheet.classList.toggle("ss-pc", sheetW >= 1100);
       sheet.classList.toggle("ss-narrow", sheetW <= 520);
-      requestAnimationFrame(layout); /* 크기 표시는 layout 이 쓴다 — 배율까지 한 줄로 말해야 해서 */
+      ssFrame(layout); /* 크기 표시는 layout 이 쓴다 — 배율까지 한 줄로 말해야 해서 */
     }
     /* 상자의 «안쪽» 크기. 여백을 CSS 한 곳(--ss-stage-pad)에서만 정하게 하려고 값을 베끼지 않고 읽는다 */
     function inner(el) {
@@ -5500,7 +5512,7 @@ ${HL_CSS}
       if (back) appFrame.src = back;
       core.soloRoots(m === "doc"); /* 정의서 모드에서는 설명하는 화면만 (#75) */
       if (m === "doc") brandHint(brand);
-      requestAnimationFrame(layout);
+      ssFrame(layout);
     }
     mProto.onclick = () => setMode("proto");
     mDoc.onclick = () => setMode("doc");
@@ -5620,7 +5632,7 @@ ${HL_CSS}
                  h: Math.max(idoc.body.scrollHeight, sheetH), marks: [markerLayer] };
       },
       isDoc: () => document.body.classList.contains("ss-mode-doc"),
-      afterRender: () => requestAnimationFrame(layout),
+      afterRender: () => ssFrame(layout),
       toggleRoot: true /* wrap은 앱 DOM을 소유한다 — setScreen이 root 표시/숨김도 함께 전환 */
     };
     if (FRAME) {
@@ -5689,7 +5701,7 @@ ${HL_CSS}
       let placeRaf = null;
       const queueFramePlace = () => {
         if (placeRaf) return;
-        placeRaf = requestAnimationFrame(() => { placeRaf = null; core.placeMarkers(); });
+        placeRaf = ssFrame(() => { placeRaf = null; core.placeMarkers(); });
       };
       const wireFrame = () => {
         const win = appFrame.contentWindow, doc = appFrame.contentDocument;
@@ -5701,7 +5713,7 @@ ${HL_CSS}
           doc.head.appendChild(st);
         }
         const detect = () => { detectScreenIn(core, win, doc); mirrorUrl(); };
-        const soon = () => setTimeout(detect, 50); /* 라우터가 DOM 을 바꾼 뒤에 판정 */
+        const soon = () => ssDefer(detect, 50); /* 라우터가 DOM 을 바꾼 뒤에 판정 */
         ["pushState", "replaceState"].forEach((fn) => {
           const orig = win.history[fn];
           win.history[fn] = function () {
@@ -5716,11 +5728,11 @@ ${HL_CSS}
         win.addEventListener("resize", queueFramePlace);
         let moTimer = null;
         new MutationObserver(() => {
-          clearTimeout(moTimer);
-          moTimer = setTimeout(() => { detect(); core.placeMarkers(); }, 120);
+          ssClear(moTimer);
+          moTimer = ssDefer(() => { detect(); core.placeMarkers(); }, 120);
         }).observe(doc.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
         detect();
-        requestAnimationFrame(layout);
+        ssFrame(layout);
       };
       appFrame.addEventListener("load", wireFrame); /* 모드 전환으로 액자가 다시 로드돼도 매번 재배선 */
     }
@@ -5728,7 +5740,7 @@ ${HL_CSS}
     /* ---- 재배치 트리거 ---- */
     window.addEventListener("resize", () => { layout(); core.placeMarkers(); });
     document.querySelectorAll("img").forEach((im) => im.addEventListener("load", layout));
-    document.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => requestAnimationFrame(layout)));
+    document.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => ssFrame(layout)));
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(core.placeMarkers)).observe(sheet);
 
     /* ---- 공개 API ---- */
@@ -5813,7 +5825,7 @@ ${HL_CSS}
     requestAnimationFrame(foldFit); /* 도구가 붙은 뒤의 폭으로 다시 잰다 */
     core.edMount();
     core.lyMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", exportImage: core.exportImage, exportText: core.exportText, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: layout, current: () => core.current().id, mode: FRAME ? "frame" : "wrap", exportImage: core.exportImage, exportText: core.exportText, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty, busy: ssBusy };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);
@@ -5938,29 +5950,29 @@ ${HL_CSS}
       const orig = history[fn];
       history[fn] = function () {
         const r = orig.apply(this, arguments);
-        setTimeout(detectScreen, 50);
+        ssDefer(detectScreen, 50);
         return r;
       };
     });
-    window.addEventListener("popstate", () => setTimeout(detectScreen, 50));
-    window.addEventListener("hashchange", () => setTimeout(detectScreen, 50));
+    window.addEventListener("popstate", () => ssDefer(detectScreen, 50));
+    window.addEventListener("hashchange", () => ssDefer(detectScreen, 50));
 
     /* ---- 재배치 트리거: 스크롤(내부 컨테이너 포함)·리사이즈·DOM 변경 ---- */
     let raf = null;
-    const queuePlace = () => { if (!raf) raf = requestAnimationFrame(() => { raf = null; place(); }); };
+    const queuePlace = () => { if (!raf) raf = ssFrame(() => { raf = null; place(); }); };
     window.addEventListener("scroll", queuePlace, { capture: true, passive: true });
     window.addEventListener("resize", queuePlace);
     let moTimer = null;
     new MutationObserver(() => {
-      clearTimeout(moTimer);
-      moTimer = setTimeout(() => { detectScreen(); place(); }, 120);
+      ssClear(moTimer);
+      moTimer = ssDefer(() => { detectScreen(); place(); }, 120);
     }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
 
     /* ---- 공개 API ---- */
     core.prMount(pill);
     core.edMount();
     core.lyMount();
-    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", exportImage: core.exportImage, exportText: core.exportText, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty };
+    window.ScreenSpec = { setScreen: core.setScreen, refresh: place, current: () => core.current().id, mode: "overlay", exportImage: core.exportImage, exportText: core.exportText, edit: core.setEdit, serialize: core.serialize, dirty: core.isDirty, busy: ssBusy };
     window.SpecLayer = window.ScreenSpec; /* 구명칭 호환 */
 
     core.setCurrent(SCREENS[0]);

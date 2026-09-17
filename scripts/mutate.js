@@ -4,6 +4,7 @@
  *   node scripts/mutate.js          전부 (돌연변이 하나당 20초쯤)
  *   node scripts/mutate.js <id>     하나만
  *   node scripts/mutate.js --list   목록
+ *   node scripts/mutate.js --shard=2/3   3대에 나눠 돌릴 때의 2번째 몫 (CI, #112)
  *
  * 왜 필요한가 (2026-08-31 실제 사고):
  *   #67 의 e2e 4건이 전부 PASS 였는데 목차 클릭 경로는 여전히 깨져 있었다(#74).
@@ -384,8 +385,12 @@ if (argv.includes("--list")) {
 try { execFileSync("git", ["diff", "--quiet", "--", "screenspec.js"], { cwd: REPO }); }
 catch (e) { console.error("✗ screenspec.js 에 커밋 안 된 변경이 있다. 돌연변이는 파일을 고쳤다 되돌리므로 깨끗할 때만 돌린다."); process.exit(2); }
 
+/* --shard=k/n — CI 가 n 대에 나눠 돈다 (#112). 등록 순서로 k번째마다 하나씩 */
+const shardArg = argv.find((a) => a.indexOf("--shard=") === 0);
+const shard = shardArg ? shardArg.slice(8).split("/").map(Number) : null;
 const only = argv.find((a) => a.indexOf("-") !== 0);
-const list = only ? MUTS.filter((m) => m.id === only) : MUTS;
+let list = only ? MUTS.filter((m) => m.id === only) : MUTS;
+if (shard && shard.length === 2 && shard[1] > 0 && shard[0] > 0) list = list.filter((m, i) => i % shard[1] === shard[0] - 1);
 if (!list.length) { console.error("✗ 그런 돌연변이가 없다: " + only + " (--list 로 목록)"); process.exit(2); }
 
 const original = fs.readFileSync(LIB, "utf8");
