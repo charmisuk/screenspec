@@ -2799,19 +2799,26 @@ ${HL_CSS}
         const sheet = src.node.querySelector(".ss-sheet");
         if (!sheet) { box.remove(); return null; }
         capNeutralize(src.node); /* 높이를 재기 «전에» — sticky 채로 재면 내용보다 길게 나온다 */
+        /* 되돌릴 값은 «바꾸기 전에» 적는다 (#119) — 빈 값으로 돌렸더니 layout 이 쓴 기기 높이(800px)가 풀려
+           프레임이 내용 높이로 쪼그라들었다. layout 은 프리셋을 누를 때만 높이를 다시 쓴다 */
+        const was = { h: sheet.style.height, o: sheet.style.overflow };
         sheet.style.height = "auto";
         const full = Math.max(sheet.scrollHeight, sheet.offsetHeight);
         src.node.style.transform = "";
         sheet.style.height = full + "px";
         sheet.style.overflow = "visible";
-        if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
+        /* 번호를 끌 때도 «숨기고 되돌린다» (#119) — 여기 층은 복사본이 아니라 살아 있는 층이다. 지웠더니 화면에서
+           번호·지시선이 사라지고 새로고침 전까지 안 돌아왔다. 「주요 항목만」 이 숨기는 것과 같은 이유다 (#106) */
+        const layersHid = [];
+        if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => { layersHid.push([n, n.style.display]); n.style.display = "none"; });
         else if (opt.major) capMajorStrip(src.node);
         body.appendChild(src.node);
         live.forEach((x) => freeze(x.el)(x)); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
         target = src.node;
         restoreSrc = function () {
-          sheet.style.height = "";
-          sheet.style.overflow = "";
+          sheet.style.height = was.h;
+          sheet.style.overflow = was.o;
+          layersHid.forEach(([n, d]) => (n.style.display = d));
           if (src.give) src.give(src.node);
         };
       } else {

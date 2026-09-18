@@ -2070,6 +2070,56 @@ function check(name, ok, detail) {
     s16.close();
   }
 
+  /* ============ wrap 에서 뽑고 나도 화면이 그대로다 (#119) ============
+     wrap 은 복제하지 않고 «살아 있는 시트» 를 옮겨 갔다 온다. 되돌리는 쪽이 둘을 놓쳤다:
+     높이를 원래 값이 아니라 빈 값으로 돌려 기기 프레임이 쪼그라들었고, 「번호 끔」 이면 살아 있는 번호 층을 지웠다.
+     내용이 전부 absolute 인 화면은 시트 높이가 인라인 값에서만 나오므로 두 번째 내보내기부터 백지가 됐다 —
+     #117 을 만들다 연달아 뽑는 검사가 드러냈다. 흐름 배치 본문에서는 백지가 안 돼 기존 검사가 못 봤다 */
+  if (sec("[그림] wrap 에서 뽑고 나도 화면이 그대로다 (#119)")) {
+    const APP19 = `<!doctype html><html><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif;background:#fff}
+      .t{position:absolute;background:rgb(238,238,238)}
+      .a{left:40px;top:60px;width:120px;height:50px}.b{left:40px;top:160px;width:160px;height:40px}
+      </style></head><body><div class="t a" data-spec="1"></div><div class="t b" data-spec="2"></div>
+      <script>window.SCREENSPEC={mode:"wrap",screens:[{id:"S-119",name:"그대로",specs:[
+        {n:1,target:"1",title:"가",defs:[{t:"a"}]},{n:2,target:"2",title:"나",defs:[{t:"b"}]}]}]};
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s19 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(APP19);
+    });
+    await new Promise((r) => s19.listen(P(4360), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("http://localhost:" + P(4360) + "/wrap.html");
+    await settle(700);
+    await page.click("#ss-mDoc");
+    await settle(500);
+    const view = () => page.evaluate(() => {
+      const sh = document.querySelector(".ss-sheet");
+      return { h: sh.style.height, rh: Math.round(sh.getBoundingClientRect().height),
+        marks: [...sh.querySelectorAll(".ss-marker")].filter((m) => m.getClientRects().length).length,
+        layers: sh.querySelectorAll(".ss-markers,.ss-anno").length };
+    });
+    const cut = (o) => page.evaluate((o) => window.ScreenSpec.exportImage(Object.assign({ head: false, table: false }, o))
+      .then((r) => ({ ok: !!(r && r.ok), why: (r && r.why) || "" })), o);
+    const v0 = await view();
+    let r = await cut({ markers: true });
+    let v = await view();
+    check("뽑은 뒤 기기 프레임 높이가 그대로다 — 인라인 값도, 화면 높이도 (#119)",
+      r.ok && v.h === v0.h && v0.h !== "" && Math.abs(v.rh - v0.rh) <= 1, JSON.stringify({ v0, v, r }));
+    r = await cut({ markers: true });
+    check("연달아 뽑아도 두 번째가 백지가 아니다 (내용이 전부 absolute 인 화면)", r.ok, JSON.stringify(r));
+    r = await cut({ markers: false });
+    await settle(300);
+    v = await view();
+    check("「번호 끔」 으로 뽑아도 화면의 번호·지시선 층이 남는다 (#119)",
+      r.ok && v.layers === v0.layers && v.marks === v0.marks && v0.marks === 2, JSON.stringify({ v0, v, r }));
+    r = await cut({ markers: true });
+    check("그 뒤에 번호를 켜고 뽑으면 번호가 다시 든다", r.ok, JSON.stringify(r));
+    check("JS 에러 0건", errors.length === 0, errors);
+    s19.close();
+  }
+
   /* ============ 프리셋을 선언으로 · 페이지만 보기 (#111) ============
      폭 프리셋 버튼이 mobile·pc 로 박혀 있어, devices 에 태블릿을 선언해도 툴바에 안 나왔다.
      기본을 셋으로 늘리지 «않는» 이유는 태블릿 폭이 제품마다 다르기 때문이다(768·744·834) —
