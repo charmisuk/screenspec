@@ -2709,6 +2709,53 @@ ${HL_CSS}
       document.body.appendChild(box);
       return box;
     }
+    /* 복사본은 «지금 화면» 이 아니라 «처음 그려지는 화면» 이다 — 둘을 맞출 값을 옮기거나 뜨기 «전에» 읽는다 (#116).
+       ① 애니메이션 — 새로 붙은 요소는 CSS 애니메이션을 처음부터 다시 돌고, 그림은 한 번에 찍히므로 그 «첫 프레임» 이
+          나온다. 등장 애니메이션(opacity 0 → 1)이면 패널이 통째로 투명해져 번호만 빈 자리에 떴다(실사용 2026-09-18).
+          wrap 도 같다 — 시트를 옮기는 순간 다시 돈다. 그래서 지금 값을 읽어 두고, 복사본에는 그 값을 박고 끈다
+       ② position:fixed (copy 모드만) — 복사본에서는 기준이 조립 상자 밖의 «창» 이, 그림에서는 머리말까지 든
+          «그림 틀 전체» 가 된다. 화면에 보이던 자리(마커와 같은 좌표)를 적어 둔다.
+          wrap 은 액자(.ss-frame)가 transform 으로 fixed 를 가두므로 그대로 맞다 */
+    const KF_META = { offset: 1, computedOffset: 1, easing: 1, composite: 1 };
+    function capLive(root, withFixed) {
+      const d = root.ownerDocument, win = d.defaultView || window;
+      const byEl = new Map();
+      try {
+        (d.getAnimations ? d.getAnimations() : []).forEach((a) => {
+          const ef = a.effect;
+          if (!ef || !ef.target || ef.pseudoElement || !ef.getKeyframes) return; /* 가상 요소는 인라인으로 못 박는다 */
+          if (!byEl.has(ef.target)) byEl.set(ef.target, []);
+          byEl.get(ef.target).push(ef);
+        });
+      } catch (e) { /* getAnimations 가 없는 브라우저 — CSS 애니메이션 이름만 끈다 */ }
+      const els = [root].concat(Array.from(root.getElementsByTagName("*")));
+      const out = [];
+      els.forEach((el, i) => {
+        const own = el.closest && el.closest(OWN_UI);
+        if (own && own !== root && root.contains(own)) return; /* 우리 것(마커·툴팁) — wrap 은 시트 안에 같이 산다 */
+        const cs = win.getComputedStyle(el);
+        const named = !!cs.animationName && cs.animationName !== "none";
+        const efs = byEl.get(el);
+        const fixed = withFixed && cs.position === "fixed" && el.getClientRects().length > 0;
+        if (!named && !efs && !fixed) return;
+        const css = {};
+        /* 끝난 애니메이션(채움 없음)도 끈다 — 복사본에서는 다시 처음부터 돈다 */
+        if (named) css.animation = "none";
+        /* 지금 걸려 있는 효과는 «지금 값» 으로 — 채움(both·forwards)으로 끝 상태에 머문 것도 여기 든다 */
+        (efs || []).forEach((ef) => {
+          let kfs = [];
+          try { kfs = ef.getKeyframes(); } catch (e) { kfs = []; }
+          kfs.forEach((kf) => Object.keys(kf).forEach((k) => {
+            if (KF_META[k]) return;
+            const kk = k === "cssFloat" ? "float" : k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
+            css[kk] = cs.getPropertyValue(kk);
+          }));
+        });
+        out.push({ i: i, el: el, css: css,
+          fix: fixed ? { r: ctx.rectOf(el), w: el.offsetWidth, h: el.offsetHeight, disp: cs.display } : null });
+      });
+      return out;
+    }
     /* 그림을 조립한다. 되돌리는 함수를 같이 준다 — 화면은 원래대로 돌아가야 한다 */
     function capBuild(opt) {
       const src = ctx.capSource ? ctx.capSource() : null;
@@ -2736,6 +2783,16 @@ ${HL_CSS}
         }
       });
       const restoreSticky = () => stickyUndo.forEach(([el, k, v]) => (el.style[k] = v));
+      /* 지금 모습 읽기 (#116) — 옮기거나 뜨기 «전» 이어야 한다. 옮긴 뒤에 읽으면 이미 첫 프레임이다 */
+      const live = capLive(src.node, src.kind !== "move");
+      const frozeUndo = [];
+      const freeze = (el) => (x) => Object.keys(x.css).forEach((k) => {
+        frozeUndo.push([el, k, el.style.getPropertyValue(k), el.style.getPropertyPriority(k)]);
+        el.style.setProperty(k, x.css[k], "important");
+      });
+      const restoreFrozen = () => frozeUndo.reverse().forEach(([el, k, v, pr]) => {
+        if (v) el.style.setProperty(k, v, pr); else el.style.removeProperty(k);
+      });
 
       if (src.kind === "move") {
         /* wrap — 살아 있는 시트를 «옮긴다». 복제하면 앱의 상태(입력값·canvas)를 잃는다 */
@@ -2750,6 +2807,7 @@ ${HL_CSS}
         if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
         else if (opt.major) capMajorStrip(src.node);
         body.appendChild(src.node);
+        live.forEach((x) => freeze(x.el)(x)); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
         target = src.node;
         restoreSrc = function () {
           sheet.style.height = "";
@@ -2759,6 +2817,9 @@ ${HL_CSS}
       } else {
         /* overlay·frame — 옮길 시트가 없으므로 사본을 뜬다. 다른 문서의 노드도 importNode 로 가져온다 */
         target = document.importNode(src.node, true);
+        /* 짝 맞추기는 걷어내기 «전» 에 — 같은 순서의 두 나무라야 번호로 짝이 맞는다 (#116) */
+        const twins = [target].concat(Array.from(target.getElementsByTagName("*")));
+        live.forEach((x) => { x.twin = twins[x.i]; freeze(x.twin)(x); });
         target.querySelectorAll(CAP_DROP).forEach((n) => n.remove());
         if (opt.markers === false) target.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
         else if (src.marks) src.marks.forEach((m) => target.appendChild(document.importNode(m, true)));
@@ -2775,6 +2836,27 @@ ${HL_CSS}
       }
 
       if (src.kind !== "move") capNeutralize(target); /* 사본 쪽 — 복제 뒤라야 요소가 있다 */
+
+      /* fixed → absolute (#116) — 화면에 보이던 자리에 못 박는다. 좌표는 마커와 같은 ctx.rectOf 다.
+         놓고 «재서» 옮긴다: 조상의 기준 상자·여백·transform 을 따지는 대신 결과를 맞춘다.
+         크기도 지금 값으로 — top:0;bottom:0 처럼 기준 상자에서 늘어나던 것이 복사본에서는 기준이 바뀐다 */
+      if (src.kind !== "move") {
+        const tr = target.getBoundingClientRect();
+        const ox = tr.left + target.clientLeft, oy = tr.top + target.clientTop;
+        live.forEach((x) => {
+          const c = x.twin;
+          if (!x.fix || !c || !target.contains(c)) return;
+          const S = (k, v) => c.style.setProperty(k, v, "important");
+          S("position", "absolute"); S("display", x.fix.disp); /* 팝오버는 복사본에서 «닫힌» 것이 된다 — 보이던 대로 */
+          S("box-sizing", "border-box"); S("width", x.fix.w + "px"); S("height", x.fix.h + "px");
+          S("min-width", "0"); S("min-height", "0"); S("max-width", "none"); S("max-height", "none");
+          S("left", "0px"); S("top", "0px"); S("right", "auto"); S("bottom", "auto");
+          const cr = c.getBoundingClientRect();
+          const at = (v) => Math.round(v * 100) / 100 + "px";
+          S("left", at(ox + x.fix.r.l - cr.left));
+          S("top", at(oy + x.fix.r.t - cr.top));
+        });
+      }
 
       /* 여백은 «마커가 실제로 튀어나온 만큼» 만 준다. 사방에 넉넉히 주면 그림 둘레에 흰 띠가 남는다 */
       const base = (src.kind === "move" ? target.querySelector(".ss-sheet") : target).getBoundingClientRect();
@@ -2795,7 +2877,7 @@ ${HL_CSS}
 
       return {
         box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
-        restore: function () { restoreSticky(); restoreSrc(); box.remove(); },
+        restore: function () { restoreSticky(); restoreFrozen(); restoreSrc(); box.remove(); },
       };
     }
     async function capPNG(opt) {

@@ -1976,6 +1976,100 @@ function check(name, ok, detail) {
     s9.close();
   }
 
+  /* ============ 열린 패널이 화면 그대로 구워진다 (#116) ============
+     실사용(2026-09-18): 목록 줄을 누르면 오른쪽 패널(fixed)이 등장 애니메이션(opacity 0→1)과 함께 붙는 화면에서,
+     그림에 패널이 통째로 빠지고 패널 안 번호만 빈 자리에 떴다. 복사본은 새 요소라 애니메이션이 처음부터 다시 돌고,
+     그림은 그 «첫 프레임» 을 찍는다. 그리고 fixed 는 복사본에서 기준이 바뀌어 머리말을 덮었다.
+     고침이 기대는 장치가 셋이라 요소도 셋이다 — 돌연변이로 하나씩 끄면 저마다 빨개져야 한다:
+       패널 — 제기자 그대로(both) : 다시 안 돌게
+       배지 — 기본 투명 + forwards 로 보인다 : «지금 값» 을 박아야 산다 (끄기만 하면 기본값 = 투명)
+       힌트 — 채움 없음, 끝나면 기본값 : 애니메이션을 «꺼야» 산다 (지금 걸린 효과가 없어 박을 값도 없다) */
+  if (sec("[그림] 열린 패널이 화면 그대로 구워진다 (#116)")) {
+    const APP16 = (mode) => `<!doctype html><html><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif;background:#fff}
+      .list{padding:16px;width:180px}.row{height:36px;border-bottom:1px solid #ddd;cursor:pointer}
+      .badge{display:inline-block;width:60px;height:20px;background:rgb(0,160,80);opacity:0;animation:b-in .15s forwards}
+      .hint{width:60px;height:20px;margin-top:8px;background:rgb(200,0,160);animation:h-in .15s}
+      aside.pn{position:fixed;top:0;right:0;bottom:0;width:140px;background:rgb(0,90,200);padding:12px;box-sizing:border-box;
+        animation:pn-in .25s cubic-bezier(.2,.9,.3,1) both}
+      .perm{margin-top:40px;height:40px;background:rgb(255,200,0)}
+      @keyframes pn-in{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
+      @keyframes b-in{to{opacity:1}}
+      @keyframes h-in{from{opacity:0}to{opacity:1}}
+      </style></head><body>
+      <div class="list"><div class="row" data-spec="1">줄 1</div><span class="badge"></span><div class="hint"></div></div>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-116",name:"패널",specs:[
+        {n:1,target:"1",title:"줄",defs:[{t:"a"}]},{n:2,target:"2",title:"권한",defs:[{t:"b"}]}]}]};
+      /* 줄을 누르면 그때 붙는 패널 — React 처럼 앱의 뿌리 안에 */
+      document.querySelector(".row").onclick = () => document.querySelector(".list").parentNode.insertAdjacentHTML("beforeend",
+        '<aside class="pn"><div class="perm" data-spec="2">권한</div></aside>');
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s16 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      const m = (req.url.match(/\/(frame|overlay|wrap)\.html/) || [])[1] || "frame";
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(APP16(m));
+    });
+    await new Promise((r) => s16.listen(P(4340), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const mode of ["frame", "overlay", "wrap"]) {
+      await page.goto("http://localhost:" + P(4340) + "/" + mode + ".html");
+      await settle(600);
+      /* 제기자 순서: 정의서 모드를 켜고 «그 안에서» 줄을 누른다 — 액자는 모드를 바꾸면 다시 불러오므로 순서가 결과를 바꾼다 */
+      if (mode !== "overlay") { await page.click("#ss-mDoc"); await settle(600); }
+      const row = mode === "frame" ? page.frameLocator("iframe[data-ss-frame]").locator(".row") : page.locator(".row").first();
+      await row.click();
+      await page.waitForFunction((m) => {
+        const f = document.querySelector("iframe[data-ss-frame]");
+        const d = m === "frame" ? f && f.contentDocument : document;
+        return !!(d && d.querySelector(".pn")) && d.getAnimations().every((a) => a.playState === "finished");
+      }, mode, { timeout: 4000 }).catch(() => {});
+      await settle(200);
+      const k = await page.evaluate(async () => {
+        let geo = null;
+        const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
+          if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+          const b = n.getBoundingClientRect(), perm = n.querySelector('.ss-cap-body [data-spec="2"]');
+          const pr = perm && perm.getBoundingClientRect();
+          geo = { bw: b.width, pc: pr ? { x: pr.left - b.left + pr.width / 2, y: pr.top - b.top + pr.height - 6 } : null };
+        } });
+        mo.observe(document.body, { childList: true });
+        const r = await window.ScreenSpec.exportImage({ markers: true, head: true, table: false });
+        mo.disconnect();
+        if (!r || !r.url) return { err: JSON.stringify(r) };
+        const img = new Image();
+        await new Promise((res) => { img.onload = res; img.src = r.url; });
+        const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+        const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+        const d = x.getImageData(0, 0, img.width, img.height).data;
+        const px = (cx, cy) => { const i = (Math.round(cy * 2) * img.width + Math.round(cx * 2)) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+        let blue = 0, green = 0, mag = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] === 0 && d[i + 1] === 90 && d[i + 2] === 200) blue++;
+          else if (d[i] === 0 && d[i + 1] === 160 && d[i + 2] === 80) green++;
+          else if (d[i] === 200 && d[i + 1] === 0 && d[i + 2] === 160) mag++;
+        }
+        /* 머리말 오른쪽 끝 — 패널이 그림 틀 전체를 기준으로 풀리면 여기를 덮는다 */
+        const head = px(geo.bw - 12, 12);
+        return { blue, green, mag, head, perm: geo.pc ? px(geo.pc.x, geo.pc.y) : null, geo };
+      });
+      const tag = "[" + mode + "] ";
+      check(tag + "열린 패널이 그림에 있다 — 투명한 첫 프레임이 아니다 (#116)", k.blue > 20000, JSON.stringify(k).slice(0, 200));
+      check(tag + "패널 안 항목이 번호가 가리키는 그 자리에 그려진다", !!k.perm && k.perm.join() === "255,200,0", JSON.stringify(k.perm));
+      check(tag + "패널이 머리말을 덮지 않는다 — 그림 틀이 아니라 앱 자리 기준", !!k.head && k.head.join() !== "0,90,200", JSON.stringify(k.head));
+      check(tag + "«지금 값» 으로 머문 배지(forwards)도 산다", k.green > 500, String(k.green));
+      check(tag + "끝난 애니메이션(채움 없음)이 다시 돌지 않는다", k.mag > 500, String(k.mag));
+      /* 화면은 원래대로 — 그림 때문에 박은 값이 앱에 남으면 안 된다 (wrap 은 살아 있는 앱을 옮겨 갔다 온다) */
+      check(tag + "내보낸 뒤 화면의 패널에 박은 값이 안 남는다", await page.evaluate((m) => {
+        const f = document.querySelector("iframe[data-ss-frame]");
+        const d = m === "frame" ? f.contentDocument : document;
+        const pn = d.querySelector(".pn");
+        return !!pn && pn.getAttribute("style") === null || (pn && pn.style.length === 0);
+      }, mode));
+    }
+    check("JS 에러 0건", errors.length === 0, errors);
+    s16.close();
+  }
+
   /* ============ 프리셋을 선언으로 · 페이지만 보기 (#111) ============
      폭 프리셋 버튼이 mobile·pc 로 박혀 있어, devices 에 태블릿을 선언해도 툴바에 안 나왔다.
      기본을 셋으로 늘리지 «않는» 이유는 태블릿 폭이 제품마다 다르기 때문이다(768·744·834) —

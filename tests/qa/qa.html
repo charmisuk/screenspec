@@ -37,6 +37,11 @@
     border:1px solid #D3D1CB;border-left-width:3px;border-radius:8px 0 0 8px;
     box-shadow:-4px 0 16px rgba(17,24,39,.08);font-size:12px;z-index:5}
   .qapin b{display:block;font-weight:800;margin-bottom:2px}
+  /* QA-17 (#116) — 목록 줄을 누르면 붙는 오른쪽 패널. 실사용 앱처럼 «열 때 끼워 넣고» 등장 애니메이션이 있다 */
+  .q116{position:fixed;top:0;right:0;bottom:0;width:260px;background:#fff;border-left:1px solid var(--line);
+    box-shadow:-8px 0 24px rgba(17,24,39,.10);padding:18px 16px;z-index:60;animation:q116in .25s cubic-bezier(.2,.9,.3,1) both}
+  .q116 .perm{margin:14px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+  @keyframes q116in{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
   .qapin span{color:#9B9A97}
 </style>
 </head>
@@ -185,7 +190,17 @@
     <span><button class="q17" style="padding:5px 13px;border-radius:8px;font:inherit">버튼</button>
     <span class="q17" style="padding:5px 13px;border-radius:8px;display:inline-block">네모</span></span></div>
   <div class="card" data-spec="173"><b>툴바</b><span>「페이지만 보기」와 폭 프리셋</span></div>
+  <div class="card" data-spec="174"><b>열린 패널</b><span><button type="button" onclick="q116Open()">패널 열기</button> 오른쪽에서 밀려 들어오는 고정 패널</span></div>
 </section>
+<script>
+  /* QA-17 (#116) — React 처럼 열 때 끼워 넣는다. 닫으면 뺀다 */
+  function q116Open() {
+    if (document.querySelector(".q116")) return;
+    document.getElementById("qa17").insertAdjacentHTML("beforeend",
+      '<aside class="q116"><b>역할 편집</b><div class="perm" data-spec="175">메뉴별 권한</div>' +
+      '<button type="button" onclick="this.closest(\'.q116\').remove()">닫기</button></aside>');
+  }
+</script>
 
 <!-- ══ QA-16 · 번호 없는 섹션 (#107) ══ -->
 <section class="scr" id="qa16">
@@ -613,6 +628,22 @@ window.SCREENSPEC = {
           { t: "기본을 셋으로 안 늘린 이유 — 태블릿 폭은 제품마다 다르다(768·744·834). 우리가 하나를 박으면 그것이 «기준» 인 척한다. 기준은 그 제품의 CSS 브레이크포인트다 (#111)", kind: "why" }
         ]},
         { t: "그 버튼을 눌러 확인 : 시트가 768×1024 가 된다" }
+      ]},
+      { n: 4, target: "174", anno: "box", title: "열린 패널이 그림에 든다", defs: [
+        { t: "「패널 열기」 를 누른다 — 오른쪽에서 패널이 밀려 들어오고 5번이 패널 안에 선다" },
+        { t: "「내보내기」 로 뽑는다 (머리말 켠 채)" },
+        { t: "확인 : 그림에 패널이 있고, 5번이 패널 안 «메뉴별 권한» 위에 있다", c: [
+          { t: "그림용 복사본은 새 요소라 등장 애니메이션이 처음부터 다시 돌았고, 그림은 그 첫 프레임(투명)을 찍었다 — 패널이 빠지고 번호만 빈 자리에 떴다 (#116)", kind: "why" }
+        ]},
+        { t: "확인 : 패널이 머리말을 덮지 않는다 — 머리말 아래 앱 자리에 선다", c: [
+          { t: "fixed 는 복사본에서 기준이 «그림 틀 전체» 로 바뀌어 머리말 높이만큼 위로 올라갔다. 화면에 보이던 자리에 못 박는다 (#116)", kind: "why" }
+        ]},
+        { t: "주소 끝에 ?mode=frame 을 붙여 다시 연다 → 정의서 모드를 «먼저» 켜고 → 패널을 연다 → 뽑는다", c: [
+          { t: "확인 : 액자 모드에서도 같다 (액자는 모드를 바꾸면 다시 불러오므로 패널을 나중에 연다)" }
+        ]}
+      ]},
+      { n: 5, target: "175", anno: "box", optional: true, title: "패널 안 항목", defs: [
+        { t: "패널을 열어야 보이는 자리 — 그림에서 이 번호가 패널 안 항목 위에 있어야 한다" }
       ]}
     ]},
     { id: "QA-16-SECTION", name: "번호 없는 섹션", path: ["QA", "번호 없는 섹션"], specs: [
