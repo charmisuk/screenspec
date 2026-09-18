@@ -3680,6 +3680,7 @@ function check(name, ok, detail) {
       내용높이: document.querySelector(".ss-sheet").scrollHeight,
       기기폭: document.querySelector(".ss-sheet").offsetWidth,
       마커: document.querySelectorAll(".ss-marker").length,
+      인라인높이: document.querySelector(".ss-sheet").style.height,
     }));
     const img = await shoot({ markers: true, head: true });
     check("wrap: 내보내기가 성공한다", img.ok === true, JSON.stringify(img));
@@ -3688,11 +3689,19 @@ function check(name, ok, detail) {
       img.h / 2 > dev.내용높이 * 0.9, JSON.stringify({ img: img.h, dev: dev }));
     check("wrap: 폭이 기기 폭에 딱 맞는다 (쓸데없는 흰 띠 없음)",
       img.w / 2 >= dev.기기폭 && img.w / 2 <= dev.기기폭 + 60, JSON.stringify({ img: img.w / 2, 기기폭: dev.기기폭 }));
-    check("wrap: 내보낸 뒤 화면이 원상 복귀한다", await page.evaluate((d) =>
-      document.querySelectorAll(".ss-cap").length === 0 &&
-      !document.querySelector(".ss-sheet").style.height &&
-      document.querySelector(".ss-frame").parentElement.id === "ss-docHolder" &&
-      document.querySelectorAll(".ss-marker").length === d.마커, dev));
+    /* «원상» 은 빈 값이 아니라 «뽑기 전 값» 이다 (#119). 예전 검사는 높이가 빈 값인지를 봤는데, 그게 바로 결함이었다 —
+       layout 이 쓴 기기 높이(800px)가 풀려 프레임이 1645px 로 늘어난 채였다(v0.35.0 실측). 검사가 결함을 정답으로 적어 두었다 */
+    const after = await page.evaluate(() => ({
+      caps: document.querySelectorAll(".ss-cap").length,
+      인라인높이: document.querySelector(".ss-sheet").style.height,
+      기기높이: document.querySelector(".ss-sheet").offsetHeight,
+      holder: document.querySelector(".ss-frame").parentElement.id,
+      마커: document.querySelectorAll(".ss-marker").length,
+    }));
+    check("wrap: 내보낸 뒤 화면이 원상 복귀한다 — 기기 높이도 뽑기 전 그대로 (#119)",
+      after.caps === 0 && after.holder === "ss-docHolder" && after.마커 === dev.마커 &&
+      after.인라인높이 === dev.인라인높이 && dev.인라인높이 !== "" && after.기기높이 === dev.기기높이,
+      JSON.stringify({ 전: dev, 후: after }));
 
     const noHead = await shoot({ head: false, markers: false });
     check("wrap: 머리말을 끄면 그만큼 세로가 짧아진다", noHead.ok && noHead.h < img.h, JSON.stringify({ noHead, img }));
