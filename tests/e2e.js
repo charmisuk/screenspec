@@ -1385,6 +1385,107 @@ function check(name, ok, detail) {
     srvM.close();
   }
 
+  /* ============ 번호 목록 (#118) ============
+     순서나 가짓수가 뜻인 목록을 ①·1) 글자로 흉내 내면 컨플·노션에 붙였을 때 진짜 번호 목록이 아니다 (PM 2026-09-18).
+     kind:"ol" — 같은 층에서 «이어지는» ol 이 한 목록, 다른 종류가 끼면 다시 1. 하위 줄은 그 번호 항목 안에.
+     가려진 줄(기획 보기의 개발 줄)은 세지도 끊지도 않는다 — 보이는 대로 센다 */
+  if (sec("[번호 목록] 순서가 뜻인 목록 (#118)")) {
+    const ODOC = '<h1 id="t">홈</h1><button id="b" data-spec="1" style="margin:40px">역할</button>' +
+      "<script>window.SCREENSPEC={screen:{id:'S-OL',name:'권한'},specs:[{n:1,target:'1',title:'역할 추가',defs:[" +
+      "{t:'하는 일 두 가지'}," +
+      "{t:'역할을 만든다',kind:'ol',c:[{t:'이름은 20자'},{t:'안쪽 첫째',kind:'ol'},{t:'안쪽 둘째',kind:'ol'}]}," +
+      "{t:'사람에게 준다',kind:'ol'}," +
+      "{t:'개발 메모',kind:'ol',layer:'dev'}," +
+      "{t:'권한을 고른다',kind:'ol'}," +
+      "{t:'끊는 불릿'}," +
+      "{t:'다시 첫째',kind:'ol'}" +
+      "]}]};<" + "/script>";
+    await page.goto("about:blank");
+    await page.setContent(ODOC);
+    await page.addScriptTag({ content: LIB });
+    await settle(400);
+    await page.click("#ss-mDoc");
+    await settle(400);
+    /* 줄 글자 → 번호 — 기획 목록(개발 절 제외)에서 읽는다 */
+    const nums = () => page.evaluate(() => {
+      const o = {};
+      document.querySelectorAll('.ss-b[data-kind="ol"]').forEach((b) => {
+        if (b.closest(".ss-dev")) return;
+        const t = (b.querySelector(".ss-dt") || {}).textContent, n = b.querySelector(".ss-b-num");
+        o[t] = n ? n.textContent : "(없음)";
+      });
+      return o;
+    });
+    let nu = await nums();
+    check("뷰어: 이어지는 번호 줄은 1·2·3 — 불릿 점 자리에 번호", nu["역할을 만든다"] === "1." && nu["사람에게 준다"] === "2." && nu["권한을 고른다"] === "3.", JSON.stringify(nu));
+    check("뷰어: 다른 종류가 끼면 다시 1 (#118)", nu["다시 첫째"] === "1.", JSON.stringify(nu));
+    check("뷰어: 하위 층은 따로 센다 — 번호 항목 안의 번호 목록", nu["안쪽 첫째"] === "1." && nu["안쪽 둘째"] === "2.", JSON.stringify(nu));
+    check("뷰어: 가려진 개발 줄은 세지도 끊지도 않는다 (보이는 대로 센다)", nu["권한을 고른다"] === "3.", JSON.stringify(nu));
+    /* 그림 속 기능 설명 표 */
+    const tbl = await page.evaluate(async () => {
+      let rows = null;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
+        if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+        rows = [...n.querySelectorAll(".ss-pr-table li.ss-pr-ol")].map((li) => li.textContent.trim());
+      } });
+      mo.observe(document.body, { childList: true });
+      await window.ScreenSpec.exportImage({ markers: true, head: false, table: true, layer: "plan" });
+      mo.disconnect();
+      return rows;
+    });
+    check("그림 속 표에도 번호가 선다 — 같은 규칙", JSON.stringify(tbl) === JSON.stringify(["1.역할을 만든다", "1.안쪽 첫째", "2.안쪽 둘째", "2.사람에게 준다", "3.권한을 고른다", "1.다시 첫째"]), JSON.stringify(tbl));
+    /* 설명 복사 — 컨플·노션이 진짜 번호 목록으로 받는 모양 */
+    const tx = await page.evaluate(() => window.ScreenSpec.exportText({ markers: true, head: false, layer: "plan" }));
+    check("설명 복사 HTML 이 <ol> 이다 — 종류가 바뀌면 닫고 새로 연다", tx.html.indexOf(
+      "<ul><li>하는 일 두 가지</li></ul><ol><li>역할을 만든다<ul><li>이름은 20자</li></ul><ol><li>안쪽 첫째</li><li>안쪽 둘째</li></ol></li>" +
+      "<li>사람에게 준다</li><li>권한을 고른다</li></ol><ul><li>끊는 불릿</li></ul><ol><li>다시 첫째</li></ol>") >= 0, tx.html);
+    check("설명 복사 글(마크다운)은 1. 2. 3.", tx.text.indexOf(
+      "- 하는 일 두 가지\n1. 역할을 만든다\n  - 이름은 20자\n  1. 안쪽 첫째\n  2. 안쪽 둘째\n2. 사람에게 준다\n3. 권한을 고른다\n- 끊는 불릿\n1. 다시 첫째") >= 0, tx.text);
+
+    /* ── 편집기: 사람이 치는 길 ── */
+    const kinds = () => page.evaluate(() => [...document.querySelectorAll(".ss-b[data-kind]")].filter((b) => !b.closest(".ss-dev"))
+      .map((b) => b.dataset.kind + ":" + ((b.querySelector(".ss-b-num") || {}).textContent || "") + ":" + ((b.querySelector(".ss-dt") || {}).textContent || "")));
+    const FDOC = ODOC.replace(/defs:\[[\s\S]*?\]\}\]\};/, "defs:[{t:'첫 줄'}]}]};");
+    await page.goto("about:blank");
+    await page.setContent(FDOC);
+    await page.addScriptTag({ content: LIB });
+    await settle(400);
+    await page.click("#ss-mDoc");
+    await settle(300);
+    await page.click('.ss-dt[data-ed="b"][data-di="0"]');
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await settle(250);
+    await page.keyboard.press("/");
+    await settle(250);
+    check("슬래시 메뉴에 「번호 목록」 — 화면 마커 「번호」 와 이름이 다르다",
+      (await page.locator('.ss-slash [data-sl="ol"]').count()) === 1 &&
+      /번호 목록/.test(await page.locator('.ss-slash [data-sl="ol"]').textContent()),
+      await page.locator(".ss-slash [data-sl]").allTextContents());
+    await page.click('.ss-slash [data-sl="ol"]');
+    await settle(250);
+    await page.keyboard.type("가");
+    await page.keyboard.press("Enter");
+    await settle(250);
+    let ks = await kinds();
+    check("Enter 는 번호를 잇는다 — 다음 줄이 2.", ks.length === 3 && ks[1] === "ol:1.:가" && ks[2] === "ol:2.:", JSON.stringify(ks));
+    await page.keyboard.press("Enter");
+    await settle(250);
+    ks = await kinds();
+    check("빈 번호 줄에서 Enter 는 목록에서 나온다 — 줄이 늘지 않는다 (노션과 같다)", ks.length === 3 && ks[2] === "text::", JSON.stringify(ks));
+    await page.keyboard.type("1.");
+    await page.keyboard.press(" ");
+    await settle(250);
+    ks = await kinds();
+    check("빈 줄에서 «1.» + 스페이스 = 번호 목록 — 친 숫자는 글에 안 남는다", ks.length === 3 && ks[2] === "ol:2.:", JSON.stringify(ks));
+    await page.keyboard.type("나");
+    await page.keyboard.press("Escape");
+    await settle(250);
+    const ser = await page.evaluate(() => window.ScreenSpec.serialize());
+    check("저장하면 kind: \"ol\" 로 남는다", (ser.match(/kind:\s*"ol"/g) || []).length === 2 && ser.indexOf('"가"') >= 0 && ser.indexOf('"나"') >= 0, ser.slice(0, 400));
+    check("JS 에러 0건", errors.length === 0, errors);
+  }
+
   /* ============ 폰 폭에서 툴바가 접힌다 (#94) ============
      툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다 — 폰에서는
      문서 모드에 들어갈 수조차 없었다. 좁은 폭: 폭 시뮬레이터 숨김 + 도구는 ⋯ 로. */

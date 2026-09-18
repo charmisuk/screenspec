@@ -866,6 +866,10 @@
   .ss-pr-table li.ss-pr-text{list-style:none;margin-left:-14px}
   .ss-pr-table li.ss-pr-why{list-style:none;color:var(--ss-ink3);font-size:11px}
   .ss-pr-table li.ss-pr-why::before{content:"↳ "}
+  /* 번호 목록 (#118) — 불릿 자리에 번호. 두 자리 수는 왼쪽으로 자란다 */
+  .ss-pr-table li.ss-pr-ol{list-style:none}
+  .ss-pr-num{display:inline-block;min-width:18px;margin-left:-18px;padding-right:4px;box-sizing:border-box;text-align:right;
+    font-variant-numeric:tabular-nums}
   .ss-pr-table tr.ss-pr-dev .ss-pr-no,.ss-pr-table tr.ss-pr-dev .ss-pr-tag{color:#8E4EC6}
   .ss-pr-table .ss-pr-devtag{font-family:var(--ss-mono);font-size:10px;font-weight:800;color:#8E4EC6;
     border:1px solid #D9C3EE;border-radius:3px;padding:0 3px;margin-right:4px}
@@ -942,6 +946,10 @@
   .ss-b-dot,.ss-b-arrow{flex:none;width:var(--ss-blk-mark);height:var(--ss-blk-lh);display:grid;place-items:center;
     transform:translateY(var(--ss-blk-ink))}
   .ss-b-dot::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--ss-ink)}
+  /* 번호 목록 (#118) — 불릿 점과 같은 칸. 두 자리 수도 들어가게 칸 폭은 «최소» 로만 */
+  .ss-b-num{flex:none;min-width:var(--ss-blk-mark);height:var(--ss-blk-lh);display:grid;place-items:center end;padding-right:3px;
+    box-sizing:border-box;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ss-ink)}
+  .ss-dev .ss-b-num{color:#8E4EC6}
   /* ↳ 글리프는 밑선보다 위에 앉는 문자다 — 실측으로 본문 잉크보다 1px 높다. 그만큼 더 내린다 */
   .ss-b-arrow{color:var(--ss-ink3);font-size:11px;transform:translateY(calc(var(--ss-blk-ink) + 1px))}
   .ss-b-why{color:var(--ss-ink3)}
@@ -1368,6 +1376,11 @@ ${HL_CSS}
        why 속성   → 바로 뒤에 오는 화살표 블록
      한 가지 표현만 남으면 편집·드래그·저장이 전부 같은 규칙으로 돈다. */
   const B_TEXT = "text", B_BULLET = "bullet", B_WHY = "why", B_TABLE = "table", B_MERMAID = "mermaid";
+  /* 번호 목록 (#118, PM 2026-09-18) — 순서나 가짓수가 뜻인 목록(「하는 일 두 가지」 · 「세 단계」)을 ①·1) 글자로
+     흉내 내면 컨플·노션에 붙였을 때 진짜 번호 목록이 아니다. 같은 층에서 «이어지는» ol 줄이 한 목록이고,
+     다른 종류가 끼면 번호는 다시 1 이다. 하위 줄(c)은 그 번호 항목 «안» 에 든다.
+     이름을 ol 로 둔 이유 — 「번호」 는 이 도구에서 화면 마커(n)다. 겹치지 않게 HTML 의 이름을 빌린다 */
+  const B_OL = "ol";
   /* 표 (#97, 실사용 2026-09-02) — 조건·결과 짝이 줄 나열로는 안 읽힌다.
      «한 블록» 이다: 행을 자식(c)으로 두지 않는다. 그래야 「모든 블록은 줄이고 깊이를 갖는다」 는
      전제가 살고 위계 규칙(272자리)이 그대로 간다. 표는 맨 위 층에만 온다 —
@@ -1449,10 +1462,15 @@ ${HL_CSS}
   function flatten(defs, want) {
     const out = [];
     const walk = (list, depth, path) => {
+      let run = 0; /* 번호 목록 (#118) — «보이는» 형제 중 이어지는 ol 을 센다. 가려진 줄은 세지도 끊지도 않는다 */
       (list || []).forEach((b, i) => {
         const p = path.concat(i);
         const keep = want === "plan" ? !b.layer : want === "dev" ? b.layer === "dev" : true;
-        if (keep) out.push({ b: b, depth: depth, path: p });
+        if (keep) {
+          const node = { b: b, depth: depth, path: p };
+          if (blkKind(b) === B_OL) node.ol = ++run; else run = 0;
+          out.push(node);
+        }
         walk(b.c, depth + 1, p);
       });
     };
@@ -1560,7 +1578,8 @@ ${HL_CSS}
     }
     return '<div class="' + cls + '" data-di="' + di + '" data-path="' + n.path.join(".") + '" data-kind="' + kind + '">' +
       edGut("b", di) +
-      (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' : "") +
+      (kind === B_BULLET ? '<span class="ss-b-dot"></span>' : kind === B_WHY ? '<span class="ss-b-arrow">↳</span>' :
+        kind === B_OL ? '<span class="ss-b-num">' + (n.ol || 1) + ".</span>" : "") +
       '<span class="ss-dt"' + edMark("b", di) + ">" + rich(d.t) + "</span>" + refSupHTML(d) + "</div>";
   }
   function blocksHTML(defs, want) {
@@ -2477,7 +2496,7 @@ ${HL_CSS}
     function prLine(n) {
       const d = n.b, kind = blkKind(d), ind = Math.max(0, Math.min(2, n.depth));
       const cls = "ss-pr-b" + (ind ? " ss-pr-in" + ind : "") + (kind === B_WHY ? " ss-pr-why" : "") +
-        (kind === B_TEXT ? " ss-pr-text" : "");
+        (kind === B_TEXT ? " ss-pr-text" : "") + (kind === B_OL ? " ss-pr-ol" : "");
       /* 머메이드 (#98) — 뷰어가 그려 둔 svg 가 있으면 그대로, 없으면(못 그렸으면) 코드가 바닥 */
       if (kind === B_MERMAID) {
         const got = MM_SVG.get(d);
@@ -2495,7 +2514,8 @@ ${HL_CSS}
         t.rows.forEach((row) => { inner += "<tr>" + row.map((v) => "<td>" + rich(v) + "</td>").join("") + "</tr>"; });
         return '<li class="' + cls + ' ss-pr-tbl-li">' + inner + "</table></li>";
       }
-      return '<li class="' + cls + '">' + (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) +
+      return '<li class="' + cls + '">' + (kind === B_OL ? '<span class="ss-pr-num">' + (n.ol || 1) + ".</span>" : "") +
+        (d.layer === "dev" ? '<span class="ss-pr-devtag">DEV</span>' : "") + rich(d.t) +
         (d.ref && SOURCES && SOURCES[d.ref] && refNos[d.ref] ? '<sup class="ss-pr-ref">' + refNos[d.ref] + "</sup>" : "") + "</li>";
     }
     /* 그림 속 출처 절 — 링크는 그림에서 못 누르니 이름이 정보다 (#100) */
@@ -2537,7 +2557,7 @@ ${HL_CSS}
       const brief = opt.depth === "brief";
       const refSup = (b) => (b.ref && SOURCES && SOURCES[b.ref] && refNos[b.ref] ? refNos[b.ref] : 0);
       /* 블록 하나 → (html, md). 표·순서도는 목록 «밖» 에 선다 — 목록 안 표는 붙여넣기 대상이 잘 못 받는다 */
-      const one = (b, depth) => {
+      const one = (b, depth, num) => {
         const kind = blkKind(b), ind = "  ".repeat(depth);
         if (kind === B_TABLE) {
           const t = tblNorm(b);
@@ -2555,15 +2575,20 @@ ${HL_CSS}
         const dev = b.layer === "dev" ? "DEV " : "", why = kind === B_WHY ? "\u21B3 " : "";
         const n = refSup(b), body = rich(b.t);
         return { h: "<li>" + dev + why + body + (n ? "<sup>" + n + "</sup>" : "") + "</li>",
-                 m: ind + "- " + dev + why + mdOf(body) + (n ? " (" + n + ")" : ""), block: false };
+                 m: ind + (kind === B_OL ? num + ". " : "- ") + dev + why + mdOf(body) + (n ? " (" + n + ")" : ""), block: false };
       };
       /* 나무를 그대로 따라 내려간다 — 층이 곧 들여쓰기다 */
       const list = (arr, depth, H2, M2) => {
-        let open = false;
+        /* 열린 목록의 꼬리표 — ul·ol (#118). 종류가 바뀌면 닫고 새로 연다: 이어지는 ol 만 한 번호 목록이다 */
+        let open = "", run = 0;
+        const close = () => { if (open) { H2.push("</" + open + ">"); open = ""; } };
         (arr || []).filter(keep).forEach((b) => {
-          const r = one(b, depth);
-          if (r.block) { if (open) { H2.push("</ul>"); open = false; } H2.push(r.h); M2.push(r.m); return; }
-          if (!open) { H2.push("<ul>"); open = true; }
+          const isOl = blkKind(b) === B_OL;
+          run = isOl ? run + 1 : 0;
+          const r = one(b, depth, run);
+          if (r.block) { close(); H2.push(r.h); M2.push(r.m); return; }
+          const tag = isOl ? "ol" : "ul";
+          if (open !== tag) { close(); H2.push("<" + tag + ">"); open = tag; }
           M2.push(r.m);
           if (!brief && b.c && b.c.length && (b.c || []).some(keep)) {
             const H3 = [], M3 = [];
@@ -2572,7 +2597,7 @@ ${HL_CSS}
             M2.push(M3.join("\n"));
           } else H2.push(r.h);
         });
-        if (open) H2.push("</ul>");
+        close();
       };
       /* 요약 = 제목 + 이유. 이유(why)를 나무 전체에서 모아 한 층으로 편다 */
       const whysOf = (arr, acc) => { (arr || []).filter(keep).forEach((b) => { if (blkKind(b) === B_WHY) acc.push(Object.assign({}, b, { c: [] })); whysOf(b.c, acc); }); return acc; };
@@ -3842,8 +3867,15 @@ ${HL_CSS}
       if (node) {
         const cur = node.b;
         if (cur.layer) nb.layer = cur.layer;
-        /* PM 결정 (#56): Enter 의 기본은 «아무것도 아닌 줄» 이다. 불릿은 «-» + 스페이스나 ＋ 로 만든다 */
-        nb.kind = cur.kind === B_BULLET ? B_BULLET : B_TEXT;
+        /* 빈 번호 줄에서 Enter = 목록에서 나온다 — 노션과 같다. 이게 없으면 번호 목록에 갇힌다 (#118) */
+        if (cur.kind === B_OL && !String(cur.t || "").replace(/<[^>]*>/g, "").trim()) {
+          cur.kind = B_TEXT;
+          edGoPath(p.key, cur);
+          return;
+        }
+        /* PM 결정 (#56): Enter 의 기본은 «아무것도 아닌 줄» 이다. 불릿은 «-» + 스페이스나 ＋ 로 만든다.
+           번호 목록은 이어 쓰는 것이 곧 뜻이라(다음 번호) 잇는다 (#118) */
+        nb.kind = cur.kind === B_BULLET || cur.kind === B_OL ? cur.kind : B_TEXT;
         /* 형제로 «바로 뒤» — 하위를 가진 줄이어도 그 하위 «앞» 에 끼우지 않는다.
            그러면 그 하위들의 부모가 바뀐다 (R0) */
         list = node.spot.owner; at = node.spot.idx + 1;
@@ -4085,6 +4117,8 @@ ${HL_CSS}
     const SLASH = [
       { k: "num", ico: "①", nm: "번호", key: "화면에서 찍기" },
       { k: "bul", ico: "•", nm: "불릿", key: "-" },
+      /* 「번호」 는 화면 마커다 — 목록은 「번호 목록」 으로 이름을 나눈다 (#118) */
+      { k: "ol", ico: "1.", nm: "번호 목록", key: "1." },
       { k: "why", ico: "↳", nm: "화살표", key: ">" },
       { k: "tbl", ico: "▦", nm: "표", key: "2열" },
     ];
@@ -4235,6 +4269,7 @@ ${HL_CSS}
       edSlashEat(); /* «/» 와 거르려고 친 글자를 걷어낸다 (#85) */
       if (kind === "num") { edFinish(true); pickStart(); return; }
       if (kind === "bul") { edSetKind(B_BULLET); return; }
+      if (kind === "ol") { edSetKind(B_OL); return; }
       if (kind === "why") { edSetKind(B_WHY); return; }
       if (kind === "brief") { edKillLine(); edAddBrief(); return; } /* 슬래시를 친 빈 줄은 «자리 잡던 줄» 이라 치운다 (#82) */
       if (kind === "sect") { const sp0 = p && p.s; edKillLine(); edAddSection(sp0); return; }
@@ -5334,6 +5369,8 @@ ${HL_CSS}
         }
         /* 노션과 같은 마크다운 단축키 — 빈 줄에서 «-» + 스페이스면 불릿, «>» 면 화살표 (#56) */
         else if (k === " " && edEl.textContent === "-") { eat(); edEl.textContent = ""; edPickUp(); edSetKind(B_BULLET); }
+        /* «1.» + 스페이스 = 번호 목록 (#118) — 친 숫자는 버린다. 번호는 자리가 정한다 */
+        else if (k === " " && /^\d+\.$/.test(edEl.textContent)) { eat(); edEl.textContent = ""; edPickUp(); edSetKind(B_OL); }
         else if (k === ">" && empty) { eat(); edSetKind(B_WHY); }
         /* 굵게·링크 — 저장에는 <strong>·<a href> 로만 남는다 (#44) */
         else if ((e.ctrlKey || e.metaKey) && (k === "b" || k === "B")) { eat(); document.execCommand("bold"); }
