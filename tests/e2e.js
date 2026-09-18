@@ -1569,7 +1569,8 @@ function check(name, ok, detail) {
         mark: st("mark"), table: st("table"), dev: st("dev"),
         headKidsOff: d.querySelector('[data-pr-k="head"]').classList.contains("ss-off"),
         devBox: !!d.querySelector('[data-pr-k="table"]'),
-        major: st("major"), mjVis: vis('[data-pr-k="mark"]'), mjOff: d.querySelector('[data-pr-k="mark"]').classList.contains("ss-off"),
+        major: st("major"), mjVis: vis('[data-pr-l="major"]'), mjOff: d.querySelector('[data-pr-k="mark"]').classList.contains("ss-off"),
+        area: st("area"), pvArea: vis(".ss-pr-p-area"),
         pvPath: vis(".ss-pr-p-path"), pvMk: vis(".ss-pr-p-mk"), pvMk2: vis(".ss-pr-p-mkx"), pvTbl: vis(".ss-pr-p-tbl"),
         fname: d.querySelector(".ss-pr-fname").textContent, accent: d.style.getPropertyValue("--ss-accent") };
     });
@@ -1594,9 +1595,9 @@ function check(name, ok, detail) {
     check("무엇이 만들어지는지 이름으로 말한다 (.png 는 여기서 보인다)", /\.png$/.test(d.fname), d.fname);
     check("취소 — 이 자리에서 하는 일은 «그만두기» 다",
       (await page.textContent('.ss-prdlg [data-pr="cancel"]')) === "취소");
-    check("기본값: 화면 ID·화면명·경로 켬 · 일시 끔 · 번호 켬 · 표 끔",
+    check("기본값: 화면 ID·화면명·경로 켬 · 일시 끔 · 번호 켬 · 영역 상자 켬 · 표 끔",
       d.head === "v" && d.id === "v" && d.name === "v" && d.path === "v" &&
-      d.when === "x" && d.mark === "v" && d.table === "x", JSON.stringify(d));
+      d.when === "x" && d.mark === "v" && d.area === "v" && d.table === "x", JSON.stringify(d));
     check("기본 한 벌은 «일부» 가 아니다 — 부모가 중간 상태로 안 보인다", d.head === "v", d.head);
     check("스케치에 번호가 서 있다", d.pvMk === true);
     await page.uncheck('[data-pr-c="mark"]');
@@ -2118,6 +2119,131 @@ function check(name, ok, detail) {
     check("그 뒤에 번호를 켜고 뽑으면 번호가 다시 든다", r.ok, JSON.stringify(r));
     check("JS 에러 0건", errors.length === 0, errors);
     s19.close();
+  }
+
+  /* ============ 영역 상자 (#117) ============
+     PM(2026-09-18): 「숫자만 가지고는 어디가 박스인지 잘 모르겟어」 — 그림에 번호만 찍히고 그 번호가 가리키는 영역의
+     테두리가 없었다. 뷰어는 가리키면 대상을 강조하지만(ss-hl) 그림에는 가리킬 손이 없다.
+     「화면 위 번호」 의 하위 선택지 · 기본 켬. 상자는 마커와 같은 좌표(ctx.rectOf)라 번호와 한 자리를 가리킨다 */
+  if (sec("[그림] 영역 상자 (#117)")) {
+    const APP17 = (mode) => `<!doctype html><html><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif;background:#fff}
+      .t{position:absolute;background:rgb(238,238,238)}
+      .a{left:40px;top:60px;width:120px;height:50px}.b{left:40px;top:160px;width:160px;height:40px;border-radius:12px}
+      .c{left:230px;top:60px;width:80px;height:140px}
+      </style></head><body>
+      <div class="t a" data-spec="1"></div><div class="t b" data-spec="2"></div><div class="t c" data-spec="3"></div>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-117",name:"상자",specs:[
+        {n:1,target:"1",title:"가",defs:[{t:"a"}]},{n:2,target:"2",title:"나",major:true,defs:[{t:"b"}]},
+        {n:3,target:"3",title:"다",defs:[{t:"c"}]}]}]};
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s17 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      const m = (req.url.match(/\/(frame|overlay|wrap)\.html/) || [])[1] || "wrap";
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(APP17(m));
+    });
+    await new Promise((r) => s17.listen(P(4350), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    /* 조립 상자가 붙는 순간 상자·대상의 자리를 재고, 구운 PNG 에서 대상 왼쪽 테두리 픽셀을 본다 */
+    const bake = (o) => page.evaluate(async (o) => {
+      let geo = null;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
+        if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+        const b = n.getBoundingClientRect();
+        const R = (e) => { const r = e.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height }; };
+        const tg = {};
+        n.querySelectorAll(".ss-cap-body [data-spec]").forEach((e) => { tg[e.dataset.spec] = R(e); });
+        geo = { tg, areas: [...n.querySelectorAll(".ss-cap-area")].map((e) => Object.assign(R(e), { rad: e.style.borderRadius })) };
+      } });
+      mo.observe(document.body, { childList: true });
+      const r = await window.ScreenSpec.exportImage(Object.assign({ head: false, table: false, accent: "#E5484D" }, o));
+      mo.disconnect();
+      if (!r || !r.url || !geo) return { err: JSON.stringify(r) };
+      const img = new Image();
+      await new Promise((res) => { img.onload = res; img.src = r.url; });
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, img.width, img.height).data;
+      const px = (cx, cy) => { const i = (Math.round(cy * 2) * img.width + Math.round(cx * 2)) * 4; return [d[i], d[i + 1], d[i + 2]].join(); };
+      geo.edge = {}; /* 대상 왼쪽 변 1px 안쪽 · 세로 가운데 — 상자 테두리(2px)가 있으면 번호 색이다 */
+      Object.keys(geo.tg).forEach((k) => { const t = geo.tg[k]; geo.edge[k] = px(t.x + 1, t.y + t.h / 2); });
+      geo.live = document.querySelectorAll(".ss-cap-areas").length; /* 화면에 남은 상자 층 */
+      return geo;
+    }, o);
+    /* 선 경계는 안티에일리어싱으로 한두 값 흔들린다 — 정확한 값이 아니라 «붉은가» 로 본다 (바탕은 238 회색·흰색) */
+    const isRed = (c) => { const v = String(c || "").split(",").map(Number); return v[0] > 180 && v[1] < 130 && v[2] < 140; };
+    const near = (a, t) => !!a && !!t && Math.abs(a.x - t.x) < 1.5 && Math.abs(a.y - t.y) < 1.5 && Math.abs(a.w - t.w) < 1.5 && Math.abs(a.h - t.h) < 1.5;
+    for (const mode of ["wrap", "frame", "overlay"]) {
+      await page.goto("http://localhost:" + P(4350) + "/" + mode + ".html");
+      await settle(700);
+      /* 번호는 정의서 모드에서 보인다 — 사람처럼 켜고 뽑는다 (overlay 는 켜지 않으면 번호 층이 통째로 숨어 있다) */
+      await page.click(mode === "overlay" ? "#ss-ovDoc" : "#ss-mDoc");
+      await settle(600);
+      const tag = "[" + mode + "] ";
+      let k = await bake({ markers: true, areas: true });
+      const byT = (t) => (k.areas || []).find((a) => near(a, t));
+      check(tag + "번호가 달린 대상마다 상자 — 셋, 대상과 같은 자리·크기", !!k.areas && k.areas.length === 3 &&
+        ["1", "2", "3"].every((s) => !!byT(k.tg[s])), JSON.stringify(k).slice(0, 300));
+      check(tag + "그림에도 상자 선이 있다 (대상 왼쪽 변이 번호 색)", !!k.edge && ["1", "2", "3"].every((s) => isRed(k.edge[s])), JSON.stringify(k.edge));
+      check(tag + "모서리는 대상의 둥글기를 따른다 — 각진 대상도 조금은 둥글게",
+        !!byT(k.tg["2"]) && byT(k.tg["2"]).rad === "12px" && !!byT(k.tg["1"]) && byT(k.tg["1"]).rad === "4px",
+        JSON.stringify(k.areas && k.areas.map((a) => a.rad)));
+      check(tag + "내보낸 뒤 화면에 상자 층이 안 남는다", k.live === 0, String(k.live));
+      k = await bake({ markers: true, areas: true, major: true });
+      check(tag + "「주요 항목만」 이면 주요 항목의 대상에만", !!k.areas && k.areas.length === 1 && near(k.areas[0], k.tg["2"]) &&
+        !isRed(k.edge["1"]) && isRed(k.edge["2"]), JSON.stringify(k).slice(0, 300));
+      k = await bake({ markers: false, areas: true });
+      check(tag + "번호를 끄면 상자도 없다 — 번호의 하위다", !!k.areas && k.areas.length === 0 && !isRed(k.edge["1"]), JSON.stringify(k.areas));
+      k = await bake({ markers: true, areas: false });
+      check(tag + "끄면 상자가 없다", !!k.areas && k.areas.length === 0, JSON.stringify(k.areas));
+    }
+    /* ── 사람이 쓰는 길: 대화상자 (wrap) ── */
+    await page.goto("http://localhost:" + P(4350) + "/wrap.html");
+    await page.evaluate(() => { try { localStorage.removeItem("screenspec:export"); } catch (e) {} });
+    await page.reload();
+    await settle(700);
+    /* 그림에 «실제로 들어가는 것» 을 센다 — 조립 상자가 붙는 순간은 아직 비어 있고, 뽑은 뒤에는 wrap 이 시트를 도로 가져간다 */
+    await page.evaluate(() => {
+      window.__caps = [];
+      const orig = XMLSerializer.prototype.serializeToString;
+      XMLSerializer.prototype.serializeToString = function (n) {
+        if (n && n.querySelectorAll && n.querySelector(".ss-cap")) window.__caps.push(n.querySelectorAll(".ss-cap-area").length);
+        return orig.call(this, n);
+      };
+    });
+    const dl = () => page.evaluate(() => {
+      const d = document.querySelector(".ss-prdlg"), a = d.querySelector('[data-pr-c="area"]');
+      const vis = (e) => !!e && getComputedStyle(e).display !== "none";
+      return { area: a ? a.checked : null, under: !!a && !!a.closest('[data-pr-k="mark"]'),
+        sketch: [...d.querySelectorAll(".ss-pr-p-area")].filter(vis).length,
+        off: d.querySelector('[data-pr-k="mark"]').classList.contains("ss-off") };
+    });
+    await page.click(".ss-prbtn");
+    await settle(300);
+    let q = await dl();
+    check("대화상자: 「영역 상자」 가 「화면 위 번호」 밑에 있고 기본 켬 · 스케치에 상자 셋", q.area === true && q.under && q.sketch === 3, JSON.stringify(q));
+    await page.click('[data-pr="go"]');
+    await page.waitForFunction(() => window.__caps.length >= 1, null, { timeout: 5000 }).catch(() => {});
+    check("기본 설정 그대로 뽑으면 상자가 들어간다", (await page.evaluate(() => window.__caps[0])) === 3, JSON.stringify(await page.evaluate(() => window.__caps)));
+    await page.uncheck('.ss-prdlg [data-pr-c="area"]');
+    q = await dl();
+    check("끄면 스케치의 상자가 사라진다 — 스케치가 설정을 따라간다", q.area === false && q.sketch === 0, JSON.stringify(q));
+    await page.click('[data-pr="go"]');
+    await page.waitForFunction(() => window.__caps.length >= 2, null, { timeout: 5000 }).catch(() => {});
+    check("끄고 뽑으면 상자가 없다", (await page.evaluate(() => window.__caps[1])) === 0, JSON.stringify(await page.evaluate(() => window.__caps)));
+    await page.click('[data-pr="cancel"]');
+    await page.click(".ss-prbtn");
+    await settle(300);
+    check("뽑을 때의 선택을 기억한다 (다시 열어도 꺼져 있다)", (await dl()).area === false);
+    await page.check('.ss-prdlg [data-pr-c="area"]');
+    await page.uncheck('.ss-prdlg [data-pr-c="mark"]');
+    q = await dl();
+    check("번호를 끄면 「영역 상자」 도 흐려지고 스케치 상자도 없다", q.off === true && q.sketch === 0, JSON.stringify(q));
+    await page.check('.ss-prdlg [data-pr-c="mark"]');
+    check("번호를 다시 켜면 상자 선택은 그대로 살아 있다 — 다시 체크할 필요가 없다", (await dl()).area === true && (await dl()).sketch === 3);
+    await page.click('[data-pr="cancel"]');
+    check("JS 에러 0건", errors.length === 0, errors);
+    s17.close();
   }
 
   /* ============ 프리셋을 선언으로 · 페이지만 보기 (#111) ============

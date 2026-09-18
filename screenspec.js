@@ -792,6 +792,7 @@
   .ss-pr-p-bar{position:absolute;left:9px;right:9px;height:9px;border-radius:3px;background:#EAEAE8}
   .ss-pr-p-mk{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--ss-accent);color:#fff;
     font-size:8px;font-weight:800;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .ss-pr-p-area{position:absolute;border:1.5px solid var(--ss-accent);border-radius:4px}
   .ss-pr-p-tbl{border-top:1px solid var(--ss-line);padding:6px 9px;background:#fff}
   .ss-pr-p-tr{display:flex;gap:5px;align-items:center;margin:3px 0}
   .ss-pr-p-tn{width:10px;height:10px;border-radius:3px;background:var(--ss-accent);opacity:.85}
@@ -820,6 +821,9 @@
   }
   /* 이미지 내보내기 (#40) — 화면 밖에 조립했다가 캡처 뒤 지운다. 화면에는 안 보인다 */
   .ss-cap{position:fixed;left:-99999px;top:0;background:#fff;z-index:-1}
+  /* 영역 상자 (#117) — 뷰어의 강조(ss-hl)와 같은 선. 대상 «안쪽» 에 그리고, 번호 밑에 깔린다 */
+  .ss-cap-areas{position:absolute;left:0;top:0;width:0;height:0}
+  .ss-cap-area{position:absolute;box-sizing:border-box;border:2px solid var(--ss-accent);pointer-events:none}
   /* 머메이드가 글자를 재는 칸 (#115) — 액자 모드는 body 의 낯선 자식을 숨기므로 우리 칸을 준다. 그리기마다 하나, 끝나면 뗀다 */
   .ss-mm-stage{position:fixed;left:-99999px;top:0;z-index:-1}
   .ss-cap-head{padding:16px 30px 12px;border-bottom:2px solid var(--ss-ink)}
@@ -2756,6 +2760,37 @@ ${HL_CSS}
       });
       return out;
     }
+    /* 영역 상자 (#117) — 번호가 달린 대상마다 상자. 좌표는 마커와 같은 ctx.rectOf 라 번호와 상자가 한 자리를 가리킨다.
+       «주요 항목만» 이면 주요 항목의 대상에만. 옮기거나 transform 을 풀기 «전에» 잰다 — wrap 의 좌표는 지금 배율로 나눈 값이다 */
+    function capAreaRects(opt) {
+      const out = [];
+      items().forEach((it) => {
+        if (noMark(it.spec) || (opt.major && !isMajor(it.spec))) return;
+        const t = targetOf(it.spec);
+        if (!t || !t.getClientRects().length) return;
+        const r = ctx.rectOf(t);
+        if (r.r - r.l < 1 || r.b - r.t < 1) return;
+        const cs = (t.ownerDocument.defaultView || window).getComputedStyle(t);
+        out.push({ r: r, rad: parseFloat(cs.borderTopLeftRadius) || 0 });
+      });
+      return out;
+    }
+    /* 마커 층 «안의 맨 앞» 에 넣는다 — 층의 쌓임 순서를 같이 쓰고, 뒤에 오는 번호가 그 위에 선다 */
+    function capAreaDraw(root, rects) {
+      const ml = root.querySelector(".ss-markers,.ss-ov-markers");
+      if (!ml || !rects.length) return null;
+      const layer = h("div", { class: "ss-cap-areas" });
+      rects.forEach((a) => {
+        const b = document.createElement("div");
+        b.className = "ss-cap-area";
+        /* 모서리는 대상의 둥글기를 따른다(뷰어의 inherit 와 같다). 각진 요소도 조금은 둥글게 */
+        b.style.cssText = "left:" + a.r.l + "px;top:" + a.r.t + "px;width:" + (a.r.r - a.r.l) + "px;height:" +
+          (a.r.b - a.r.t) + "px;border-radius:" + Math.max(4, a.rad) + "px";
+        layer.appendChild(b);
+      });
+      ml.insertBefore(layer, ml.firstChild);
+      return layer;
+    }
     /* 그림을 조립한다. 되돌리는 함수를 같이 준다 — 화면은 원래대로 돌아가야 한다 */
     function capBuild(opt) {
       const src = ctx.capSource ? ctx.capSource() : null;
@@ -2785,6 +2820,8 @@ ${HL_CSS}
       const restoreSticky = () => stickyUndo.forEach(([el, k, v]) => (el.style[k] = v));
       /* 지금 모습 읽기 (#116) — 옮기거나 뜨기 «전» 이어야 한다. 옮긴 뒤에 읽으면 이미 첫 프레임이다 */
       const live = capLive(src.node, src.kind !== "move");
+      const areas = opt.markers !== false && opt.areas ? capAreaRects(opt) : null;
+      let areaLayer = null;
       const frozeUndo = [];
       const freeze = (el) => (x) => Object.keys(x.css).forEach((k) => {
         frozeUndo.push([el, k, el.style.getPropertyValue(k), el.style.getPropertyPriority(k)]);
@@ -2812,6 +2849,7 @@ ${HL_CSS}
         const layersHid = [];
         if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => { layersHid.push([n, n.style.display]); n.style.display = "none"; });
         else if (opt.major) capMajorStrip(src.node);
+        if (areas) areaLayer = capAreaDraw(src.node, areas); /* 살아 있는 층에 잠깐 — 되돌릴 때 걷는다 */
         body.appendChild(src.node);
         live.forEach((x) => freeze(x.el)(x)); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
         target = src.node;
@@ -2831,6 +2869,7 @@ ${HL_CSS}
         if (opt.markers === false) target.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
         else if (src.marks) src.marks.forEach((m) => target.appendChild(document.importNode(m, true)));
         if (opt.markers !== false && opt.major) capMajorStrip(target);
+        if (areas) areaLayer = capAreaDraw(target, areas);
         /* 마커는 absolute 다. 기준이 될 것이 없으면 조립 상자(fixed)를 기준으로 잡혀
            머리말 높이만큼 통째로 밀린다 — 캡처 대상을 기준으로 세운다 */
         target.style.position = "relative";
@@ -2884,7 +2923,7 @@ ${HL_CSS}
 
       return {
         box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
-        restore: function () { restoreSticky(); restoreFrozen(); restoreSrc(); box.remove(); },
+        restore: function () { if (areaLayer) areaLayer.remove(); restoreSticky(); restoreFrozen(); restoreSrc(); box.remove(); },
       };
     }
     async function capPNG(opt) {
@@ -3001,7 +3040,9 @@ ${HL_CSS}
        팀원끼리 내보내기 취향이 서로 덮인다. 문서별이 아니라 사람별인 이유도 같다 */
     const PR_KEY = "screenspec:export";
     /* 일시를 기본에서 빼는 이유: 그림마다 달라지는 값이라 «늘 넣을 것» 이 아니다. 필요하면 그때 켠다 (PM 2026-09-03) */
-    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, major: false, table: false, dev: false, color: "", pv: false, depth: "full" };
+    /* 영역 상자를 기본으로 켜는 이유 (#117): 번호만으로는 «어디까지가 3번인지» 모른다 (PM 2026-09-18).
+       번호 + 상자가 화면설계서의 관례이고, 깨끗한 그림이 필요하면 그때 끈다 */
+    const PR_DEF = { id: true, name: true, path: true, when: false, mark: true, area: true, major: false, table: false, dev: false, color: "", pv: false, depth: "full" };
     const PR_HEAD = ["id", "name", "path", "when"];
     /* 색은 accent 프리셋 그대로 — 여기서 베끼면 둘이 어긋난다 */
     const PR_SW_NAME = { blue: "파랑", red: "빨강", orange: "주황", green: "초록", purple: "보라" };
@@ -3030,6 +3071,7 @@ ${HL_CSS}
       PR_HEAD.forEach((k) => (head[k] = !!prCfg[k]));
       return {
         markers: !!prCfg.mark,
+        areas: !!(prCfg.mark && prCfg.area), /* 번호의 하위 — 번호가 없으면 상자도 없다 (#117) */
         major: !!(prCfg.mark && prCfg.major && anyMajor()),
         head: PR_HEAD.some((k) => prCfg[k]) ? head : false,
         table: !!prCfg.table,
@@ -3056,13 +3098,15 @@ ${HL_CSS}
       prDlg.querySelector('[data-pr-k="head"]').classList.toggle("ss-off", n === 0);
       const tk = prDlg.querySelector('[data-pr-k="table"]');
       if (tk) tk.classList.toggle("ss-off", !prCfg.table);
-      /* 「주요」 로 찍은 항목이 하나도 없으면 이 선택지는 백지를 내준다 — 그때는 아예 안 보인다 */
-      const mj = prDlg.querySelector('[data-pr-k="mark"]');
+      /* 「주요」 로 찍은 항목이 하나도 없으면 이 선택지는 백지를 내준다 — 그때는 아예 안 보인다.
+         묶음이 아니라 그 줄만 숨긴다 — 같은 묶음의 「영역 상자」 는 늘 있다 (#117) */
+      const mj = prDlg.querySelector('[data-pr-l="major"]');
       mj.hidden = !anyMajor();
-      mj.classList.toggle("ss-off", !prCfg.mark);
+      prDlg.querySelector('[data-pr-k="mark"]').classList.toggle("ss-off", !prCfg.mark);
       /* 미리보기 — 스케치가 설정을 그대로 따라간다 */
       PR_HEAD.forEach((k) => { prDlg.querySelector(".ss-pr-p-" + k).hidden = !prCfg[k]; });
       prDlg.querySelectorAll(".ss-pr-p-mk").forEach((el) => { el.hidden = !prCfg.mark; });
+      prDlg.querySelectorAll(".ss-pr-p-area").forEach((el) => { el.hidden = !(prCfg.mark && prCfg.area); }); /* #117 */
       /* 스케치가 «건너뛴 번호» 를 보여 준다 — 2번이 빠지고 1·3 만 남는 그 모습이 결과다 */
       const mjOn = prCfg.mark && prCfg.major && anyMajor();
       prDlg.querySelectorAll(".ss-pr-p-mkx").forEach((el) => { if (mjOn) el.hidden = true; });
@@ -3090,6 +3134,9 @@ ${HL_CSS}
             '<div class="ss-pr-p-bar" style="top:12px"></div>' +
             '<div class="ss-pr-p-bar" style="top:34px;height:38px"></div>' +
             '<div class="ss-pr-p-bar" style="top:80px;right:74px"></div>' +
+            '<div class="ss-pr-p-area" style="top:10px;left:7px;right:7px;height:13px"></div>' +
+            '<div class="ss-pr-p-area ss-pr-p-mkx" style="top:32px;left:7px;right:7px;height:42px"></div>' +
+            '<div class="ss-pr-p-area" style="top:78px;left:7px;right:72px;height:13px"></div>' +
             '<div class="ss-pr-p-mk" style="top:7px;left:14px">1</div>' +
             '<div class="ss-pr-p-mk ss-pr-p-mkx" style="top:44px;left:120px">2</div>' +
             '<div class="ss-pr-p-mk" style="top:75px;left:22px">3</div>' +
@@ -3121,7 +3168,9 @@ ${HL_CSS}
               /* 「주요」 는 앱이 아니라 «이 문서» 가 만드는 것이라 부팅 뒤에도 늘어난다 —
                  anyDev 처럼 만들 때 한 번 재고 마는 것이 아니라 열 때마다 다시 본다 (#106) */
               '<div class="ss-pr-kids" data-pr-k="mark">' +
-                '<label><input type="checkbox" data-pr-c="major"> 주요 항목만 (상위기획용)</label>' +
+                /* 번호만으로는 «어디까지가 3번인지» 모른다 — 뷰어는 가리키면 강조하지만 그림에는 가리킬 손이 없다 (#117) */
+                '<label><input type="checkbox" data-pr-c="area"> 영역 상자</label>' +
+                '<label data-pr-l="major"><input type="checkbox" data-pr-c="major"> 주요 항목만 (상위기획용)</label>' +
               "</div>" +
               '<label><input type="checkbox" data-pr-c="table"> 기능 설명 표</label>' +
               /* 개발 정의가 없는 문서에 「개발 정의 포함」은 아무 일도 안 하는 선택지다 — 안 만든다 */

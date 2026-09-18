@@ -210,6 +210,7 @@ screen: { id:"SCR-XXX-001", name:"목록", dev:[{ t:"인증 : Bearer 토큰" },{
 |---|---|---|
 | **머리말** | 화면 ID · 화면명 · 경로 | **네 조각을 각각 켜고 끈다.** 부모를 누르면 이 기본 한 벌이 켜지거나 전부 꺼진다. **일시는 기본에서 빠져 있다** — 그림마다 달라지는 값이라 늘 넣을 것이 아니다. 기본보다 적게 고르면 부모가 중간 상태가 된다 |
 | **화면 위 번호** | 켬 | 끄면 프로토타입 그림만 — 번호를 옆에 직접 매길 때 |
+| **영역 상자** | 켬 | 「화면 위 번호」의 하위. 번호가 달린 대상마다 **번호 색 테두리**를 그린다 — 번호만으로는 «어디까지가 3번인지» 모른다. 「주요 항목만」과 함께면 주요 항목의 대상에만. 모서리는 대상의 둥글기를 따른다 |
 | **기능 설명 표** | 끔 | 켜면 그림 아래에 표까지 한 장으로 |
 | **개발 정의 포함** | 끔 | 「기능 설명 표」의 하위. [개발 정의](#개발-정의-레이어-layer)가 있는 문서에서만 나온다 |
 | **주요 항목만 (상위기획용)** | 끔 | 「화면 위 번호」의 하위. `major: true` 인 항목이 하나라도 있는 문서에서만 나온다. 아래 [상위기획 갈래](#상위기획-갈래-major) 참조 |
@@ -646,11 +647,12 @@ window.ScreenSpec.mode                      // "wrap" | "overlay" | "frame" | "o
 window.ScreenSpec.edit(true)                // 편집 모드 켜기·끄기 (readonly 면 아무 일도 안 한다)
 window.ScreenSpec.serialize()               // 지금 설정을 «window.SCREENSPEC = {…};» 텍스트로
 window.ScreenSpec.dirty()                   // 저장 안 된 변경이 있는가 (boolean)
-window.ScreenSpec.exportImage({ markers, major, head, table, layer, accent, scale })  // 화면을 PNG 로 내려받는다 (모든 모드)
+window.ScreenSpec.exportImage({ markers, areas, major, head, table, layer, accent, scale })  // 화면을 PNG 로 내려받는다 (모든 모드)
 window.ScreenSpec.exportText({ markers, major, head, layer, depth })   // 설명을 { html, text } 로 돌려준다 — 컨플·노션에 붙일 글 (#108). depth: "brief" | "full"
 window.ScreenSpec.busy()   // 라이브러리가 미뤄 둔 일의 수 (마커 자리잡기·화면 감지·누락 판정·배치). 0 이면 가라앉은 것 — 시험이 고정 대기 대신 이것을 본다 (#112)
 // head: false = 머리말 없음 · true·생략 = 넷 다 · { id, name, path, when } = 고른 것만
 // accent: 이 그림에만 쓸 번호 색 (hex). 문서의 accent 는 안 바뀐다
+// areas: 번호가 달린 대상마다 테두리 상자 (#117). markers 가 false 면 무시 — 번호의 하위다
 ```
 
 `setScreen`은 wrap에서 root 표시/숨김 토글을 동반하고, overlay는 앱 DOM을 건드리지 않으므로 root가 보이는 동안만 유지된다.
