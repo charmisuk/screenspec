@@ -227,7 +227,7 @@
 
 <script>
 window.SCREENSPEC = {
-  mode: "wrap",
+  mode: new URLSearchParams(location.search).get("mode") || "wrap", /* ?mode=frame — 같은 QA 를 액자 모드로 (#115) */
   sources: {
     kps: { label: "KPS 연동 정책/화면기획 (예시)", href: "https://github.com/charmisuk/screenspec" },
     ctrl: { label: "Ctrl.R 방문자 초대 (예시)", href: "https://github.com/charmisuk/screenspec/blob/main/README.md" },
@@ -439,7 +439,10 @@ window.SCREENSPEC = {
         { t: "상태 우선순위 : 위에서 먼저 걸리는 것이 이긴다" },
         { kind: "mermaid", code: "flowchart TD\n  A[계약 확인] -->|막힘| B[초대 불가]\n  A -->|통과| C[오류 건수]\n  C -->|있음| D[고치면 초대 가능]\n  C -->|없음| E[한도 확인]\n  E -->|초과| F[한도 초과 안내]\n  E -->|여유| G[정상 : N명 초대하기]" },
         { t: "확인 : ⠿ 를 누르면 «삭제» 로 통째로 지워진다 (Ctrl+Z 로 되돌리기)" },
-        { t: "「내보내기」 로 뽑으면 그림 속에도 이 순서도가 들어간다" }
+        { t: "「내보내기」 로 뽑으면 그림 속에도 이 순서도가 들어간다" },
+        { t: "주소 끝에 ?mode=frame 을 붙여 «액자 모드» 로 다시 연다", c: [
+          { t: "확인 : 선 글자(막힘·통과·있음…)가 있는 이 순서도가 액자 모드에서도 그려진다 — 코드만 남으면 #115 재발", kind: "bullet" }
+        ]}
       ]}
     ]},
     { id: "QA-11-STAGE", name: "무대와 배율", path: ["QA", "무대와 배율"], specs: [

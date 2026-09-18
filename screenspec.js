@@ -523,7 +523,8 @@
   /* 액자 모드: 앱은 액자 «안» 에 산다. 바깥 문서에 남은 앱 DOM 은 전부 감춘다 (#103).
      부팅 때 한 번 훑어 인라인 style 을 걸던 것을 규칙으로 바꾼 이유: 프레임워크가 라우팅하며
      최상위 노드를 갈아끼우면 새 노드에는 그 인라인이 없어 «앱이 두 번 보였다».
-     규칙은 노드가 새로 생겨도 저절로 따라온다. !important 인 이유는 앱의 #id 규칙이 이겨선 안 되기 때문이다 */
+     규칙은 노드가 새로 생겨도 저절로 따라온다. !important 인 이유는 앱의 #id 규칙이 이겨선 안 되기 때문이다.
+     서드파티가 body 끝에 잠깐 붙이는 것(mermaid 의 재는 칸)도 같이 숨는다 — 붙일 곳을 줄 수 있으면 data-ss-ignore 칸을 준다 (#115) */
   body.ss-framed > *:not(.ss-ui):not(.ss-toolbar):not(.ss-proto-wrap):not(.ss-docmode):not(.ss-tip):not(.ss-toc):not(.ss-nav-toast):not([data-ss-ignore]):not(script):not(style){display:none!important}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -819,6 +820,8 @@
   }
   /* 이미지 내보내기 (#40) — 화면 밖에 조립했다가 캡처 뒤 지운다. 화면에는 안 보인다 */
   .ss-cap{position:fixed;left:-99999px;top:0;background:#fff;z-index:-1}
+  /* 머메이드가 글자를 재는 칸 (#115) — 액자 모드는 body 의 낯선 자식을 숨기므로 우리 칸을 준다. 그리기마다 하나, 끝나면 뗀다 */
+  .ss-mm-stage{position:fixed;left:-99999px;top:0;z-index:-1}
   .ss-cap-head{padding:16px 30px 12px;border-bottom:2px solid var(--ss-ink)}
   .ss-cap-id{font-family:var(--ss-mono);font-size:12px;font-weight:800;color:var(--ss-ink)}
   .ss-cap-name{font-size:19px;font-weight:800;color:var(--ss-ink);margin:3px 0 3px}
@@ -1845,11 +1848,19 @@ ${HL_CSS}
             if (code) code.hidden = true;
           };
           if (done && done.code === d.code) { put(done.svg); return; }
-          Promise.resolve(mm.render("ss-mm-" + run + "-" + i, String(d.code || ""))).then((r) => {
+          /* 재는 칸 (#115) — mermaid 는 글자 크기를 재려고 임시 칸을 붙이는데, 칸을 안 주면 body 끝에 붙인다.
+             액자 모드는 body 의 낯선 자식을 전부 숨기므로(ss-framed) 그 칸도 숨고, 숨은 칸에서 잰 선 글자 자리는 0 이라
+             「suitable point」 오류로 그림이 안 됐다. 우리가 가진 화면 밖 칸을 넘긴다 — 그리기마다 하나.
+             하나를 같이 쓰면 안 된다: mermaid 가 그리기 시작에 칸을 비우므로 동시에 도는 다른 그림의 칸이 지워진다 */
+          const stage = h("div", { class: "ss-mm-stage", "data-ss-ignore": "1" });
+          document.body.appendChild(stage);
+          Promise.resolve(mm.render("ss-mm-" + run + "-" + i, String(d.code || ""), stage)).then((r) => {
+            stage.remove();
             if (run !== mmSeq) return;
             MM_SVG.set(d, { code: d.code, svg: r.svg });
             put(r.svg);
           }).catch((e) => {
+            stage.remove();
             /* 문법 오류 등 — 코드가 그대로 남고, 왜인지 한 줄 붙인다 */
             if (run !== mmSeq || !box.isConnected) return;
             if (!box.querySelector(".ss-mm-note")) {

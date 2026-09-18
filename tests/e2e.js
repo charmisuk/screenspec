@@ -1344,6 +1344,47 @@ function check(name, ok, detail) {
     page.off("console", onMW);
   }
 
+  /* ============ 머메이드 · 액자 모드에서도 선 글자가 그려진다 (#115) ============
+     mermaid 는 글자 크기를 재려고 임시 칸을 붙이는데 칸을 안 주면 body 끝에 붙인다. 액자 모드는 body 의 낯선 자식을
+     숨기므로 그 칸도 숨고, 숨은 칸에서 잰 글자 폭은 0 → 선 글자 있는 순서도가 «suitable point» 로 실패했다.
+     가짜 mermaid 가 실물처럼 «받은 칸(없으면 body)에 임시 칸을 붙여 getBBox 로 잰다» — 잰 폭이 0 이면 그 결함이다.
+     가짜는 픽스처 안에 심는다(addInitScript 는 뒤 절까지 샌다). */
+  if (sec("[머메이드] 액자 모드에서도 선 글자가 그려진다 (#115)")) {
+    const MFIX = '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+      '<div class="app"><h1 data-spec="1">앱</h1><p data-spec="2">바닥</p></div>' +
+      "<script>window.mermaid = { initialize() {}, render: async (id, code, el) => {" +
+      "  const tmp = document.createElement('div'); tmp.id = 'd' + id;" +
+      "  (el || document.body).appendChild(tmp);" +
+      "  tmp.innerHTML = '<svg xmlns=\"http://www.w3.org/2000/svg\"><text>' + code + '</text></svg>';" +
+      "  const w = tmp.querySelector('text').getBBox().width; tmp.remove();" + /* 실물이 재는 방식 — 숨은 칸이면 0 */
+      "  return { svg: '<svg data-fake=\"1\" data-w=\"' + w + '\"><text>' + code.length + '</text></svg>' }; } };" +
+      "window.SCREENSPEC={mode:'frame',screens:[{id:'S-115',name:'액자',path:['액자'],specs:[" +
+      "{n:1,target:'1',title:'선 글자',defs:[{kind:'mermaid',code:'flowchart TD; A -->|예| B'}]}," +
+      "{n:2,target:'2',title:'둘째',defs:[{kind:'mermaid',code:'flowchart TD; C -->|아니오| D'}]}" +
+      "]}]};<" + "/script><script src=\"/screenspec.js\"><" + "/script></body></html>";
+    const srvM = http.createServer((req, res) => {
+      if (req.url.endsWith("screenspec.js")) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(MFIX);
+    });
+    await new Promise((r) => srvM.listen(P(4185), r));
+    await page.goto("http://localhost:" + P(4185) + "/screenspec/p.html");
+    await page.waitForFunction(() =>
+      document.querySelectorAll('.ss-b[data-kind="mermaid"] .ss-mm-svg:not([hidden]) svg').length +
+      document.querySelectorAll(".ss-mm-note").length >= 2, null, { timeout: 4000 }).catch(() => {});
+    await settle(300);
+    const mf = await page.evaluate(() => ({
+      framed: document.body.classList.contains("ss-framed"),
+      n: document.querySelectorAll('.ss-b[data-kind="mermaid"]').length,
+      ws: [...document.querySelectorAll('.ss-b[data-kind="mermaid"] .ss-mm-svg:not([hidden]) svg[data-fake]')].map((s) => +s.dataset.w),
+      stages: document.querySelectorAll(".ss-mm-stage").length,
+      notes: document.querySelectorAll(".ss-mm-note").length
+    }));
+    check("액자 모드에서 순서도 둘이 다 그려진다 — 재는 칸이 보인다(글자 폭 > 0)",
+      mf.framed && mf.n === 2 && mf.ws.length === 2 && mf.ws.every((w) => w > 0), JSON.stringify(mf));
+    check("재는 칸은 그리고 나면 뗀다", mf.stages === 0 && mf.notes === 0, JSON.stringify(mf));
+    srvM.close();
+  }
+
   /* ============ 폰 폭에서 툴바가 접힌다 (#94) ============
      툴바가 546px 를 요구해 «화면정의서» 버튼이 「모바일」 아래에 깔렸다 — 폰에서는
      문서 모드에 들어갈 수조차 없었다. 좁은 폭: 폭 시뮬레이터 숨김 + 도구는 ⋯ 로. */
