@@ -535,7 +535,7 @@
      최상위 노드를 갈아끼우면 새 노드에는 그 인라인이 없어 «앱이 두 번 보였다».
      규칙은 노드가 새로 생겨도 저절로 따라온다. !important 인 이유는 앱의 #id 규칙이 이겨선 안 되기 때문이다.
      서드파티가 body 끝에 잠깐 붙이는 것(mermaid 의 재는 칸)도 같이 숨는다 — 붙일 곳을 줄 수 있으면 data-ss-ignore 칸을 준다 (#115) */
-  body.ss-framed > *:not(.ss-ui):not(.ss-toolbar):not(.ss-proto-wrap):not(.ss-docmode):not(.ss-tip):not(.ss-toc):not(.ss-nav-toast):not([data-ss-ignore]):not(script):not(style){display:none!important}
+  body.ss-framed > *:not(.ss-ui):not(.ss-toolbar):not(.ss-docmode):not(.ss-tip):not(.ss-toc):not(.ss-nav-toast):not([data-ss-ignore]):not(script):not(style){display:none!important}
   .ss-ui,.ss-ui *{box-sizing:border-box;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
   .ss-ui :where(button){font:inherit;cursor:pointer;border:0;background:none;color:inherit}
   /* 프로토타입의 CSS 가 우리 UI 를 흔들면 안 된다 (2026-08-29 실측: 프로토타입의 button{flex:1} 때문에
@@ -594,11 +594,13 @@
      앱이 position:fixed 로 붙인 패널·버튼(프레임이 창보다 크면 창 밖으로 나간다)에
      scrollIntoView·focus()·폼 검증의 «첫 오류로 이동» 이 전부 닿지 못했다. 손으로는 밀 수 있었으므로
      «못 닿는다» 가 아니라 «자동으로는 못 닿는다» 였고, 그래서 눈에 잘 안 띄었다 */
-  .ss-proto-wrap{position:fixed;top:50px;left:0;right:0;bottom:0;overflow:auto;padding:var(--ss-stage-pad)}
-  body.ss-mode-doc .ss-proto-wrap{display:none}
+  /* 껍데기도 하나다 (#121) — 두 모드가 «같은 상자» 를 쓴다. 모드마다 상자를 따로 두면 프레임을 옮겨야 하는데,
+     액자(iframe)는 DOM 에서 옮기는 순간 브라우저가 다시 로드한다. 프로토타입에서 만들어 둔 상태
+     (열어 둔 패널·고른 줄·입력값)가 화면정의서로 넘어가며 통째로 사라졌다 (2026-09-21 실측).
+     이제 옮기지 않는다 — 프레임은 늘 .ss-stage 안에 살고, 모드는 머리말·설명 패널을 접고 펼 뿐이다 */
   .ss-holder{margin:0 auto;width:max-content}
-  .ss-docmode{display:none}
-  body.ss-mode-doc .ss-docmode{display:flex;flex-direction:column;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:9000}
+  .ss-docmode{display:flex;flex-direction:column;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:9000}
+  body.ss-mode-proto .ss-doc-header,body.ss-mode-proto .ss-defs{display:none}
   .ss-doc-header{background:#fff;border-bottom:1px solid var(--ss-line2);padding:12px 24px;display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap}
   .ss-dh .ss-k{font-size:10.5px;font-weight:700;color:var(--ss-ink3);letter-spacing:.06em;display:block;margin-bottom:1px}
   .ss-dh .ss-v{font-size:14px;font-weight:800;color:var(--ss-ink)}
@@ -606,7 +608,11 @@
   .ss-dh .ss-sep{color:var(--ss-ink3);font-weight:400;margin:0 4px}
   .ss-doc-body{flex:1;display:flex;min-height:0;background:var(--ss-canvas)}
   .ss-stage{flex:1;min-width:0;overflow:auto;padding:var(--ss-stage-pad)}
-  .ss-fit{position:relative;margin:0 auto;transition:width .15s,height .15s}
+  .ss-fit{position:relative;margin:0 auto}
+  /* 크기 전환은 정의서 모드에만 — 프로토타입 모드는 예전처럼 즉시 바뀐다 (#121).
+     두 모드가 한 상자를 쓰게 되면서 이 전환이 프로토타입까지 따라왔고, 창을 줄인 직후 «예전 폭» 이
+     잠깐 남아 가로로 밀 것이 생겼다(실측 45px). 보기 좋으라고 넣은 것이 규칙(«밀 것이 없다»)을 깼다 */
+  body.ss-mode-doc .ss-fit{transition:width .15s,height .15s}
   .ss-defs{width:var(--ss-panel-w,50vw);flex-shrink:0;background:#fff;border-left:1px solid var(--ss-line2);
     display:flex;flex-direction:column;min-height:0;position:relative}
   /* 폭 조절 (#53) — 왼쪽 가장자리를 잡아 끈다. 고른 폭은 그 사람 브라우저에 남는다 */
@@ -906,14 +912,10 @@
     background:#FAFAF9;font-size:12px;color:var(--ss-ink3);line-height:1.7}
   .ss-cov-miss{color:var(--ss-ink);font-weight:800}
   @media(max-width:1000px){
-    body.ss-mode-doc .ss-docmode{position:static;display:block;padding-top:50px}
+    .ss-docmode{position:static;display:block;padding-top:50px}
     body.ss-mode-doc.ss-pv-on .ss-docmode{top:auto;padding-top:78px} /* 좁은 폭: 흐름 배치라 여백으로 민다 */
     .ss-doc-body{display:block}.ss-stage{overflow:visible}
     .ss-defs{width:100%;border-left:0;border-top:1px solid var(--ss-line2)}
-    /* 좁은 폭에서는 문서가 두 축을 다 맡는다 — 규칙(«스크롤러는 하나»)은 같고 맡는 쪽만 바뀐다 (#102).
-       고정 높이 상자를 폰에 두면 주소창이 접히지 않아 화면이 그만큼 계속 줄어든 채로 남는다 */
-    .ss-proto-wrap{position:static;overflow:visible;
-      padding:calc(50px + var(--ss-stage-pad)) var(--ss-stage-pad) var(--ss-stage-pad)}
   }
   /* 번호 블록 = 하나의 덩어리 (노션 콜아웃). PM: 「1~9번 라벨 자체도 컴포넌트가 돼야 한다 —
      크게 보면 에디터가 있고 그 안에 번호가 있고 그 안에 또 넣을 수 있는 구조」 */
@@ -1280,13 +1282,29 @@ ${HL_CSS}
     const b = doc.adoptedStyleSheets || []; for (let i = 0; i < b.length; i++) out.push(b[i]);
     return out;
   }
+  /* 지금 «걸려 있는» 상태 (#121) — 마우스를 올린 것·포커스·누르는 중. 그림 속 복사본은 그 상태가 아니라
+     앱의 :hover 규칙이 안 걸린다. 값을 베껴 쓰는 대신 규칙을 «표식으로도 걸리게» 한 벌 더 적는다.
+     :focus-visible 을 :focus 보다 먼저 두는 이유 — 글자로 바꾸므로 긴 것이 먼저다 */
+  const PSEUDO = [[":focus-visible", "data-ss-focusv"], [":focus-within", "data-ss-focusw"],
+                  [":hover", "data-ss-hover"], [":focus", "data-ss-focus"], [":active", "data-ss-active"]];
+  /* :hover → [data-ss-hover]. 세기가 같고 뒤에 오므로 표식을 단 요소에만 그대로 걸린다.
+     :not(:hover) 은 :not([data-ss-hover]) 이 되어 뜻이 유지된다. 원본 규칙은 그대로 둔다 */
+  function pseudoRule(text) {
+    let has = false;
+    for (let i = 0; i < PSEUDO.length; i++) if (text.indexOf(PSEUDO[i][0]) >= 0) { has = true; break; }
+    if (!has) return "";
+    let out = text;
+    PSEUDO.forEach(([sel, attr]) => { out = out.split(sel).join("[" + attr + "]"); });
+    return out + "\n";
+  }
+  /* 문서의 CSS 를 글자로 — 그림에 싣는다. 걸린 상태의 규칙은 표식판을 한 벌 더 싣는다 (#121) */
   function cssText(doc) {
     let out = "";
     const sheets = allSheets(doc);
     for (let i = 0; i < sheets.length; i++) {
       try {
         const rules = sheets[i].cssRules;
-        for (let j = 0; j < rules.length; j++) out += rules[j].cssText + "\n";
+        for (let j = 0; j < rules.length; j++) { const t = rules[j].cssText; out += t + "\n" + pseudoRule(t); }
       } catch (e) { /* 읽을 수 없는 시트는 건너뛴다 */ }
     }
     return out;
@@ -1916,7 +1934,7 @@ ${HL_CSS}
     /* .ss-cap 이 여기 있는 이유 (#109) — 상자는 ss-ui 를 안 달지만 «우리 것» 이다.
        빠지면 그림을 조립하는 동안 시트가 옮겨 다니는 것을 «앱의 변경» 으로 오인해 누락 검사가 다시 돈다 */
     const OWN_UI = ".ss-ui,.ss-cap,.ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-toolbar,.ss-tip";
-    /* 우리가 «그린» 것 — 마커·주석선·툴팁. 앱을 «감싸는» 컨테이너(.ss-proto-wrap·.ss-docmode)와 구분해야 한다 */
+    /* 우리가 «그린» 것 — 마커·주석선·툴팁. 앱을 «감싸는» 컨테이너(.ss-docmode)와 구분해야 한다 */
     const OWN_DRAWN = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno,.ss-tip,.ss-toc,.ss-nav-toast,.ss-pvbar";
     /* 이 변경이 «앱» 의 것인가.
        wrap·frame 은 앱을 .ss-holder 안으로 옮기는데 그 조상 컨테이너에 .ss-ui 가 붙어 있다.
@@ -2676,16 +2694,23 @@ ${HL_CSS}
       return out;
     }
 
-    function capCSS(doc) {
-      let css = "";
-      const sheets = allSheets(doc || document);
-      for (let i = 0; i < sheets.length; i++) {
-        try {
-          const rules = sheets[i].cssRules;
-          for (let j = 0; j < rules.length; j++) css += rules[j].cssText + "\n";
-        } catch (e) { /* cross-origin 스타일시트는 읽을 수 없다 — 건너뛴다 */ }
-      }
-      return css;
+    const capCSS = (doc) => cssText(doc || document); /* 같은 일을 하던 두 번째 함수였다 — 하나로 (#121) */
+    /* 캔버스는 그림 틀(SVG foreignObject) 안에서 «아예 안 그려진다» — 배경을 깔아도 0px 였다 (2026-09-21 실측).
+       그려지는 것은 보통 요소다. 그래서 굽기 직전 사본에서만 같은 자리·같은 크기의 div 로 바꿔 끼운다.
+       살아 있는 앱의 캔버스는 그대로 둔다 — 앱이 들고 있는 참조가 끊기면 안 된다 */
+    function capCanvasSwap(root) {
+      root.querySelectorAll("canvas[data-ss-canvas]").forEach((cv) => {
+        const box = document.createElement("div");
+        [].forEach.call(cv.attributes, (a) => { if (a.name.indexOf("data-ss-canvas") !== 0) box.setAttribute(a.name, a.value); });
+        box.style.boxSizing = "border-box";
+        box.style.width = cv.getAttribute("data-ss-canvas-w") + "px";
+        box.style.height = cv.getAttribute("data-ss-canvas-h") + "px";
+        box.style.display = "inline-block";
+        box.style.backgroundImage = "url(" + cv.getAttribute("data-ss-canvas") + ")";
+        box.style.backgroundSize = "100% 100%";
+        box.style.backgroundRepeat = "no-repeat";
+        if (cv.parentNode) cv.parentNode.replaceChild(box, cv);
+      });
     }
     /* 바깥 주소 이미지는 그림에 «빈칸» 으로 나온다 — <img> 안의 SVG 는 바깥 요청을 못 하기 때문이다.
        조용히 백지를 내주는 것은 실패보다 나쁘므로 미리 센다 */
@@ -2712,7 +2737,7 @@ ${HL_CSS}
       return html ? '<div class="ss-cap-head ss-ui">' + html + "</div>" : "";
     }
     /* 우리 뷰어 UI — 그림에는 «문서» 만 남고 뷰어는 빠진다 */
-    const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode,.ss-proto-wrap," +
+    const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode," +
       ".ss-toc,.ss-tip,.ss-pvbar,.ss-nav-toast,.ss-cap";
     const CAP_MARKS = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno";
 
@@ -2758,6 +2783,12 @@ ${HL_CSS}
     const KF_META = { offset: 1, computedOffset: 1, easing: 1, composite: 1 };
     function capLive(root, withFixed) {
       const d = root.ownerDocument, win = d.defaultView || window;
+      /* 지금 그 상태인 요소들 — «올린 것» 은 조상까지 함께 걸린다. 그대로 표식을 단다 */
+      const nowPs = PSEUDO.map(([sel, attr]) => {
+        let set = null;
+        try { set = new Set(d.querySelectorAll(sel)); } catch (e) { set = new Set(); } /* 옛 브라우저 */
+        return [set, attr];
+      });
       const byEl = new Map();
       try {
         (d.getAnimations ? d.getAnimations() : []).forEach((a) => {
@@ -2776,7 +2807,8 @@ ${HL_CSS}
         const named = !!cs.animationName && cs.animationName !== "none";
         const efs = byEl.get(el);
         const fixed = withFixed && cs.position === "fixed" && el.getClientRects().length > 0;
-        if (!named && !efs && !fixed) return;
+        const st = capState(el, nowPs);
+        if (!named && !efs && !fixed && !st) return;
         const css = {};
         /* 끝난 애니메이션(채움 없음)도 끈다 — 복사본에서는 다시 처음부터 돈다 */
         if (named) css.animation = "none";
@@ -2790,7 +2822,7 @@ ${HL_CSS}
             css[kk] = cs.getPropertyValue(kk);
           }));
         });
-        out.push({ i: i, el: el, css: css,
+        out.push({ i: i, el: el, css: css, st: st,
           fix: fixed ? { r: ctx.rectOf(el), w: el.offsetWidth, h: el.offsetHeight, disp: cs.display } : null });
       });
       return out;
@@ -2826,6 +2858,30 @@ ${HL_CSS}
       ml.insertBefore(layer, ml.firstChild);
       return layer;
     }
+    /* 화면에 «보이는» 상태 중 마크업에 안 실리는 것들 (#121) — 그림은 마크업만 본다.
+       체크·고른 항목·적은 값은 메모리(프로퍼티)에만 있고, 스크롤 자리·캔버스 그림·걸린 상태도 마찬가지다.
+       실측(2026-09-21): 체크해 둔 칸이 그림에서 빈 칸, 고른 항목은 첫 항목, 스크롤은 맨 위, 캔버스는 백지였다 */
+    function capState(el, nowPs) {
+      const tag = el.tagName, st = {};
+      let any = false;
+      const ps = [];
+      nowPs.forEach(([set, attr]) => { if (set.has(el)) ps.push(attr); });
+      if (ps.length) { st.ps = ps; any = true; }
+      if (tag === "INPUT") {
+        const t = String(el.type || "").toLowerCase();
+        if (t === "checkbox" || t === "radio") { st.checked = !!el.checked; any = true; }
+        else if (t !== "file" && t !== "password") { st.value = String(el.value == null ? "" : el.value); any = true; }
+      } else if (tag === "TEXTAREA") { st.text = String(el.value == null ? "" : el.value); any = true; }
+      else if (tag === "SELECT") { st.sel = [].map.call(el.options, (o) => !!o.selected); any = true; }
+      else if (tag === "CANVAS") {
+        /* 바깥 이미지를 그린 캔버스는 읽을 수 없다(오염) — 그때는 조용히 넘어간다. 그림엔 백지로 남는다 */
+        try {
+          if (el.width && el.height) { st.canvas = el.toDataURL(); st.cw = el.offsetWidth; st.ch = el.offsetHeight; any = true; }
+        } catch (e) { /* tainted */ }
+      }
+      if (el.scrollTop || el.scrollLeft) { st.scroll = { t: el.scrollTop, l: el.scrollLeft }; any = true; }
+      return any ? st : null;
+    }
     /* 그림을 조립한다. 되돌리는 함수를 같이 준다 — 화면은 원래대로 돌아가야 한다 */
     function capBuild(opt) {
       const src = ctx.capSource ? ctx.capSource() : null;
@@ -2855,6 +2911,9 @@ ${HL_CSS}
       const restoreSticky = () => stickyUndo.forEach(([el, k, v]) => (el.style[k] = v));
       /* 지금 모습 읽기 (#116) — 옮기거나 뜨기 «전» 이어야 한다. 옮긴 뒤에 읽으면 이미 첫 프레임이다 */
       const live = capLive(src.node, src.kind !== "move");
+      /* wrap 은 살아 있는 시트를 옮겼다 되돌린다 — DOM 을 옮기면 안쪽 스크롤 자리와 커서(포커스)가 풀린다.
+         내보내기가 화면을 건드리면 안 된다 (#121): 옮기기 전 자리를 적어 두었다가 돌아온 뒤 되돌린다 */
+      const wasFocus = src.kind === "move" ? (src.node.ownerDocument.activeElement || null) : null;
       const areas = opt.markers !== false && opt.areas ? capAreaRects(opt) : null;
       let areaLayer = null;
       const frozeUndo = [];
@@ -2865,6 +2924,42 @@ ${HL_CSS}
       const restoreFrozen = () => frozeUndo.reverse().forEach(([el, k, v, pr]) => {
         if (v) el.style.setProperty(k, v, pr); else el.style.removeProperty(k);
       });
+      /* 마크업에 안 실리는 상태를 «마크업으로» 옮긴다 (#121) — 되돌리기까지 같이 든다.
+         wrap 은 살아 있는 앱에 잠깐 쓰는 것이라 되돌리지 않으면 앱에 남는다 */
+      const stUndo = [];
+      const putAttr = (el, k, v) => {
+        const had = el.hasAttribute(k), old = had ? el.getAttribute(k) : null;
+        stUndo.push(() => (had ? el.setAttribute(k, old) : el.removeAttribute(k)));
+        if (v === null) el.removeAttribute(k); else el.setAttribute(k, v);
+      };
+      const putSty = (el, k, v) => {
+        const old = el.style.getPropertyValue(k), pr = el.style.getPropertyPriority(k);
+        stUndo.push(() => (old ? el.style.setProperty(k, old, pr) : el.style.removeProperty(k)));
+        el.style.setProperty(k, v, "important");
+      };
+      const applyState = (t, st) => {
+        if (!t || !st) return;
+        (st.ps || []).forEach((a) => putAttr(t, a, "")); /* 지금 걸린 상태 — CSS 가 표식으로도 걸리게 돼 있다 */
+        if (st.checked !== undefined) putAttr(t, "checked", st.checked ? "checked" : null);
+        if (st.value !== undefined) putAttr(t, "value", st.value);
+        if (st.text !== undefined) { const old = t.textContent; stUndo.push(() => (t.textContent = old)); t.textContent = st.text; }
+        if (st.sel) [].forEach.call(t.options || [], (o, i) => putAttr(o, "selected", st.sel[i] ? "selected" : null));
+        if (st.canvas) { /* 캔버스는 그림 틀 안에서 아예 안 그려진다 — 표식만 달고, 바꿔 끼우기는 굽기 직전 사본에서 */
+          putAttr(t, "data-ss-canvas", st.canvas);
+          putAttr(t, "data-ss-canvas-w", String(st.cw));
+          putAttr(t, "data-ss-canvas-h", String(st.ch));
+        }
+        if (st.scroll) { /* 스크롤 자리도 마크업에 없다 — 자식을 그만큼 옮겨 «그 자리» 를 그린다.
+                            흐름을 안 건드리게 transform 으로, 이미 걸린 변형 앞에 붙인다 */
+          const win = t.ownerDocument.defaultView || window;
+          [].forEach.call(t.children, (c) => {
+            let cur = "";
+            try { cur = win.getComputedStyle(c).transform; } catch (e) { cur = ""; }
+            if (cur === "none") cur = "";
+            putSty(c, "transform", "translate(" + -st.scroll.l + "px," + -st.scroll.t + "px)" + (cur ? " " + cur : ""));
+          });
+        }
+      };
 
       if (src.kind === "move") {
         /* wrap — 살아 있는 시트를 «옮긴다». 복제하면 앱의 상태(입력값·canvas)를 잃는다 */
@@ -2886,7 +2981,7 @@ ${HL_CSS}
         else if (opt.major) capMajorStrip(src.node);
         if (areas) areaLayer = capAreaDraw(src.node, areas); /* 살아 있는 층에 잠깐 — 되돌릴 때 걷는다 */
         body.appendChild(src.node);
-        live.forEach((x) => freeze(x.el)(x)); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
+        live.forEach((x) => { freeze(x.el)(x); applyState(x.el, x.st); }); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
         target = src.node;
         restoreSrc = function () {
           sheet.style.height = was.h;
@@ -2899,7 +2994,7 @@ ${HL_CSS}
         target = document.importNode(src.node, true);
         /* 짝 맞추기는 걷어내기 «전» 에 — 같은 순서의 두 나무라야 번호로 짝이 맞는다 (#116) */
         const twins = [target].concat(Array.from(target.getElementsByTagName("*")));
-        live.forEach((x) => { x.twin = twins[x.i]; freeze(x.twin)(x); });
+        live.forEach((x) => { x.twin = twins[x.i]; freeze(x.twin)(x); applyState(x.twin, x.st); });
         target.querySelectorAll(CAP_DROP).forEach((n) => n.remove());
         if (opt.markers === false) target.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
         else if (src.marks) src.marks.forEach((m) => target.appendChild(document.importNode(m, true)));
@@ -2958,7 +3053,22 @@ ${HL_CSS}
 
       return {
         box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
-        restore: function () { if (areaLayer) areaLayer.remove(); restoreSticky(); restoreFrozen(); restoreSrc(); box.remove(); },
+        restore: function () {
+          if (areaLayer) areaLayer.remove();
+          stUndo.reverse().forEach((f) => f());
+          restoreSticky(); restoreFrozen(); restoreSrc(); box.remove();
+          /* 옮겼다 돌아온 뒤에 — 스크롤 자리는 붙어 있어야 값이 남는다 (#121) */
+          if (src.kind === "move") {
+            live.forEach((x) => {
+              if (!x.st || !x.st.scroll || !x.el.isConnected) return;
+              x.el.scrollTop = x.st.scroll.t;
+              x.el.scrollLeft = x.st.scroll.l;
+            });
+            if (wasFocus && wasFocus.isConnected && wasFocus.focus) {
+              try { wasFocus.focus({ preventScroll: true }); } catch (e) { /* 못 받는 요소 */ }
+            }
+          }
+        },
       };
     }
     async function capPNG(opt) {
@@ -2968,6 +3078,7 @@ ${HL_CSS}
         const r = built.box.getBoundingClientRect();
         const w = Math.ceil(r.width), hgt = Math.ceil(r.height);
         const clone = built.box.cloneNode(true);
+        capCanvasSwap(clone); /* 캔버스 → 같은 그림의 div (#121). 사본에서만 — 살아 있는 앱은 안 건드린다 */
         /* 조립 상자는 화면 밖(-99999px)에 숨겨 두는데, 그 위치가 SVG 안까지 따라가면
            그림이 캔버스 밖에 그려져 «백지» 가 나온다. 사본에서는 무력화한다 */
         clone.style.position = "static";
@@ -5482,7 +5593,7 @@ ${HL_CSS}
 
   /* frame 모드: 바깥 창에 남은 앱 DOM 을 숨긴다 — 프레임워크 앱은 옮길 수 없으므로(리액트가 다시 붙인다)
      감싸는 대신 숨기고, 같은 주소를 액자(iframe)로 다시 연다. 우리 UI 는 전부 .ss-ui 지만 방어적으로 전부 적는다 */
-  const SS_OWN_SEL = ".ss-ui,.ss-toolbar,.ss-proto-wrap,.ss-docmode,.ss-tip,.ss-toc,.ss-nav-toast";
+  const SS_OWN_SEL = ".ss-ui,.ss-toolbar,.ss-docmode,.ss-tip,.ss-toc,.ss-nav-toast";
   /* 표시만 건다 — 실제로 감추는 것은 위의 규칙이다 (#103).
      예전에는 여기서 body.children 을 훑어 인라인 style 을 걸었는데, 그건 «부팅 그 순간» 의 목록이라
      프레임워크가 뒤에 갈아끼운 노드를 놓쳤다. 두 번 불러도 해가 없다 */
@@ -5623,18 +5734,16 @@ ${HL_CSS}
         </aside>
       </div>`);
 
-    const protoWrap = h("div", { class: "ss-proto-wrap ss-ui" }, '<div class="ss-holder" id="ss-protoHolder"></div>');
     const tip = h("div", { class: "ss-tip ss-ui", role: "tooltip" });
     document.body.appendChild(toolbar);
-    document.body.appendChild(protoWrap);
     document.body.appendChild(docmode);
     document.body.appendChild(tip);
 
-    const protoHolder = document.getElementById("ss-protoHolder");
     const docHolder = document.getElementById("ss-docHolder");
     const stage = document.getElementById("ss-stage");
     const fit = document.getElementById("ss-fit");
-    protoHolder.appendChild(frame);
+    /* 프레임의 «집» 은 하나다 (#121) — 모드가 바뀌어도 여기서 안 나간다 */
+    docHolder.appendChild(frame);
     document.body.classList.add("ss-mode-proto");
 
     /* ---- 크기: 프리셋 3(고정 둘 + 자동) + DevTools식 드래그 3핸들, 프리셋 클릭 = 복귀 ---- */
@@ -5702,11 +5811,9 @@ ${HL_CSS}
       mProto.setAttribute("aria-pressed", String(m === "proto"));
       mDoc.setAttribute("aria-pressed", String(m === "doc"));
       core.clearActive();
-      /* iframe 은 DOM 트리를 옮기면 브라우저가 src 로 다시 로드한다 — 보던 경로를 되돌려 준다 */
-      const back = FRAME ? frameHref() : null;
-      if (m === "doc") docHolder.appendChild(frame);
-      else { protoHolder.appendChild(frame); frame.style.transform = ""; }
-      if (back) appFrame.src = back;
+      /* 프레임은 안 옮긴다 (#121) — 옮기면 액자가 다시 로드돼 앱이 처음 상태로 돌아간다.
+         옛 코드는 옮긴 뒤 «보던 경로» 만 되돌려 줬는데, 경로만 돌아오고 화면의 상태는 사라졌다.
+         모드는 겉(머리말·설명 패널·배율)만 바꾼다 — 배율은 layout 이 쓴다 */
       core.soloRoots(m === "doc"); /* 정의서 모드에서는 설명하는 화면만 (#75) */
       if (m === "doc") brandHint(brand);
       ssFrame(layout);
@@ -5734,12 +5841,11 @@ ${HL_CSS}
     const sty = (el, k, v) => { if (el.style[k] !== v) el.style[k] = v; };
     const setHTML = (el, v) => { if (el.innerHTML !== v) el.innerHTML = v; };
     function layout() {
-      const doc = document.body.classList.contains("ss-mode-doc");
       /* 두 모드가 «한 규칙» 을 쓴다 (#105): 넘칠 때만 줄인다.
          한때 프로토타입만 실물 크기를 고집하고 축소를 「맞춤」 버튼으로 두었는데,
          PC 1920 은 노트북에서 거의 늘 넘쳐 기본이 «스크롤해서 반쪽 보기» 가 됐다.
          줄여도 잃는 정보가 없으니 판단이 아니라 규칙이고, 규칙은 버튼일 이유가 없다 */
-      scale = fitScale(doc ? stage : protoWrap);
+      scale = fitScale(stage); /* 두 모드가 같은 상자를 쓴다 (#121) — 잴 곳도 하나다 */
       if (scale !== 1) {
         sty(frame, "transformOrigin", "top left");
         sty(frame, "transform", "scale(" + scale + ")");

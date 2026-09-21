@@ -636,6 +636,8 @@ window.addEventListener("screenspec:screenchange", (e) => {
 | `data-ss-screen="ID"` | 화면 컨테이너 | Screen의 `root` 셀렉터로 지정할 때의 관례 (wrap 다중화면, overlay·frame 의 패널·다이얼로그 화면) |
 | `data-ss-ignore` | 전역 모달·토스트 등 | 시트로 감싸지 않고 페이지 전역에 남긴다 (wrap) |
 | `data-ss-frame` | (라이브러리가 붙인다) | frame 모드의 액자 iframe 표식. 이 표식이 붙은 액자 안에서 로드된 인스턴스는 UI 를 만들지 않는다 (재귀 방지) |
+| `data-ss-hover` · `data-ss-focus` · `data-ss-focusv` · `data-ss-focusw` · `data-ss-active` | (내보낼 때만, 라이브러리가 붙였다 뗀다) | **그림용 복사본에서 «지금 걸린 상태» 를 그리는 표식** (#121). 그림은 마크업만 보므로 `:hover`·`:focus` 가 안 걸린다. 앱의 규칙을 `:hover` → `[data-ss-hover]` 로 한 벌 더 적어 이 표식에도 걸리게 한다. 뽑고 나면 뗀다 — 앱에 남지 않는다 |
+| `data-ss-canvas` | (내보낼 때만, 라이브러리가 붙였다 뗀다) | 캔버스에 그린 그림을 실어 나르는 표식 (#121). 그림 틀(SVG)은 캔버스를 아예 안 그려서, 굽기 직전 사본에서만 같은 그림의 `div` 로 바꿔 끼운다. 살아 있는 캔버스는 그대로 둔다 |
 
 ## JS API
 

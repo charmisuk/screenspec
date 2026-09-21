@@ -555,11 +555,10 @@ function check(name, ok, detail) {
       d.textContent = "부팅 뒤에 생긴 앱 뿌리";
       document.body.appendChild(d);
       const cs = getComputedStyle(d);
-      /* 툴바는 늘 보여야 하고, 무대는 «지금 모드의 것» 하나가 보이면 된다
-         (정의서 모드에서 .ss-proto-wrap 이 숨는 것은 원래 그렇다) */
+      /* 툴바는 늘 보여야 하고, 무대(.ss-docmode)는 두 모드가 같이 쓰므로 늘 보인다 (#121) */
       const seen = (q) => { const e = document.querySelector(q); return !!e && getComputedStyle(e).display !== "none"; };
       const ui = "툴바:" + (seen(".ss-toolbar") ? "보임" : "숨김") +
-        " 무대:" + (seen(".ss-proto-wrap") || seen(".ss-docmode") ? "보임" : "둘 다 숨김");
+        " 무대:" + (seen(".ss-docmode") ? "보임" : "숨김");
       const w = Math.round(d.getBoundingClientRect().width);
       const cls = document.body.className, disp = cs.display, par = d.parentNode === document.body;
       d.remove();
@@ -2376,6 +2375,174 @@ function check(name, ok, detail) {
     s17.close();
   }
 
+  /* ============ 모드를 바꿔도 앱 상태가 남는다 (#121) ============
+     실사용(2026-09-21): 프로토타입에서 패널을 열고 줄을 고른 뒤 「화면정의서」 로 넘어가면 그 상태가 사라졌다.
+     모드마다 «다른 상자» 를 두고 프레임을 옮겼기 때문이다 — 액자(iframe)는 DOM 에서 옮기는 순간 다시 로드되고,
+     wrap 도 옮기면 앱 안의 iframe 이 다시 로드되고 안쪽 스크롤 자리가 풀린다.
+     이제 상자가 하나라 옮길 일이 없다. 「보이는 그대로 찍힌다」 의 바닥이 이것이다 */
+  if (sec("[상태] 모드를 바꿔도 앱 상태가 남는다 (#121)")) {
+    const APP21 = (mode) => `<!doctype html><html><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif}.row{padding:8px 10px;border-bottom:1px solid #ddd}
+      #sc{height:60px;overflow:auto;border:1px solid #999}#sc div{height:30px}
+      aside{position:fixed;right:0;top:0;bottom:0;width:120px;background:#eef}
+      </style></head><body>
+      <div class="list" data-spec="1"><div class="row"><input type="checkbox" id="c1"> 고르기</div>
+      <div class="row"><input type="text" id="t1"></div>
+      <div id="sc"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div>
+      <iframe id="inner" src="/inner.html" style="width:120px;height:40px;border:1px solid #ccc"></iframe></div>
+      <button id="open" data-spec="2">패널 열기</button>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-121",name:"상태",specs:[
+        {n:1,target:"1",title:"목록",defs:[{t:"a"}]},{n:2,target:"2",title:"단추",defs:[{t:"b"}]}]}]};
+      window.__boot = (window.__boot || 0) + 1;
+      document.getElementById("open").onclick = () => document.body.insertAdjacentHTML("beforeend", '<aside id="pn">패널</aside>');
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s21 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      if (req.url.indexOf("inner.html") >= 0) { res.end('<!doctype html><meta charset="utf-8"><body>안쪽<script>window.__innerBoot=(window.__innerBoot||0)+1;<\/script>'); return; }
+      res.end(APP21((req.url.match(/\/(frame|wrap)\.html/) || [])[1] || "wrap"));
+    });
+    await new Promise((r) => s21.listen(P(4370), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const mode of ["frame", "wrap"]) {
+      await page.goto("http://localhost:" + P(4370) + "/" + mode + ".html");
+      await booted(500);
+      const tag = "[" + mode + "] ";
+      /* 프로토타입 모드에서 «사람이» 상태를 만든다 */
+      const app = () => (mode === "frame" ? page.frameLocator("iframe[data-ss-frame]") : page);
+      await app().locator("#open").click();
+      await app().locator("#c1").check();
+      await app().locator("#t1").fill("적어 둔 값");
+      await page.evaluate((m) => {
+        const d = m === "frame" ? document.querySelector("iframe[data-ss-frame]").contentDocument : document;
+        d.getElementById("sc").scrollTop = 45;
+      }, mode);
+      await settle(300);
+      const read = () => page.evaluate((m) => {
+        const f = document.querySelector("iframe[data-ss-frame]");
+        const d = m === "frame" ? f.contentDocument : document;
+        const inner = d.getElementById("inner");
+        return { boot: (m === "frame" ? f.contentWindow : window).__boot,
+          innerBoot: (() => { try { return inner.contentWindow.__innerBoot; } catch (e) { return "못 읽음"; } })(),
+          checked: d.getElementById("c1").checked, text: d.getElementById("t1").value,
+          panel: !!d.getElementById("pn"), scroll: d.getElementById("sc").scrollTop };
+      }, mode);
+      const before = await read();
+      await page.click("#ss-mDoc");
+      await settle(600);
+      const after = await read();
+      check(tag + "정의서 모드로 넘어가도 앱이 다시 시작되지 않는다 (#121)",
+        after.boot === before.boot && before.boot === 1, JSON.stringify({ before: before, after: after }));
+      check(tag + "열어 둔 패널 · 고른 줄 · 적은 값이 그대로다",
+        after.panel === true && after.checked === true && after.text === "적어 둔 값", JSON.stringify(after));
+      check(tag + "앱 안의 iframe 도 다시 로드되지 않는다", after.innerBoot === 1 && before.innerBoot === 1, JSON.stringify([before.innerBoot, after.innerBoot]));
+      check(tag + "안쪽 스크롤 자리가 풀리지 않는다", after.scroll === before.scroll && before.scroll === 45, JSON.stringify([before.scroll, after.scroll]));
+      /* 되돌아가도 마찬가지다 — 두 방향 다 «겉» 만 바뀐다 */
+      await page.click("#ss-mProto");
+      await settle(500);
+      const back = await read();
+      check(tag + "프로토타입으로 되돌아가도 그대로다", back.boot === 1 && back.panel === true && back.scroll === 45, JSON.stringify(back));
+    }
+    check("JS 에러 0건", errors.length === 0, errors);
+    s21.close();
+  }
+
+  /* ============ 보이는 상태가 그림에 그대로 (#121) ============
+     그림은 «마크업» 만 본다. 체크·고른 항목·적은 값은 메모리(프로퍼티)에만 있고, 스크롤 자리·캔버스 그림·
+     지금 걸린 상태(:hover)도 마크업에 없다. 그래서 「30건 고른 화면」 을 뽑으면 빈 칸이 나왔다 (2026-09-21 실측).
+     다섯 갈래를 마크업으로 옮긴다: 체크·값 → 속성 · 고른 항목 → selected · 스크롤 → 자식을 옮겨 그린다 ·
+     캔버스 → 같은 그림의 div(그림 틀이 캔버스를 안 그린다) · 걸린 상태 → 표식 + 규칙 한 벌 더 */
+  if (sec("[상태] 보이는 대로 굽는다 (#121)")) {
+    const APP22 = (mode) => `<!doctype html><html><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif;background:#fff}
+      input[type=checkbox]{width:40px;height:40px;accent-color:rgb(0,128,0)}
+      #sc{width:120px;height:40px;overflow:auto}#sc div{height:40px}#sc .hit{background:rgb(255,0,255)}
+      button{background:#eee;padding:8px 14px;border:0}
+      button:hover{background:rgb(0,90,200);color:#fff}
+      textarea:focus{background:rgb(0,200,200)}
+      h1{font-size:18px;margin:8px}
+      </style></head><body>
+      <h1 data-spec="1">권한</h1>
+      <div class="app"><input type="checkbox" id="c1">
+      <select id="s1"><option>가</option><option>나</option></select>
+      <input type="text" id="t1"><textarea id="ta"></textarea>
+      <div id="sc"><div>1</div><div class="hit">2</div><div>3</div></div>
+      <canvas id="cv" width="80" height="40"></canvas><button id="btn" data-spec="2">단추</button></div>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-122",name:"상태",specs:[
+        {n:1,target:"1",title:"제목",defs:[{t:"a"}]},{n:2,target:"2",title:"단추",defs:[{t:"b"}]}]}]};
+      const cx = document.getElementById("cv").getContext("2d");
+      cx.fillStyle = "rgb(255,160,0)"; cx.fillRect(0, 0, 80, 40);
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s22 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      res.end(APP22((req.url.match(/\/(frame|overlay|wrap)\.html/) || [])[1] || "wrap"));
+    });
+    await new Promise((r) => s22.listen(P(4380), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const mode of ["wrap", "frame", "overlay"]) {
+      await page.goto("http://localhost:" + P(4380) + "/" + mode + ".html");
+      await booted(500);
+      await page.click(mode === "overlay" ? "#ss-ovDoc" : "#ss-mDoc");
+      await settle(500);
+      const tag = "[" + mode + "] ";
+      const app = () => (mode === "frame" ? page.frameLocator("iframe[data-ss-frame]") : page);
+      /* 사람이 만드는 상태 */
+      await app().locator("#c1").check();
+      await app().locator("#s1").selectOption("나");
+      await app().locator("#t1").fill("적어 둔 값");
+      await app().locator("#ta").fill("여러 줄");
+      await page.evaluate((m) => {
+        const d = m === "frame" ? document.querySelector("iframe[data-ss-frame]").contentDocument : document;
+        d.getElementById("sc").scrollTop = 40;
+      }, mode);
+      await app().locator("#btn").hover(); /* 마우스를 올린 채로 굽는다 */
+      await settle(300);
+      const k = await page.evaluate(async () => {
+        let mk = null;
+        const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
+          if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+          const b = n.querySelector(".ss-cap-body"), q = (id) => b.querySelector("#" + id);
+          mk = { checked: q("c1") && q("c1").hasAttribute("checked"), value: q("t1") && q("t1").getAttribute("value"),
+            text: q("ta") && q("ta").textContent, sel: q("s1") && [].map.call(q("s1").options, (o) => o.hasAttribute("selected")).join(","),
+            hoverMark: q("btn") && q("btn").hasAttribute("data-ss-hover") };
+        } });
+        mo.observe(document.body, { childList: true });
+        const r = await window.ScreenSpec.exportImage({ markers: false, head: false, table: false });
+        mo.disconnect();
+        const img = new Image();
+        await new Promise((res) => { img.onload = res; img.src = r.url; });
+        const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+        const g = c.getContext("2d"); g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, img.width, img.height).data;
+        const cnt = (r0, g0, b0) => { let n = 0; for (let i = 0; i < d.length; i += 4)
+          if (Math.abs(d[i] - r0) < 14 && Math.abs(d[i + 1] - g0) < 14 && Math.abs(d[i + 2] - b0) < 14) n++; return n; };
+        return { mk: mk, 체크: cnt(0, 128, 0), 캔버스: cnt(255, 160, 0), 스크롤: cnt(255, 0, 255),
+          hover: cnt(0, 90, 200), 포커스: cnt(0, 200, 200) };
+      });
+      check(tag + "체크해 둔 칸이 그림에도 체크다 — 「30건 고른 화면」 의 바닥 (#121)", k.체크 > 500 && k.mk.checked === true, JSON.stringify(k));
+      check(tag + "고른 항목·적은 값이 그림에 실린다", k.mk.value === "적어 둔 값" && k.mk.text === "여러 줄" && k.mk.sel === "false,true", JSON.stringify(k.mk));
+      check(tag + "안쪽 스크롤이 그 자리로 그려진다", k.스크롤 > 500, JSON.stringify(k));
+      check(tag + "캔버스에 그린 것이 그림에 남는다 (틀이 캔버스를 안 그린다)", k.캔버스 > 2000, JSON.stringify(k));
+      check(tag + "마우스를 올린 상태가 그대로 굳는다 (:hover)", k.hover > 500 && k.mk.hoverMark === true, JSON.stringify(k));
+      check(tag + "커서가 들어가 있는 칸도 그 모습 그대로 (:focus)", k.포커스 > 500, JSON.stringify(k));
+      /* 화면은 원래대로 — 그림 때문에 붙인 표식·속성이 앱에 남으면 안 된다 */
+      check(tag + "뽑은 뒤 커서 자리가 그대로다 — 적던 칸에서 안 튕긴다 (#121)", await page.evaluate((m) => {
+        const d = m === "frame" ? document.querySelector("iframe[data-ss-frame]").contentDocument : document;
+        return !!d.activeElement && d.activeElement.id === "ta";
+      }, mode));
+      check(tag + "뽑은 뒤 앱에 표식·속성이 안 남는다", await page.evaluate((m) => {
+        const d = m === "frame" ? document.querySelector("iframe[data-ss-frame]").contentDocument : document;
+        const cv = d.getElementById("cv");
+        return d.querySelectorAll("[data-ss-hover],[data-ss-canvas],[data-ss-focus]").length === 0 &&
+          !d.getElementById("t1").hasAttribute("value") && cv.tagName === "CANVAS" &&
+          d.getElementById("sc").scrollTop === 40 && !d.getElementById("sc").firstElementChild.style.transform;
+      }, mode), JSON.stringify(k.mk));
+    }
+    check("JS 에러 0건", errors.length === 0, errors);
+    s22.close();
+  }
+
   /* ============ 프리셋을 선언으로 · 페이지만 보기 (#111) ============
      폭 프리셋 버튼이 mobile·pc 로 박혀 있어, devices 에 태블릿을 선언해도 툴바에 안 나왔다.
      기본을 셋으로 늘리지 «않는» 이유는 태블릿 폭이 제품마다 다르기 때문이다(768·744·834) —
@@ -2532,8 +2699,7 @@ function check(name, ok, detail) {
     await booted(400);
     const zs = () => page.evaluate(() => {
       const f = document.querySelector(".ss-frame"), sh = document.querySelector(".ss-sheet");
-      const w = document.querySelector(".ss-proto-wrap"), st = document.querySelector(".ss-stage");
-      const box = document.body.classList.contains("ss-mode-doc") ? st : w;
+      const box = document.querySelector(".ss-stage"); /* 두 모드가 같은 상자를 쓴다 (#121) */
       const m = (f.style.transform || "").match(/scale\(([\d.]+)\)/);
       const r = f.getBoundingClientRect();
       return { scale: m ? Number(m[1]) : 1, wpx: document.getElementById("ss-wpx").textContent,
@@ -2683,7 +2849,7 @@ function check(name, ok, detail) {
     await booted(400);
 
     const box = () => page.evaluate(() => {
-      const w = document.querySelector(".ss-proto-wrap"), st = document.querySelector(".ss-stage");
+      const w = document.querySelector(".ss-stage"), st = w; /* 한 상자다 (#121) */
       const cs = getComputedStyle(w), pad = (e) => getComputedStyle(e).paddingRight;
       return {
         wrapX: w.scrollWidth - w.clientWidth, wrapY: w.scrollHeight - w.clientHeight,
