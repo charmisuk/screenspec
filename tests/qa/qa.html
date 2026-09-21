@@ -42,6 +42,9 @@
     box-shadow:-8px 0 24px rgba(17,24,39,.10);padding:18px 16px;z-index:60;animation:q116in .25s cubic-bezier(.2,.9,.3,1) both}
   .q116 .perm{margin:14px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
   @keyframes q116in{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
+  /* QA-17 (#121) — 사람이 만들 수 있는 상태: 체크·고른 항목·안쪽 스크롤 */
+  .q121sc{display:inline-block;width:64px;height:22px;overflow:auto;border:1px solid var(--line);vertical-align:middle}
+  .q121sc i{display:block;height:22px;font-style:normal;text-align:center}
   .qapin span{color:#9B9A97}
 </style>
 </head>
@@ -191,6 +194,12 @@
     <span class="q17" style="padding:5px 13px;border-radius:8px;display:inline-block">네모</span></span></div>
   <div class="card" data-spec="173"><b>툴바</b><span>「페이지만 보기」와 폭 프리셋</span></div>
   <div class="card" data-spec="174"><b>열린 패널</b><span><button type="button" onclick="q116Open()">패널 열기</button> 오른쪽에서 밀려 들어오는 고정 패널</span></div>
+  <div class="card" data-spec="176"><b>지금 보이는 상태</b><span>
+    <label><input type="checkbox" id="q121a"> 첫째</label>
+    <label><input type="checkbox" id="q121b"> 둘째</label>
+    <select id="q121s"><option>기본</option><option>고른 값</option></select>
+    <span class="q121sc" id="q121sc"><i>1</i><i>2</i><i>3</i><i>4</i></span>
+  </span></div>
 </section>
 <script>
   /* QA-17 (#116) — React 처럼 열 때 끼워 넣는다. 닫으면 뺀다 */
@@ -662,6 +671,19 @@ window.SCREENSPEC = {
       ]},
       { n: 5, target: "175", anno: "box", optional: true, title: "패널 안 항목", defs: [
         { t: "패널을 열어야 보이는 자리 — 그림에서 이 번호가 패널 안 항목 위에 있어야 한다" }
+      ]},
+      { n: 6, target: "176", anno: "box", title: "지금 보이는 상태가 그대로 굽힌다", defs: [
+        { t: "체크 두 개를 켜고, 드롭다운에서 «고른 값» 을 고르고, 작은 목록을 아래로 스크롤한다" },
+        { t: "「내보내기」 로 뽑는다" },
+        { t: "확인 : 그림에도 체크가 켜져 있고, 드롭다운이 «고른 값» 이고, 목록이 스크롤된 자리를 보여 준다", c: [
+          { t: "그림은 마크업만 본다 — 체크·고른 항목·스크롤 자리는 마크업이 아니라 메모리에만 있어서, 예전에는 초기 상태로 찍혔다 (#121)", kind: "why" }
+        ]},
+        { t: "확인 : 뽑고 난 «화면» 은 그대로다 — 체크·스크롤·적던 칸의 커서가 안 풀린다" },
+        { t: "프로토타입 모드에서 상태를 만든 뒤 «화면정의서» 로 건너간다" },
+        { t: "확인 : 만들어 둔 상태가 그대로 넘어온다", c: [
+          { t: "예전에는 모드를 바꿀 때 액자를 옮겨서 앱이 처음부터 다시 로드됐다 (#121)", kind: "why" }
+        ]},
+        { t: "마우스를 올린 상태(:hover)는 사람이 뽑을 수 없다 — 내보내기를 누르는 순간 마우스가 앱에서 떠난다. 자동화(Playwright)가 부르면 담긴다", kind: "why" }
       ]}
     ]},
     { id: "QA-16-SECTION", name: "번호 없는 섹션", path: ["QA", "번호 없는 섹션"], specs: [
