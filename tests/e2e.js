@@ -639,31 +639,36 @@ function check(name, ok, detail) {
     check("state 만 누락이면 경고 없음", !warns2.some((x) => x.includes("못 찾은 정의")), warns2.join(" | ").slice(0, 200));
     page.off("console", onMsg2);
   }
-  /* 비동기 조회 화면 (#23): 스켈레톤 뒤 본문 — 늦게 온 요소는 경고에서 빠져야 한다.
+  /* ============ 비동기 조회 화면 (#23) ============
+     스켈레톤 뒤 본문 — 늦게 온 요소는 경고에서 빠져야 한다.
      경고는 «조용해지면» 이 아니라 «상한(5초)» 에 나온다 — 조용하다고 다 온 것은 아니기 때문이다.
-     전부 찾으면 그 전에 조용히 끝난다(경고 없음). 그래서 대기는 고정이 아니라 «도착할 때까지» 로 잡는다 */
-  for (const [라벨, 지연] of [["0.7초", 700], ["2.5초(조용한 뒤 도착)", 2500]]) {
-    const warns3 = [];
-    const onMsg3 = (msg) => { if (msg.type() === "warning") warns3.push(msg.text()); };
-    page.on("console", onMsg3);
-    await page.goto("about:blank");
-    await page.setContent('<div id="app">로딩 중…</div><script>window.SCREENSPEC={screen:{id:"S-A",name:"a"},specs:[' +
-      '{n:1,target:"1",title:"본문"},{n:2,target:"2",title:"버튼"},{n:9,target:"9",title:"진짜 누락"}]};' +
-      'setTimeout(()=>{document.getElementById("app").innerHTML=\'<div data-spec="1">본문</div><button data-spec="2">저장</button>\';},' + 지연 + ');</script>');
-    await page.addScriptTag({ content: LIB });
-    await settle(500);
-    await page.click("#ss-mDoc");
-    const miss = () => warns3.filter((x) => x.includes("못 찾은 정의"));
-    /* 데이터가 오기 전에는 경고가 없어야 한다 (조용해졌다고 성급히 판정하면 안 된다) */
-    await page.waitForTimeout(지연 + 300);
-    check("비동기 " + 라벨 + ": 데이터 도착 전에는 경고 없음", miss().length === 0, miss().join(" | ").slice(0, 160));
-    /* 상한까지 기다린다 — 고정 대기가 아니라 도착할 때까지 (경합 방지) */
-    for (let i = 0; i < 80 && miss().length === 0; i++) await settle(100);
-    const late = miss();
-    check("비동기 " + 라벨 + ": 진짜 누락 #9 만 경고 · 늦게 온 #1·#2 는 제외",
-      late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes('#1 ') && !late[0].includes('#2 '),
-      late.join(" | ").slice(0, 160));
-    page.off("console", onMsg3);
+     전부 찾으면 그 전에 조용히 끝난다(경고 없음). 그래서 대기는 고정이 아니라 «도착할 때까지» 로 잡는다.
+     절 이름을 준 이유 (#120) — 이름이 없으면 «어떤 절을 골라도 따라 도는» 검사가 된다. 돌연변이 한 건마다
+     10.5초를 냈다(실측). 전체 실행에서는 그대로 돌고, 골라 돌릴 때만 빠진다 */
+  if (sec("[docs] 비동기 조회 화면 (#23)")) {
+    for (const [라벨, 지연] of [["0.7초", 700], ["2.5초(조용한 뒤 도착)", 2500]]) {
+      const warns3 = [];
+      const onMsg3 = (msg) => { if (msg.type() === "warning") warns3.push(msg.text()); };
+      page.on("console", onMsg3);
+      await page.goto("about:blank");
+      await page.setContent('<div id="app">로딩 중…</div><script>window.SCREENSPEC={screen:{id:"S-A",name:"a"},specs:[' +
+        '{n:1,target:"1",title:"본문"},{n:2,target:"2",title:"버튼"},{n:9,target:"9",title:"진짜 누락"}]};' +
+        'setTimeout(()=>{document.getElementById("app").innerHTML=\'<div data-spec="1">본문</div><button data-spec="2">저장</button>\';},' + 지연 + ');</script>');
+      await page.addScriptTag({ content: LIB });
+      await settle(500);
+      await page.click("#ss-mDoc");
+      const miss = () => warns3.filter((x) => x.includes("못 찾은 정의"));
+      /* 데이터가 오기 전에는 경고가 없어야 한다 (조용해졌다고 성급히 판정하면 안 된다) */
+      await page.waitForTimeout(지연 + 300);
+      check("비동기 " + 라벨 + ": 데이터 도착 전에는 경고 없음", miss().length === 0, miss().join(" | ").slice(0, 160));
+      /* 상한까지 기다린다 — 고정 대기가 아니라 도착할 때까지 (경합 방지) */
+      for (let i = 0; i < 80 && miss().length === 0; i++) await settle(100);
+      const late = miss();
+      check("비동기 " + 라벨 + ": 진짜 누락 #9 만 경고 · 늦게 온 #1·#2 는 제외",
+        late.length === 1 && late[0].includes('#9 target="9"') && !late[0].includes('#1 ') && !late[0].includes('#2 '),
+        late.join(" | ").slice(0, 160));
+      page.off("console", onMsg3);
+    }
   }
 
 
