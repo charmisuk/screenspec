@@ -63,13 +63,21 @@ function check(name, ok, detail) {
     };
     requestAnimationFrame(tick);
   }), Math.max(60, ms)).then((r) => { if (SETTLE_STATS) SETTLE_STATS.push(r); }).catch(() => page.waitForTimeout(ms));
+  /* 부팅 대기 (#120) — goto 직후의 고정 1초는 «라이브러리가 떴나» 를 시계로 어림한 것이다.
+     느린 기계에서는 모자라 깜빡이고(그 자리에서 나는 실패가 제일 헷갈린다) 빠른 기계에서는 남는다.
+     조건으로 바꾼다: 뷰어가 서면(툴바·알약·액자) 그때부터 settle. «뷰어가 안 뜨는 것» 을 보는 자리에는 쓰지 않는다 */
+  const booted = async (ms) => {
+    await page.waitForFunction(() => !!document.querySelector(".ss-toolbar,.ss-pill,.ss-appframe,.ss-sheet"),
+      null, { timeout: 4000 }).catch(() => {});
+    await settle(ms == null ? 400 : ms);
+  };
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
   /* ============ wrap: demo.html ============ */
   if (sec("[wrap] demo.html")) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
-    await page.waitForTimeout(1200);
+    await booted(400);
     await page.click("#ss-mDoc");
     await settle(500);
     check("기능 설명 10행", (await page.locator(".ss-defs-list .ss-row").count()) === 10);
@@ -206,7 +214,7 @@ function check(name, ok, detail) {
   /* ============ wrap: shop.html (대표 데모 — MOA) ============ */
   if (sec("[wrap] shop.html")) {
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
-    await page.waitForTimeout(1200);
+    await booted(400);
     await page.click("#ss-mDoc");
     await settle(500);
     check("MOA 홈 기능 설명 11행", (await page.locator(".ss-defs-list .ss-row").count()) === 11);
@@ -466,7 +474,7 @@ function check(name, ok, detail) {
       };
     });
     await page.goto("http://localhost:" + P(4180) + "/screenspec/examples/overlay-spa.html");
-    await page.waitForTimeout(1200);
+    await booted(400);
     check("frame 부팅: 시트 안 액자 1개 + 툴바 + 바깥 앱 DOM 숨김", await page.evaluate(() => {
       const f = document.querySelectorAll(".ss-sheet iframe[data-ss-frame]");
       const gnb = document.querySelector("body .gnb");
@@ -1654,7 +1662,7 @@ function check(name, ok, detail) {
   if (sec("[내보내기] 뎁스·색·기억 (#96)")) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
-    await page.waitForTimeout(900);
+    await booted(400);
     /* 조립 상자를 가로채 «실제로 무엇이 구워졌는가» 를 본다 — 대화상자 상태가 아니라 결과를 잰다 */
     await page.evaluate(() => {
       window.__caps = [];
@@ -1795,7 +1803,7 @@ function check(name, ok, detail) {
     check("문서가 아니라 사람에게 붙는다 (설정 블록은 안 건드린다)",
       await page.evaluate(() => !("export" in (window.SCREENSPEC || {}))));
     await page.reload();
-    await page.waitForTimeout(900);
+    await booted(400);
     await page.click(".ss-prbtn");
     await settle(300);
     d = await dlg();
@@ -1803,7 +1811,7 @@ function check(name, ok, detail) {
     const reopen = async (raw) => {
       await page.evaluate((v) => localStorage.setItem("screenspec:export", v), raw);
       await page.reload();
-      await page.waitForTimeout(900);
+      await booted(400);
       await page.click(".ss-prbtn");
       await settle(300);
       return dlg();
@@ -1819,7 +1827,7 @@ function check(name, ok, detail) {
     /* ── 폰: 바닥 시트 ── */
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await page.waitForTimeout(900);
+    await booted(400);
     await page.click(".ss-more");
     await settle(250);
     await page.click(".ss-prbtn");
@@ -1860,7 +1868,7 @@ function check(name, ok, detail) {
     });
     await new Promise((r) => sM.listen(P(4260), r));
     await page.goto("http://localhost:" + P(4260) + "/examples/shop.html");
-    await page.waitForTimeout(900);
+    await booted(400);
     await page.evaluate(() => {
       window.__caps = [];
       const orig = document.body.appendChild.bind(document.body);
@@ -2051,7 +2059,7 @@ function check(name, ok, detail) {
     await new Promise((r) => s9.listen(P(4310), r));
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("http://localhost:" + P(4310) + "/app.html");
-    await page.waitForTimeout(1100);
+    await booted(400);
     /* 그림은 구워지고 나면 사라진다 — 조립 상자가 «붙는 순간» 의 계산값을 가로챈다 */
     const bake = (opt) => page.evaluate(async (o) => {
       let cap = null;
@@ -2092,7 +2100,7 @@ function check(name, ok, detail) {
     check("「번호 색」을 고르면 그 색으로 박힌다 (#110)", k.mbg === "rgb(229, 72, 77)", k.mbg);
     /* 구성 스타일시트 — 살아 있는 상자의 계산값은 바깥 문서 시트로 이미 맞으니, 그림의 «픽셀» 로 잰다 */
     await page.goto("http://localhost:" + P(4310) + "/adopted.html");
-    await page.waitForTimeout(1100);
+    await booted(400);
     k = await bake({ markers: false, head: false, table: false });
     check("구성 스타일시트(adoptedStyleSheets)로 준 스타일도 그림에 산다 (#113)", k.red > 100, JSON.stringify({ red: k.red }));
     check("JS 에러 0건", errors.length === 0, errors);
@@ -2389,7 +2397,7 @@ function check(name, ok, detail) {
     await new Promise((r) => s11.listen(P(4320), r));
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.goto("http://localhost:" + P(4320) + "/a.html?foo=1#zz");
-    await page.waitForTimeout(900);
+    await booted(400);
     const seg = () => page.evaluate(() =>
       [...document.querySelectorAll("#ss-seg button")].map((b) => b.dataset.w + ":" + b.textContent));
     check("선언한 키가 툴바 버튼이 된다", (await seg()).length === 3, JSON.stringify(await seg()));
@@ -2412,12 +2420,12 @@ function check(name, ok, detail) {
     check("「페이지만 보기」가 ?screenspec=0 을 붙인다", /[?&]screenspec=0/.test(await opened()), await opened());
     check("원래 쿼리와 해시를 지킨다", (await opened()) === "/a.html?foo=1&screenspec=0#zz", await opened());
     await page.goto("http://localhost:" + P(4320) + "/a.html?screenspec=1&b=2");
-    await page.waitForTimeout(900);
+    await booted(400);
     check("이미 붙어 있던 screenspec 은 갈아끼운다 (둘이 되지 않는다)",
       (await opened()) === "/a.html?b=2&screenspec=0", await opened());
     /* 액자 모드는 «액자 안» 이 지금 보는 화면이다 — 바깥 주소가 달라도 안쪽을 쓴다 */
     await page.goto("http://localhost:" + P(4320) + "/frame.html?k=9");
-    await page.waitForTimeout(1200);
+    await booted(400);
     await page.evaluate(() => history.replaceState(null, "", "/outer-only"));
     check("액자 모드는 액자 «안» 주소를 쓴다", (await opened()).indexOf("/frame.html") === 0, await opened());
     /* 선언하지 않은 문서는 예전 그대로 — 기본을 늘리지 않는다 */
@@ -2521,7 +2529,7 @@ function check(name, ok, detail) {
   if (sec("[배율] 창에 안 들어가면 줄인다 (#104·#105)")) {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
-    await page.waitForTimeout(900);
+    await booted(400);
     const zs = () => page.evaluate(() => {
       const f = document.querySelector(".ss-frame"), sh = document.querySelector(".ss-sheet");
       const w = document.querySelector(".ss-proto-wrap"), st = document.querySelector(".ss-stage");
@@ -2672,7 +2680,7 @@ function check(name, ok, detail) {
     await new Promise((r) => sP.listen(P(4210), r));
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("http://localhost:" + P(4210) + "/app.html");
-    await page.waitForTimeout(900);
+    await booted(400);
 
     const box = () => page.evaluate(() => {
       const w = document.querySelector(".ss-proto-wrap"), st = document.querySelector(".ss-stage");
@@ -2748,7 +2756,7 @@ function check(name, ok, detail) {
     const warns = [];
     page.on("console", (c) => { if (c.type() === "warning") warns.push(c.text()); });
     await page.goto("http://localhost:" + P(4210) + "/auto.html");
-    await page.waitForTimeout(900);
+    await booted(400);
     check("걷어낸 baseViewport \"auto\" 는 mobile 로 떨어진다", (await box()).size === "360×800", await box());
     check("떨어질 때는 말을 남긴다 (조용히 깨지지 않는다)",
       warns.some((w) => w.indexOf("baseViewport") >= 0), warns);
@@ -2775,7 +2783,7 @@ function check(name, ok, detail) {
     const onInfo = (m) => { if (m.type() === "info") infos.push(m.text()); };
     page.on("console", onInfo);
     await page.goto("http://localhost:" + P(4197) + "/screenspec/examples/overlay-spa.html");
-    await page.waitForTimeout(1200);
+    await booted(400);
     await page.click("#ss-mDoc");
     await page.waitForTimeout(900);
     const fst = () => page.evaluate(() => {
@@ -2815,7 +2823,7 @@ function check(name, ok, detail) {
     const sO = mkSrv("overlay");
     await new Promise((r) => sO.listen(P(4196), r));
     await page.goto("http://localhost:" + P(4196) + "/screenspec/examples/overlay-spa.html");
-    await page.waitForTimeout(1000);
+    await booted(400);
     await page.evaluate(() => window.ScreenSpec.setScreen("S-09"));
     await page.waitForTimeout(700);
     const o = await page.evaluate(() => ({ cur: window.ScreenSpec.current(), path: location.pathname }));
@@ -3675,7 +3683,7 @@ function check(name, ok, detail) {
 
     /* --- wrap --- */
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/shop.html");
-    await page.waitForTimeout(1000);
+    await booted(400);
     await page.click("#ss-mDoc");
     await settle(400);
     check("내보내기: 툴바에 있다 (패널이 아니라 화면 전체에 작용하므로)", await page.evaluate(() => {
@@ -3732,7 +3740,7 @@ function check(name, ok, detail) {
 
     /* --- 바깥 주소 이미지 · 주석에 «--» 가 있는 프로토타입 --- */
     await page.goto("file:///" + REPO.replace(/\\/g, "/") + "/examples/demo.html");
-    await page.waitForTimeout(1000);
+    await booted(400);
     await page.click("#ss-mDoc");
     await settle(400);
     const rem = await shoot({});
@@ -3748,7 +3756,7 @@ function check(name, ok, detail) {
     });
     await new Promise((r) => srvOv.listen(P(4192), r));
     await page.goto("http://localhost:" + P(4192) + "/");
-    await page.waitForTimeout(1000);
+    await booted(400);
     await page.click("#ss-ovDoc");
     await settle(500);
     check("내보내기(overlay): 버튼이 모드 알약에 있다", await page.evaluate(() =>
@@ -5118,7 +5126,7 @@ function check(name, ok, detail) {
       return route.continue();
     });
     await page.goto("file:///" + out.replace(/\\/g, "/"));
-    await page.waitForTimeout(1000);
+    await booted(400);
     check("인라인: 바깥 요청이 막혀도 부팅", await page.evaluate(() => !!window.ScreenSpec));
     check("인라인: screenspec.js 를 바깥에서 받지 않음",
       !blocked.some((u) => /screenspec/i.test(u)), JSON.stringify(blocked.slice(0, 3)));
