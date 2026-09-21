@@ -1,0 +1,18 @@
+name: playwright
+description: 브라우저 준비 — 내려받기는 판별로 캐시한다. apt 의존성은 러너마다 새로 깐다 (#120)
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        npm init -y > /dev/null
+        npm i playwright > /dev/null
+        echo "PW_VER=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_ENV"
+    # 캐시 열쇠는 playwright 판 — 판이 바뀌면 새로 받는다
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ms-playwright-${{ runner.os }}-${{ env.PW_VER }}
+    # --with-deps 를 늘 붙이는 이유: 시스템 라이브러리는 캐시되지 않고, 빠지면 브라우저가 «안 뜬다»
+    - shell: bash
+      run: npx playwright install --with-deps chromium
