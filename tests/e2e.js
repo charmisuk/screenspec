@@ -1065,7 +1065,7 @@ function check(name, ok, detail) {
     await settle(300);
     await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
-    await page.waitForTimeout(1200);
+    await settle(1200);
     const cap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
     /* 앞에서 셀을 「고침」 으로 바꿔 놨다 — 옛 값이 아니라 지금 값으로 찾는다 */
     check("PNG 조립물에도 표로 들어간다 (#97)",
@@ -1265,7 +1265,7 @@ function check(name, ok, detail) {
     await settle(300);
     await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
-    await page.waitForTimeout(1200);
+    await settle(1200);
     const rcap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
     check("PNG 조립물에 위첨자 번호 + 「출처」 절이 실린다 (#100)",
       rcap.indexOf("ss-pr-ref") >= 0 && rcap.indexOf("ss-pr-srcs") >= 0 && rcap.indexOf("KPS 연동 정책") >= 0,
@@ -1314,7 +1314,7 @@ function check(name, ok, detail) {
     await settle(300);
     await page.check('.ss-prdlg [data-pr-c="table"]');
     await page.click('[data-pr="go"]');
-    await page.waitForTimeout(1200);
+    await settle(1200);
     const mcap = await page.evaluate(() => ((window.__caps || []).map((n) => n.innerHTML).join("")) || "");
     check("PNG 조립물에 그린 svg 가 들어간다 (#98)", mcap.indexOf('data-fake="1"') >= 0, mcap.slice(0, 160));
     await page.click('[data-pr="cancel"]');
@@ -1691,7 +1691,8 @@ function check(name, ok, detail) {
         rows: [...n.querySelectorAll(".ss-pr-table tbody .ss-pr-no")].map((m) => m.textContent.trim()),
         docAccent: getComputedStyle(document.documentElement).getPropertyValue("--ss-accent").trim() };
     });
-    const go = async () => { await page.click('[data-pr="go"]'); await page.waitForTimeout(2200); };
+    /* 굽기는 «하던 일» 로 세므로 다 되면 곧장 돌아온다 (#120). 상한은 전과 같다 */
+    const go = async () => { await page.click('[data-pr="go"]'); await settle(2200); };
 
     await page.click(".ss-prbtn");
     await settle(300);
@@ -1742,6 +1743,10 @@ function check(name, ok, detail) {
 
     /* ── 실제 캡처로 검증 ── */
     await go();
+    /* 「다 됐나」 를 시계가 아니라 결과로 본다 (#120) */
+    check("뽑기가 끝나야 돌아온다 — 대화상자에 파일 이름과 크기가 붙는다",
+      /\u300c.+\.png\u300d · \d+×\d+/.test(await page.textContent(".ss-prdlg .ss-cap-msg")),
+      await page.textContent(".ss-prdlg .ss-cap-msg"));
     let b = await baked();
     check("일시를 켜면 그림에 실제로 들어간다 (전에는 문구만 약속했다)",
       b.when === true && /^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(b.whenText), JSON.stringify(b));
@@ -1933,6 +1938,17 @@ function check(name, ok, detail) {
     await page.click('[data-pr="cancel"]');
     sM.close();
 
+    /* 마지막에 둔다 — 여기서 한 번 더 구우면 앞 검사가 보는 «마지막 조립 상자» 가 바뀐다.
+       공개 계약: busy() 는 «하고 있는 일» 의 수다 — 굽는 중도 든다 (#120).
+       위 검사만으로는 부족했다: 굽는 동안 DOM 이 흔들려 settle 이 어차피 완료 뒤에 돌아왔다(돌연변이 «놓침»).
+       느린 기계·큰 화면에서 조용한 틈이 80ms 를 넘으면 그때 일찍 돌아온다 — 그 틈을 이 신호가 막는다 */
+    check("굽는 동안 busy() 가 하나 는다 — settle 이 이 신호로 기다린다", await page.evaluate(async () => {
+      const before = window.ScreenSpec.busy();
+      const p = window.ScreenSpec.exportImage({ markers: true, head: false, table: false });
+      const during = window.ScreenSpec.busy();
+      await p;
+      return { before: before, during: during, ok: during > before };
+    }).then((r) => r.ok, () => false));
     check("JS 에러 0건", errors.length === 0, errors);
     await page.setViewportSize({ width: 1440, height: 900 });
   }
@@ -1996,7 +2012,7 @@ function check(name, ok, detail) {
     await settle(300);
     await page.check('[data-pr-c="table"]');
     await page.click('[data-pr="go"]');
-    await page.waitForTimeout(2200);
+    await settle(2200);
     check("내보내기 표에서도 섹션은 번호 없이 «섹션» 으로 선다", (await page.evaluate(() => {
       const n = window.__caps[window.__caps.length - 1];
       return [...n.querySelectorAll(".ss-pr-table tbody tr")].map((tr) =>

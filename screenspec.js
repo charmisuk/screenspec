@@ -107,6 +107,16 @@
   function ssDefer(fn, ms) { const id = setTimeout(() => { PEND.delete(id); fn(); }, ms); PEND.set(id, 1); return id; }
   function ssFrame(fn) { const id = requestAnimationFrame(() => { PEND.delete("r" + id); fn(); }); PEND.set("r" + id, 1); return id; }
   function ssClear(id) { if (id == null) return; if (PEND.delete(id)) clearTimeout(id); if (PEND.delete("r" + id)) cancelAnimationFrame(id); }
+  /* 오래 걸리는 «하던 일» 도 센다 (#120) — 그림 굽기처럼 타이머가 아닌 비동기 작업. 끝나면 스스로 빠진다.
+     시험이 「다 됐나」 를 고정 대기(2.2초) 대신 이걸로 잰다. 제품의 시간이 아니라 «진행 중» 이라 세는 것이 맞다 */
+  let ssJobN = 0;
+  function ssJob(p) {
+    const k = "j" + ++ssJobN;
+    PEND.set(k, 1);
+    const off = () => PEND.delete(k);
+    try { p.then(off, off); } catch (e) { off(); }
+    return p;
+  }
   const ssBusy = () => PEND.size;
   const SCREENS = (RAW.screens && RAW.screens.length)
     ? RAW.screens
@@ -3042,7 +3052,8 @@ ${HL_CSS}
         return { ok: true, url: url, w: cut.width, h: cut.height, remote: built.remote, ink: +(ink / seen * 100).toFixed(1) };
       } finally { built.restore(); }
     }
-    async function exportImage(opt) {
+    function exportImage(opt) { return ssJob(exportImageRun(opt)); } /* 굽는 동안은 «하던 일» 이다 (#120) */
+    async function exportImageRun(opt) {
       const r = await capPNG(opt);
       if (!r.ok) { edSay2(r.why); return r; }
       const base = ((current || {}).id || "screen") + "-" + new Date().toISOString().slice(0, 10);
