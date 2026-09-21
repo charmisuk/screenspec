@@ -482,6 +482,18 @@ check("LICENSE 존재", fs.existsSync(path.join(REPO, "LICENSE")));
     if (hits !== 1) dead.push(mm[1] + (hits === 0 ? "(자리 없음)" : "(여러 곳 " + hits + ")"));
   }
   check("돌연변이 추출기 동작 (≥40개)", cnt >= 40, cnt);
+  /* 문서가 말하는 «돌연변이 N개» = 실제 수 (#120). «40개 이상» 만 보면, 검사 하나와 그것을 지키는
+     돌연변이를 «같이» 지웠을 때 아무 신호가 안 난다 — 111 이 41 이 될 때까지 초록이다.
+     숫자를 문서에 적어 두면 빼는 커밋이 그 숫자도 고쳐야 하고, 그 변경이 diff 에 드러난다 */
+  const saidM = [];
+  for (const f of ["AGENTS.md", "README.md"]) {
+    const d = fs.readFileSync(path.join(REPO, f), "utf8");
+    [...d.matchAll(/돌연변이\s*(\d+)\s*개/g)].forEach((m) => saidM.push({ f: f, n: Number(m[1]) }));
+  }
+  const wrongM = saidM.filter((x) => x.n !== cnt);
+  check("문서의 «돌연변이 N개» = 실제 " + cnt + "개 (" + saidM.length + "곳)",
+    saidM.length > 0 && wrongM.length === 0,
+    wrongM.length ? JSON.stringify(wrongM) : "문서 어디에도 안 적혀 있다 — 적어 두고 이 검사로 지킨다");
   check("돌연변이의 심을 자리가 screenspec.js 에 꼭 한 곳씩 있다", dead.length === 0,
     JSON.stringify(dead) + " — 코드를 고쳤으면 scripts/mutate.js 의 find 도 같이 고쳐라 (검사한 개수 " + cnt + ")");
   /* 음성 테스트 — 없는 자리를 진짜로 잡는지 */
