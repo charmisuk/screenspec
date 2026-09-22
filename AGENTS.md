@@ -18,7 +18,7 @@
 | `tests/e2e.js` | Playwright 브라우저 회귀 |
 | `tests/smoke.js` | 예제 전수 클릭 스모크 (아무거나 눌러도 안 죽는가) |
 | `scripts/release.js` | 릴리스 — 태그·푸시·퍼지·실물 확인 (문서가 미출시 태그를 가리키는지 검사) |
-| `.github/workflows/release.yml` | 릴리스를 Actions 버튼으로 (같은 검사를 release.js 와 공유) |
+| `.github/workflows/release.yml` | 릴리스를 Actions 버튼으로. **검사는 안 들고 있다** — 이 커밋의 ci 가 초록인지만 보고 넘어간다 (#122) |
 | `scripts/backlog-sync.js` | GitHub 이슈 ↔ Notion 보드 싱크 검사 (로컬 전용) |
 | `_private/` | **저장소 밖**(gitignore). 사이클 기록·제품 계획 등 내부 문서 — 아래 「저장소에 두지 않는 것」 |
 
@@ -239,7 +239,9 @@ node scripts/backlog-sync.js --apply   # 노션 쪽을 맞추고 실행 후 자�
 
 **A. Actions 버튼** (터미널 없이 · 태그 푸시 권한이 없는 환경에서도)
 Actions 탭 → **release** → *Run workflow* → 버전(`vX.Y.Z`) 입력.
-버전 정합 → lint·e2e·smoke → 태그+Release 발행 → 퍼지 → 실물 검증까지 한 번에 돈다.
+버전 정합 → **이 커밋의 ci 가 초록인가** → 태그+Release 발행 → 퍼지 → 실물 검증까지 한 번에 돈다.
+
+**릴리스가 검사를 다시 들고 있지 않는 이유 (#122):** 들고 있으면 ci 에 새 게이트가 붙을 때 따라오지 못한다. 실제로 `--grid`·돌연변이(#112)가 ci 에만 붙고 release 에는 안 붙어, 버튼 경로가 «CI 라면 막았을 것» 을 통과시킬 수 있는 상태로 판을 여럿 지났다. 게이트는 한 곳(ci)에만 산다. ci 가 아직 돌고 있으면 최대 12분 기다리고, 빨간 채면 멈춘다.
 
 **B. 로컬**
 
