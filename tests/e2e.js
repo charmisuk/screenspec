@@ -2375,6 +2375,99 @@ function check(name, ok, detail) {
     s17.close();
   }
 
+  /* ============ 문서의 껍데기 (#123) ============
+     실사용(2026-09-28, frame · Tailwind): 그림에서 번호·영역 상자가 아래로 갈수록 대상보다 밀렸다 — 제목 하나당 −4px.
+     그림 틀(SVG) 안의 뿌리는 svg 라 html 도 body 도 없다. 앱이 html 에 건 줄 높이(preflight 1.5)를 물려받던 글자가
+     기본값으로 짧게 그려지고, 번호·상자는 화면 좌표 그대로 찍혀 둘이 벌어졌다. wrap 은 body 에 건 규칙까지 빠졌다.
+     재는 것: 그림 속 영역 상자(빨강) 안에 대상(노랑)이 딱 맞는가 — 상자 선(2px) 바로 안쪽에서 시작해 안쪽에서 끝난다.
+     픽스처가 둘인 이유 — 고침이 기대는 장치마다 그것을 끄면 빨개지는 자리가 있어야 한다:
+       뿌리 — html 의 줄 높이 · 비율 글자 크기(62.5%) · rem : html 껍데기 · 뿌리 글자 크기 박기 · svg 의 rem
+       본문 — body 의 줄 높이 · 글자 크기 · 여백 · 배경       : body 껍데기(wrap) · 껍데기의 상자 끄기 */
+  if (sec("[그림] 문서의 껍데기 — html·body 규칙이 그림에 산다 (#123)")) {
+    const CSS23 = {
+      root: `html{line-height:1.5;font-size:62.5%}
+        body{margin:0;font-family:sans-serif;background:#fff}
+        .card{padding:1.2rem 1.6rem}h2{font-size:1.35rem;font-weight:700;margin:0 0 .8rem}p{margin:0 0 .8rem}
+        .t{height:4rem;background:rgb(255,200,0)}`,
+      body: `body{margin:0;padding:24px;font-family:sans-serif;font-size:20px;line-height:2;background:rgb(0,0,255)}
+        .card{padding:12px 16px}p{margin:0}.t{height:40px;background:rgb(255,200,0)}`,
+    };
+    const BODY23 = { /* 제목은 줄 높이를 따로 안 준다 — 제기자의 묶음 제목(text-[13.5px]) 그대로 */
+      root: "<h2>제목 하나</h2><p>물려받는 문단</p><h2>제목 둘</h2><p>물려받는 문단</p><h2>제목 셋</h2>",
+      body: "<p>본문에서 물려받는 줄</p><p>본문에서 물려받는 줄</p><p>본문에서 물려받는 줄</p>",
+    };
+    /* wrap 의 body 에는 XML 에 못 쓰는 이름의 속성(Alpine)을 단다 — 껍데기가 그것까지 옮기면 그림 틀이 문서를 통째로 거부한다.
+       frame·overlay 는 body 를 통째로 떠서 원래부터 깨진다 (#124) */
+    const APP23 = (fx, mode) => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>${CSS23[fx]}</style></head><body${
+      fx === "body" && mode === "wrap" ? ' x-data @keydown.escape="a=1"' : ""}>
+      <div class="card">${BODY23[fx]}<div class="t" data-spec="1"></div></div>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-123",name:"껍데기",specs:[{n:1,target:"1",title:"가",defs:[{t:"a"}]}]}]};
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s23 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      const m = req.url.match(/\/(root|body)-(frame|overlay|wrap)\.html/) || [];
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(APP23(m[1] || "root", m[2] || "wrap"));
+    });
+    await new Promise((r) => s23.listen(P(4390), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    /* 조립 상자가 붙는 순간 영역 상자의 자리를 재고, 구운 PNG 의 그 세로줄에서 노랑이 어디서 시작·끝나는지 본다 */
+    const bake = (o) => page.evaluate(async (o) => {
+      let a = null;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
+        if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+        const b = n.getBoundingClientRect(), e = n.querySelector(".ss-cap-area"), r = e && e.getBoundingClientRect();
+        a = r ? { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height } : null;
+      } });
+      mo.observe(document.body, { childList: true });
+      const r = await window.ScreenSpec.exportImage(Object.assign({ markers: true, areas: true, head: false, table: false, accent: "#E5484D" }, o));
+      mo.disconnect();
+      if (!r || !r.url) return { err: JSON.stringify(r) };
+      const img = new Image();
+      await new Promise((res) => { img.onload = res; img.src = r.url; });
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, img.width, img.height).data;
+      let blue = 0, red = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 255) blue++;
+        else if (d[i] > 180 && d[i + 1] < 130 && d[i + 2] < 140) red++;
+      }
+      if (!a) return { blue, red };
+      const cx = Math.round((a.x + a.w / 2) * 2); /* 그림은 2배 */
+      let first = -1, last = -1;
+      for (let y = 0; y < img.height; y++) {
+        const i = (y * img.width + cx) * 4;
+        if (d[i] === 255 && d[i + 1] === 200 && d[i + 2] === 0) { if (first < 0) first = y; last = y; }
+      }
+      /* 0 이 맞음 · 양수 = 내용이 상자보다 위로 밀렸다 · 음수 = 아래로 */
+      return { blue, red, top: +(a.y + 2 - first / 2).toFixed(1), bot: +(a.y + a.h - 2 - (last + 1) / 2).toFixed(1) };
+    }, o);
+    const fits = (k) => !!k && !k.err && Math.abs(k.top) <= 1 && Math.abs(k.bot) <= 1;
+    for (const mode of ["frame", "overlay", "wrap"]) {
+      const tag = "[" + mode + "] ";
+      for (const fx of ["root", "body"]) {
+        await page.goto("http://localhost:" + P(4390) + "/" + fx + "-" + mode + ".html");
+        await booted(500);
+        await page.click(mode === "overlay" ? "#ss-ovDoc" : "#ss-mDoc");
+        await settle(600);
+        const k = await bake({});
+        if (fx === "root") {
+          check(tag + "html 의 줄 높이·글자 크기·rem 이 그림에 산다 — 대상이 영역 상자에 딱 맞다 (#123)", fits(k), JSON.stringify(k));
+        } else {
+          check(tag + "body 의 줄 높이·글자 크기가 그림에 산다 — 대상이 영역 상자에 딱 맞다 (#123)", fits(k), JSON.stringify(k));
+          check(tag + "본문의 여백·배경이 그림으로 새지 않는다 — 껍데기는 물려주기만 한다", k.blue === 0, String(k.blue));
+        }
+      }
+    }
+    /* 「프로토타입」 모드에서 뽑아도 번호가 든다 — 껍데기가 뷰어 표시(ss-mode-proto)까지 옮기면 번호를 숨긴다 */
+    await page.goto("http://localhost:" + P(4390) + "/body-wrap.html");
+    await booted(500);
+    const kp = await bake({ areas: false });
+    check("[wrap] 「프로토타입」 모드에서 뽑아도 그림에 번호가 있다 — 뷰어 표시는 껍데기로 안 옮긴다", kp.red > 300, JSON.stringify(kp));
+    check("JS 에러 0건", errors.length === 0, errors);
+    s23.close();
+  }
+
   /* ============ 모드를 바꿔도 앱 상태가 남는다 (#121) ============
      실사용(2026-09-21): 프로토타입에서 패널을 열고 줄을 고른 뒤 「화면정의서」 로 넘어가면 그 상태가 사라졌다.
      모드마다 «다른 상자» 를 두고 프레임을 옮겼기 때문이다 — 액자(iframe)는 DOM 에서 옮기는 순간 다시 로드되고,

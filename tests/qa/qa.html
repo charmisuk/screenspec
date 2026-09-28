@@ -6,7 +6,9 @@
 <style>
   :root{--line:#E5E3DF;--line2:#D8D5D0;--ink:#1A1A19;--ink2:#5E5B55;--ink3:#8B8780;--accent:#2952E3;--soft:#F4F3F1}
   *{box-sizing:border-box}
-  body{margin:0;font:14px/1.6 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:#fff}
+  /* 줄 높이는 html 에 건다 — 제보된 앱(Tailwind)과 같은 자리라, 그림이 그것을 물려받는지 여기서 보인다 (#123) */
+  html{line-height:1.6}
+  body{margin:0;font-size:14px;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:#fff}
   .scr{padding:26px 22px 34px}
   .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.4px;color:var(--accent);
     background:#EEF2FE;border-radius:99px;padding:3px 9px;margin-bottom:10px}
@@ -200,6 +202,7 @@
     <select id="q121s"><option>기본</option><option>고른 값</option></select>
     <span class="q121sc" id="q121sc"><i>1</i><i>2</i><i>3</i><i>4</i></span>
   </span></div>
+  <div class="card" data-spec="177"><b>맨 아래 카드</b><span>번호·상자가 위쪽 카드만큼 여기에도 딱 맞아야 한다</span></div>
 </section>
 <script>
   /* QA-17 (#116) — React 처럼 열 때 끼워 넣는다. 닫으면 뺀다 */
@@ -684,6 +687,15 @@ window.SCREENSPEC = {
           { t: "예전에는 모드를 바꿀 때 액자를 옮겨서 앱이 처음부터 다시 로드됐다 (#121)", kind: "why" }
         ]},
         { t: "마우스를 올린 상태(:hover)는 사람이 뽑을 수 없다 — 내보내기를 누르는 순간 마우스가 앱에서 떠난다. 자동화(Playwright)가 부르면 담긴다", kind: "why" }
+      ]},
+      { n: 7, target: "177", anno: "box", title: "아래로 가도 번호·상자가 제자리", defs: [
+        { t: "「내보내기」 로 뽑는다 (영역 상자 켠 채 · 기본)" },
+        { t: "확인 : 맨 아래 이 카드에도 상자가 딱 맞는다 — 위쪽 카드만 맞고 아래로 갈수록 밀리지 않는다", c: [
+          { t: "그림 틀 안에는 html·body 가 없어서, 앱이 거기에 건 줄 높이가 빠진 채 글자가 짧게 그려졌다. 번호·상자는 화면 좌표 그대로라 아래로 갈수록 벌어졌다 (#123)", kind: "why" }
+        ]},
+        { t: "주소 끝에 ?mode=frame 을 붙여 다시 열고 → 정의서 모드 → 뽑는다", c: [
+          { t: "확인 : 액자 모드에서도 같다 — 이 페이지는 줄 높이를 html 에 건다 (제보된 앱과 같은 자리)" }
+        ]}
       ]}
     ]},
     { id: "QA-16-SECTION", name: "번호 없는 섹션", path: ["QA", "번호 없는 섹션"], specs: [

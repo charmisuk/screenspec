@@ -2741,6 +2741,36 @@ ${HL_CSS}
       ".ss-toc,.ss-tip,.ss-pvbar,.ss-nav-toast,.ss-cap";
     const CAP_MARKS = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno";
 
+    /* 문서의 껍데기 (#123) — 그림 틀(SVG) 안의 뿌리는 svg 다. html 도 body 도 없다.
+       그래서 앱이 html·body 에 건 규칙(Tailwind 의 줄 높이 1.5 · 글꼴 · 다크 모드 클래스)이 그림에서 걸릴 곳이 없었고,
+       물려받던 글자가 기본값으로 그려져 아래로 갈수록 번호·상자와 벌어졌다 (실사용 2026-09-28: 제목 하나당 −4px).
+       frame·overlay 는 body 를 뜨므로 html 이, wrap 은 시트만 옮기므로 둘 다 빠졌다.
+       속성만 가진 빈 껍데기를 두르면 앱의 규칙이 제 손으로 걸린다 — 값을 베끼지 않는다 (#121 과 같은 원칙).
+       껍데기는 «물려주기» 만 한다: 상자 모양(여백·크기·넘침·배경)은 끄고, 뷰어 표시(ss-*)는 옮기지 않는다 —
+       옮기면 「프로토타입」 모드의 «번호 숨김» 이 그림에까지 걸린다 */
+    const CAP_SHELL = { display: "block", position: "static", margin: "0", padding: "0", border: "0 none",
+      width: "auto", height: "auto", "min-width": "0", "min-height": "0", "max-width": "none", "max-height": "none",
+      overflow: "visible", background: "none" };
+    function capShell(el, inner) {
+      const sh = document.importNode(el, false);
+      /* XML 에 못 쓰는 이름(Alpine 의 @click · :class)은 옮기지 않는다 — 한 곳만 있어도 그림 틀이 문서를 통째로 거부한다.
+         껍데기가 그 문을 새로 열면 안 된다 (사본 전체의 같은 문제는 #124) */
+      [].slice.call(sh.attributes).forEach((a) => { if (!/^[A-Za-z_][\w.-]*$/.test(a.name)) sh.removeAttribute(a.name); });
+      const cls = String(el.getAttribute("class") || "").split(/\s+/).filter((c) => c && c.indexOf("ss-") !== 0).join(" ");
+      if (cls) sh.setAttribute("class", cls); else sh.removeAttribute("class");
+      Object.keys(CAP_SHELL).forEach((k) => sh.style.setProperty(k, CAP_SHELL[k], "important"));
+      sh.appendChild(inner);
+      return sh;
+    }
+    /* 뿌리의 글자 크기만은 픽셀로 박는다 — 뿌리의 %·em 은 초기값(16px)에 걸리는데, 껍데기는 부모에 걸려 한 번 더 곱해진다.
+       rem 은 그림 틀의 뿌리(svg)를 본다 — 같은 값을 거기에도 준다 (capPNG) */
+    const capRootPx = (doc) => (doc.defaultView || window).getComputedStyle(doc.documentElement).fontSize;
+    function capRoot(doc, inner) {
+      const sh = capShell(doc.documentElement, inner);
+      sh.style.setProperty("font-size", capRootPx(doc), "important");
+      return sh;
+    }
+
     /* 주요 항목만 (#106) — 번호는 «문서 전체 기준» 을 지킨다. 1·4·7 처럼 건너뛰어 박히더라도
        상위기획과 상세기획이 같은 번호로 같은 항목을 가리키는 편이 대조에 낫다.
        다시 매기면 두 문서가 어긋나고, 그때는 번호로 이야기할 수가 없다 */
@@ -2980,7 +3010,7 @@ ${HL_CSS}
         if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => { layersHid.push([n, n.style.display]); n.style.display = "none"; });
         else if (opt.major) capMajorStrip(src.node);
         if (areas) areaLayer = capAreaDraw(src.node, areas); /* 살아 있는 층에 잠깐 — 되돌릴 때 걷는다 */
-        body.appendChild(src.node);
+        body.appendChild(capRoot(document, capShell(document.body, src.node))); /* 그림 틀에는 html·body 가 없다 (#123) */
         live.forEach((x) => { freeze(x.el)(x); applyState(x.el, x.st); }); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
         target = src.node;
         restoreSrc = function () {
@@ -3008,7 +3038,7 @@ ${HL_CSS}
         target.style.minHeight = src.h + "px";
         target.style.background = "#fff";
         body.style.width = src.w + "px";
-        body.appendChild(target);
+        body.appendChild(capRoot(src.node.ownerDocument, target)); /* body 는 떴지만 html 은 없다 (#123) */
       }
 
       if (src.kind !== "move") capNeutralize(target); /* 사본 쪽 — 복제 뒤라야 요소가 있다 */
@@ -3053,6 +3083,7 @@ ${HL_CSS}
 
       return {
         box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
+        rem: capRootPx(src.kind === "move" ? document : src.node.ownerDocument), /* 그림 틀의 뿌리(svg)에 줄 값 (#123) */
         restore: function () {
           if (areaLayer) areaLayer.remove();
           stUndo.reverse().forEach((f) => f());
@@ -3096,7 +3127,9 @@ ${HL_CSS}
         holder.appendChild(clone);
         /* CSS 안의 < 와 & 도 XML 을 깨뜨리므로 CDATA 로 감싼다 */
         const css = capCSS(document) + built.extraCSS;
-        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + hgt + '">' +
+        /* rem 은 «문서의 뿌리» 의 글자 크기다 — 그림 틀에서 뿌리는 svg 라 주지 않으면 16px 로 풀린다 (#123) */
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + hgt + '"' +
+          (built.rem ? ' style="font-size:' + built.rem + '"' : "") + ">" +
           "<foreignObject width='100%' height='100%'><style><![CDATA[" + css.split("]]>").join("]]&gt;") + "]]></style>" +
           new XMLSerializer().serializeToString(holder) + "</foreignObject></svg>";
         const img = new Image();
