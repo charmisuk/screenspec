@@ -2477,6 +2477,59 @@ function check(name, ok, detail) {
     s23.close();
   }
 
+  /* ============ XML 에 못 쓰는 속성 이름 (#124) ============
+     Alpine·Vue 처럼 HTML 에 바로 동작을 적는 앱(@click · :class · x-on:click)은 그림이 아예 안 나왔다.
+     그림 틀(SVG)은 XML 이라 그런 이름을 한 곳만 만나도 문서를 통째로 거부한다. 사본에서 그 속성만 뺀다.
+     재는 것: 세 모드 모두 뽑히는가 · 빼면 안 되는 것(svg 의 xlink:href)은 남는가 · <template> 속(x-for)도 거르는가 ·
+     뺀 것은 사본에서만인가 (wrap 은 살아 있는 시트를 옮겨 간다) */
+  if (sec("[그림] XML 에 못 쓰는 속성 이름 — Alpine 앱도 뽑힌다 (#124)")) {
+    const APP24 = (mode) => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif;background:#fff}.t{height:40px;margin:20px;background:rgb(255,200,0)}
+      </style></head><body x-data @keydown.escape="a=1">
+      <div class="t" data-spec="1" @click="open = !open" :class="{ on: open }" x-on:mouseenter="h=1"></div>
+      <ul><template x-for="i in [1, 2]"><li @click="n = i" x-text="i"></li></template></ul>
+      <svg width="40" height="40"><defs><rect id="sq24" width="40" height="40" fill="rgb(0,0,255)"/></defs><use xlink:href="#sq24"/></svg>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-124",name:"이름",specs:[{n:1,target:"1",title:"가",defs:[{t:"a"}]}]}]};
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s24 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      const m = (req.url.match(/\/(frame|overlay|wrap)\.html/) || [])[1] || "wrap";
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(APP24(m));
+    });
+    await new Promise((r) => s24.listen(P(4400), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const mode of ["frame", "overlay", "wrap"]) {
+      await page.goto("http://localhost:" + P(4400) + "/" + mode + ".html");
+      await booted(500);
+      await page.click(mode === "overlay" ? "#ss-ovDoc" : "#ss-mDoc");
+      await settle(600);
+      const k = await page.evaluate(async (m) => {
+        const r = await window.ScreenSpec.exportImage({ head: false, table: false });
+        const d0 = m === "frame" ? document.querySelector("iframe[data-ss-frame]").contentDocument : document;
+        const t = d0.querySelector(".t");
+        const live = !!t && t.hasAttribute("@click") && t.hasAttribute(":class") && d0.body.hasAttribute("@keydown.escape");
+        if (!r || !r.url) return { ok: false, why: (r && r.why) || "", live };
+        const img = new Image();
+        await new Promise((res) => { img.onload = res; img.src = r.url; });
+        const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+        const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+        const d = x.getImageData(0, 0, img.width, img.height).data;
+        let yellow = 0, blue = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] === 255 && d[i + 1] === 200 && d[i + 2] === 0) yellow++;
+          else if (d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 255) blue++;
+        }
+        return { ok: true, yellow, blue, live };
+      }, mode);
+      const tag = "[" + mode + "] ";
+      check(tag + "이름에 @·: 가 든 속성이 있어도 그림이 나온다 — <template> 속까지 (#124)", k.ok && k.yellow > 500, JSON.stringify(k));
+      check(tag + "svg 의 xlink:href 는 남는다 — 이름공간이 있는 속성은 제대로 적힌다", k.blue > 500, JSON.stringify(k));
+      check(tag + "뺀 것은 사본에서만 — 앱의 속성은 그대로다", k.live === true, JSON.stringify(k));
+    }
+    check("JS 에러 0건", errors.length === 0, errors);
+    s24.close();
+  }
+
   /* ============ 모드를 바꿔도 앱 상태가 남는다 (#121) ============
      실사용(2026-09-21): 프로토타입에서 패널을 열고 줄을 고른 뒤 「화면정의서」 로 넘어가면 그 상태가 사라졌다.
      모드마다 «다른 상자» 를 두고 프레임을 옮겼기 때문이다 — 액자(iframe)는 DOM 에서 옮기는 순간 다시 로드되고,

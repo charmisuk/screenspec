@@ -2753,9 +2753,6 @@ ${HL_CSS}
       overflow: "visible", background: "none" };
     function capShell(el) {
       const sh = document.importNode(el, false);
-      /* XML 에 못 쓰는 이름(Alpine 의 @click · :class)은 옮기지 않는다 — 한 곳만 있어도 그림 틀이 문서를 통째로 거부한다.
-         껍데기가 그 문을 새로 열면 안 된다 (사본 전체의 같은 문제는 #124) */
-      [].slice.call(sh.attributes).forEach((a) => { if (!/^[A-Za-z_][\w.-]*$/.test(a.name)) sh.removeAttribute(a.name); });
       const cls = String(el.getAttribute("class") || "").split(/\s+/).filter((c) => c && c.indexOf("ss-") !== 0).join(" ");
       if (cls) sh.setAttribute("class", cls); else sh.removeAttribute("class");
       Object.keys(CAP_SHELL).forEach((k) => sh.style.setProperty(k, CAP_SHELL[k], "important"));
@@ -2778,6 +2775,20 @@ ${HL_CSS}
       let hold = cb.appendChild(capRoot(built.doc));                 /* html — 세 모드 다 */
       if (built.body) hold = hold.appendChild(capShell(built.body)); /* body — wrap 만 (나머지는 body 를 떴다) */
       hold.appendChild(content);
+    }
+    /* XML 에 못 쓰는 이름의 속성은 사본에서 뺀다 (#124) — Alpine·Vue 의 @click · :class · x-on:click.
+       HTML 은 받아 주지만 그림 틀(XML)은 한 곳만 만나도 문서를 통째로 거부해, 그런 앱은 그림이 아예 안 나왔다.
+       동작을 적는 속성이지 모양을 정하지 않는다 — 빼도 그림은 같다. 이름공간이 있는 속성(svg 의 xlink:href)은
+       제대로 적히므로 둔다. <template> 속(x-for)도 그대로 적히는데 querySelectorAll 은 거기에 안 들어간다 */
+    const XML_NAME = /^[A-Za-z_][\w.-]*$/;
+    function capXmlNames(root) {
+      root.querySelectorAll("*").forEach((el) => {
+        for (let i = el.attributes.length - 1; i >= 0; i--) {
+          const a = el.attributes[i];
+          if (!a.namespaceURI && !XML_NAME.test(a.name)) el.removeAttributeNode(a);
+        }
+        if (el.tagName === "TEMPLATE" && el.content) capXmlNames(el.content);
+      });
     }
 
     /* 주요 항목만 (#106) — 번호는 «문서 전체 기준» 을 지킨다. 1·4·7 처럼 건너뛰어 박히더라도
@@ -3121,6 +3132,7 @@ ${HL_CSS}
         const clone = built.box.cloneNode(true);
         capCanvasSwap(clone); /* 캔버스 → 같은 그림의 div (#121). 사본에서만 — 살아 있는 앱은 안 건드린다 */
         capWrap(clone, built); /* 문서의 껍데기 — 그림에만 (#123·#125) */
+        capXmlNames(clone); /* XML 에 못 쓰는 이름의 속성 — 껍데기까지 (#124) */
         /* 조립 상자는 화면 밖(-99999px)에 숨겨 두는데, 그 위치가 SVG 안까지 따라가면
            그림이 캔버스 밖에 그려져 «백지» 가 나온다. 사본에서는 무력화한다 */
         clone.style.position = "static";

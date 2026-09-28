@@ -204,6 +204,9 @@
   </span></div>
   <div class="card" data-spec="177"><b>맨 아래 카드</b><span>번호·상자가 위쪽 카드만큼 여기에도 딱 맞아야 한다</span></div>
   <div class="card" data-spec="178"><b>앱의 초기화 횟수</b><span id="q125">1</span></div>
+  <!-- QA-17 (#124) — Alpine 처럼 동작을 속성에 바로 적었다. 이 이름들은 XML 에 못 쓴다 -->
+  <div class="card" data-spec="179" @click="open = !open" :class="{ on: open }"><b>Alpine 처럼 적은 카드</b>
+    <span><template x-for="i in [1, 2]"><i @click="n = i" x-text="i"></i></template>@click · :class · x-for</span></div>
 </section>
 <script>
   /* QA-17 (#125) — 문서를 지켜보는 도구(Alpine)는 «새로 붙은» 요소의 x-init 을 새 앱으로 알고 돌린다. 그 도구를 흉내 내어 센다 */
@@ -714,6 +717,12 @@ window.SCREENSPEC = {
         { t: "「내보내기」 로 두 번 뽑는다" },
         { t: "확인 : 이 카드의 숫자가 1 그대로다", c: [
           { t: "이 페이지는 Alpine 처럼 body 에 초기화(x-init)를 달고, 새로 붙은 초기화를 센다. v0.37.2 는 그림용 껍데기를 살아 있는 화면에 잠깐 붙여서, 뽑을 때마다 앱의 초기화가 한 번 더 돌았다 (#125)", kind: "why" }
+        ]}
+      ]},
+      { n: 9, target: "179", anno: "box", title: "Alpine 처럼 적은 앱도 뽑힌다", defs: [
+        { t: "「내보내기」 로 뽑는다" },
+        { t: "확인 : 그림이 나온다 — 「그림으로 바꾸지 못했습니다」 가 아니다", c: [
+          { t: "이 카드는 @click · :class 와 <template> 속 @click 을 달았다. 그림 틀(XML)은 그런 이름을 한 곳만 만나도 문서를 통째로 거부해, 이런 앱은 그림이 아예 안 나왔다. 이제 사본에서만 뺀다 — 동작용 속성이라 그림은 같다 (#124)", kind: "why" }
         ]}
       ]}
     ]},
