@@ -2396,10 +2396,16 @@ function check(name, ok, detail) {
       root: "<h2>제목 하나</h2><p>물려받는 문단</p><h2>제목 둘</h2><p>물려받는 문단</p><h2>제목 셋</h2>",
       body: "<p>본문에서 물려받는 줄</p><p>본문에서 물려받는 줄</p><p>본문에서 물려받는 줄</p>",
     };
-    /* wrap 의 body 에는 XML 에 못 쓰는 이름의 속성(Alpine)을 단다 — 껍데기가 그것까지 옮기면 그림 틀이 문서를 통째로 거부한다.
-       frame·overlay 는 body 를 통째로 떠서 원래부터 깨진다 (#124) */
+    /* wrap 의 body 에는 Alpine 처럼 속성을 단다.
+       ① XML 에 못 쓰는 이름(@keydown) — 껍데기가 그것까지 옮기면 그림 틀이 문서를 통째로 거부한다.
+          frame·overlay 는 body 를 통째로 떠서 원래부터 깨진다 (#124)
+       ② x-init — 문서를 지켜보는 도구는 «새로 붙은» 요소를 새 앱으로 알고 초기화한다. 그 도구를 흉내 내어 센다.
+          껍데기를 살아 있는 조립 상자에 붙이면 옮겨 간 x-init 이 한 번 더 걸린다 (#125) */
     const APP23 = (fx, mode) => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>${CSS23[fx]}</style></head><body${
-      fx === "body" && mode === "wrap" ? ' x-data @keydown.escape="a=1"' : ""}>
+      fx === "body" && mode === "wrap" ? ' x-data x-init="1" @keydown.escape="a=1"' : ""}>
+      <script>window.__inits = 0; new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+        if (n.nodeType === 1) window.__inits += (n.matches("[x-init]") ? 1 : 0) + n.querySelectorAll("[x-init]").length;
+      }))).observe(document, { childList: true, subtree: true });<\/script>
       <div class="card">${BODY23[fx]}<div class="t" data-spec="1"></div></div>
       <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-123",name:"껍데기",specs:[{n:1,target:"1",title:"가",defs:[{t:"a"}]}]}]};
       <\/script><script src="/screenspec.js"><\/script></body></html>`;
@@ -2456,6 +2462,9 @@ function check(name, ok, detail) {
         } else {
           check(tag + "body 의 줄 높이·글자 크기가 그림에 산다 — 대상이 영역 상자에 딱 맞다 (#123)", fits(k), JSON.stringify(k));
           check(tag + "본문의 여백·배경이 그림으로 새지 않는다 — 껍데기는 물려주기만 한다", k.blue === 0, String(k.blue));
+          /* overlay·frame 은 사본 자체를 살아 있는 문서에 붙여 원래부터 한 번 더 걸린다 — 별개다 (#126) */
+          if (mode === "wrap") check(tag + "뽑아도 앱의 초기화가 다시 돌지 않는다 — 껍데기는 그림에만 두른다 (#125)",
+            (await page.evaluate(() => window.__inits)) === 0, String(await page.evaluate(() => window.__inits)));
         }
       }
     }

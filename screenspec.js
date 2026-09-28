@@ -2751,7 +2751,7 @@ ${HL_CSS}
     const CAP_SHELL = { display: "block", position: "static", margin: "0", padding: "0", border: "0 none",
       width: "auto", height: "auto", "min-width": "0", "min-height": "0", "max-width": "none", "max-height": "none",
       overflow: "visible", background: "none" };
-    function capShell(el, inner) {
+    function capShell(el) {
       const sh = document.importNode(el, false);
       /* XML 에 못 쓰는 이름(Alpine 의 @click · :class)은 옮기지 않는다 — 한 곳만 있어도 그림 틀이 문서를 통째로 거부한다.
          껍데기가 그 문을 새로 열면 안 된다 (사본 전체의 같은 문제는 #124) */
@@ -2759,16 +2759,25 @@ ${HL_CSS}
       const cls = String(el.getAttribute("class") || "").split(/\s+/).filter((c) => c && c.indexOf("ss-") !== 0).join(" ");
       if (cls) sh.setAttribute("class", cls); else sh.removeAttribute("class");
       Object.keys(CAP_SHELL).forEach((k) => sh.style.setProperty(k, CAP_SHELL[k], "important"));
-      sh.appendChild(inner);
       return sh;
     }
     /* 뿌리의 글자 크기만은 픽셀로 박는다 — 뿌리의 %·em 은 초기값(16px)에 걸리는데, 껍데기는 부모에 걸려 한 번 더 곱해진다.
        rem 은 그림 틀의 뿌리(svg)를 본다 — 같은 값을 거기에도 준다 (capPNG) */
     const capRootPx = (doc) => (doc.defaultView || window).getComputedStyle(doc.documentElement).fontSize;
-    function capRoot(doc, inner) {
-      const sh = capShell(doc.documentElement, inner);
+    function capRoot(doc) {
+      const sh = capShell(doc.documentElement);
       sh.style.setProperty("font-size", capRootPx(doc), "important");
       return sh;
+    }
+    /* 껍데기는 «그림에만» 두른다 (#125) — 살아 있는 조립 상자에 붙였더니, 문서를 지켜보는 도구(Alpine)가
+       body 껍데기로 옮겨 온 x-data·x-init 을 새 앱으로 알고 초기화를 한 번 더 돌렸다 (v0.37.2).
+       그림용 사본은 문서에 안 붙으므로 아무도 못 본다. 조립 상자는 원래 문서 안에 있어 규칙을 이미 물려받는다 */
+    function capWrap(clone, built) {
+      const cb = clone.querySelector(".ss-cap-body"), content = cb && cb.firstElementChild;
+      if (!content) return;
+      let hold = cb.appendChild(capRoot(built.doc));                 /* html — 세 모드 다 */
+      if (built.body) hold = hold.appendChild(capShell(built.body)); /* body — wrap 만 (나머지는 body 를 떴다) */
+      hold.appendChild(content);
     }
 
     /* 주요 항목만 (#106) — 번호는 «문서 전체 기준» 을 지킨다. 1·4·7 처럼 건너뛰어 박히더라도
@@ -3010,7 +3019,7 @@ ${HL_CSS}
         if (opt.markers === false) src.node.querySelectorAll(CAP_MARKS).forEach((n) => { layersHid.push([n, n.style.display]); n.style.display = "none"; });
         else if (opt.major) capMajorStrip(src.node);
         if (areas) areaLayer = capAreaDraw(src.node, areas); /* 살아 있는 층에 잠깐 — 되돌릴 때 걷는다 */
-        body.appendChild(capRoot(document, capShell(document.body, src.node))); /* 그림 틀에는 html·body 가 없다 (#123) */
+        body.appendChild(src.node);
         live.forEach((x) => { freeze(x.el)(x); applyState(x.el, x.st); }); /* 옮긴 «직후» — 다음 스타일 계산이 애니메이션을 다시 걸기 전에 */
         target = src.node;
         restoreSrc = function () {
@@ -3038,7 +3047,7 @@ ${HL_CSS}
         target.style.minHeight = src.h + "px";
         target.style.background = "#fff";
         body.style.width = src.w + "px";
-        body.appendChild(capRoot(src.node.ownerDocument, target)); /* body 는 떴지만 html 은 없다 (#123) */
+        body.appendChild(target);
       }
 
       if (src.kind !== "move") capNeutralize(target); /* 사본 쪽 — 복제 뒤라야 요소가 있다 */
@@ -3083,7 +3092,8 @@ ${HL_CSS}
 
       return {
         box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
-        rem: capRootPx(src.kind === "move" ? document : src.node.ownerDocument), /* 그림 틀의 뿌리(svg)에 줄 값 (#123) */
+        /* 그림에만 두를 껍데기의 원본 (#123·#125) — wrap 은 시트만 옮기므로 body 도 */
+        doc: src.kind === "move" ? document : src.node.ownerDocument, body: src.kind === "move" ? document.body : null,
         restore: function () {
           if (areaLayer) areaLayer.remove();
           stUndo.reverse().forEach((f) => f());
@@ -3110,6 +3120,7 @@ ${HL_CSS}
         const w = Math.ceil(r.width), hgt = Math.ceil(r.height);
         const clone = built.box.cloneNode(true);
         capCanvasSwap(clone); /* 캔버스 → 같은 그림의 div (#121). 사본에서만 — 살아 있는 앱은 안 건드린다 */
+        capWrap(clone, built); /* 문서의 껍데기 — 그림에만 (#123·#125) */
         /* 조립 상자는 화면 밖(-99999px)에 숨겨 두는데, 그 위치가 SVG 안까지 따라가면
            그림이 캔버스 밖에 그려져 «백지» 가 나온다. 사본에서는 무력화한다 */
         clone.style.position = "static";
@@ -3129,7 +3140,7 @@ ${HL_CSS}
         const css = capCSS(document) + built.extraCSS;
         /* rem 은 «문서의 뿌리» 의 글자 크기다 — 그림 틀에서 뿌리는 svg 라 주지 않으면 16px 로 풀린다 (#123) */
         const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + hgt + '"' +
-          (built.rem ? ' style="font-size:' + built.rem + '"' : "") + ">" +
+          ' style="font-size:' + capRootPx(built.doc) + '">' +
           "<foreignObject width='100%' height='100%'><style><![CDATA[" + css.split("]]>").join("]]&gt;") + "]]></style>" +
           new XMLSerializer().serializeToString(holder) + "</foreignObject></svg>";
         const img = new Image();
