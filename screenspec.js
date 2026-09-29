@@ -2738,7 +2738,7 @@ ${HL_CSS}
     }
     /* 우리 뷰어 UI — 그림에는 «문서» 만 남고 뷰어는 빠진다 */
     const CAP_DROP = ".ss-toolbar,.ss-ov-header,.ss-ov-panel,.ss-pill,.ss-docmode," +
-      ".ss-toc,.ss-tip,.ss-pvbar,.ss-nav-toast,.ss-cap";
+      ".ss-toc,.ss-tip,.ss-pvbar,.ss-nav-toast,.ss-cap,[data-ss-cap-stage]";
     const CAP_MARKS = ".ss-markers,.ss-ov-markers,.ss-anno,.ss-ov-anno";
 
     /* 문서의 껍데기 (#123) — 그림 틀(SVG) 안의 뿌리는 svg 다. html 도 body 도 없다.
@@ -2806,7 +2806,7 @@ ${HL_CSS}
          placeMarkers 가 되살릴 수 없어(끊어진 노드) 뽑고 난 뒤 화면에서 번호가 영영 사라졌다.
          숨긴 것은 placeMarkers 가 display 를 소유하므로 다음 프레임에 제 손으로 되돌린다 */
     }
-    function capBox(opt) {
+    function capBox(opt, doc) {
       /* 상자에 ss-ui 를 «안» 붙인다 (#109). 붙이면 우리 UI 규칙이 앱 사본까지 닿는다 —
          .ss-ui :where(button) 은 «레이어 없는» 규칙이라, 앱(Tailwind v4 등)이 @layer 안에서 정한
          배경·테두리·글자색을 선택자 세기와 무관하게 이긴다. 그래서 그림에서만 앱 버튼이 민낯이 됐다.
@@ -2820,8 +2820,27 @@ ${HL_CSS}
         ""); /* 꼬리표는 DOM 이 아니라 캔버스에 직접 쓴다 — 밑단 잘라내기(아래) 뒤에 붙여야 간격이 안 벌어진다 */
       /* 번호 색은 이 그림에만. 문서의 accent 를 바꾸면 내보내기가 문서를 고치는 셈이 된다 (#96) */
       if (opt.accent) box.style.setProperty("--ss-accent", opt.accent);
-      document.body.appendChild(box);
+      doc.body.appendChild(box);
       return box;
+    }
+    /* 그림 작업대 (#126) — overlay·frame 은 앱을 옮길 수 없어 body 의 사본을 떠서 조립하고, 자리를 재려고 그 사본을
+       문서에 붙인다. 앱의 문서에 붙였더니 문서를 지켜보는 도구(Alpine)와 웹 컴포넌트가 새로 붙은 사본을 새 앱으로 알고
+       초기화를 한 번 더 돌렸다 — 초기화에서 데이터를 불러오는 앱이면 뽑을 때마다 불러온다 (v0.37.1 에도 있었다).
+       사본은 «사진을 찍으려고 본뜬 모형» 이라 켜질 이유가 없다. 앱 코드가 하나도 없는 빈 문서(작업대)를 따로 띄워
+       모양(CSS)만 옮기고 거기서 조립하고 잰다. 크기는 앱의 뷰포트 그대로 — 미디어쿼리·vh 가 화면과 같게 걸린다 */
+    function capStage(src, css) {
+      const aw = src.node.ownerDocument.defaultView || window;
+      const f = h("iframe", { "data-ss-cap-stage": "1", "data-ss-ignore": "1", "aria-hidden": "true", tabindex: "-1" });
+      f.style.cssText = "position:fixed;left:-99999px;top:0;border:0;width:" + aw.innerWidth + "px;height:" + aw.innerHeight + "px";
+      document.body.appendChild(f);
+      const d = f.contentDocument;
+      d.open();
+      d.write("<!DOCTYPE html><html><head></head><body></body></html>"); /* 표준 모드로 — 빈 액자의 기본은 호환 모드다 */
+      d.close();
+      const st = d.createElement("style");
+      st.textContent = css;
+      d.head.appendChild(st);
+      return f;
     }
     /* 복사본은 «지금 화면» 이 아니라 «처음 그려지는 화면» 이다 — 둘을 맞출 값을 옮기거나 뜨기 «전에» 읽는다 (#116).
        ① 애니메이션 — 새로 붙은 요소는 CSS 애니메이션을 처음부터 다시 돌고, 그림은 한 번에 찍히므로 그 «첫 프레임» 이
@@ -2936,7 +2955,10 @@ ${HL_CSS}
     function capBuild(opt) {
       const src = ctx.capSource ? ctx.capSource() : null;
       if (!src) return null;
-      const box = capBox(opt);
+      const css = capCSS(document) + (src.css || "");
+      const stage = src.kind === "move" ? null : capStage(src, css); /* 사본은 앱이 못 보는 곳에서 조립한다 (#126) */
+      const sd = stage ? stage.contentDocument : document;
+      const box = capBox(opt, sd);
       const body = box.querySelector(".ss-cap-body");
       let restoreSrc = function () {};
       let target;
@@ -3041,13 +3063,16 @@ ${HL_CSS}
         };
       } else {
         /* overlay·frame — 옮길 시트가 없으므로 사본을 뜬다. 다른 문서의 노드도 importNode 로 가져온다 */
-        target = document.importNode(src.node, true);
+        target = sd.importNode(src.node, true); /* 작업대의 문서로 — 앱의 웹 컴포넌트 정의가 없어 되살아나지 않는다 (#126) */
         /* 짝 맞추기는 걷어내기 «전» 에 — 같은 순서의 두 나무라야 번호로 짝이 맞는다 (#116) */
         const twins = [target].concat(Array.from(target.getElementsByTagName("*")));
         live.forEach((x) => { x.twin = twins[x.i]; freeze(x.twin)(x); applyState(x.twin, x.st); });
         target.querySelectorAll(CAP_DROP).forEach((n) => n.remove());
+        /* 끼워 넣은 페이지(iframe)도 모형에서는 안 켠다 (#126) — 붙이는 순간 불러와져 제 코드를 돌린다.
+           그림 틀은 액자 속을 원래 못 그리므로 그림은 같다 */
+        target.querySelectorAll("iframe").forEach((f) => { f.removeAttribute("src"); f.removeAttribute("srcdoc"); });
         if (opt.markers === false) target.querySelectorAll(CAP_MARKS).forEach((n) => n.remove());
-        else if (src.marks) src.marks.forEach((m) => target.appendChild(document.importNode(m, true)));
+        else if (src.marks) src.marks.forEach((m) => target.appendChild(sd.importNode(m, true)));
         if (opt.markers !== false && opt.major) capMajorStrip(target);
         if (areas) areaLayer = capAreaDraw(target, areas);
         /* 마커는 absolute 다. 기준이 될 것이 없으면 조립 상자(fixed)를 기준으로 잡혀
@@ -3102,13 +3127,14 @@ ${HL_CSS}
       box.style.width = Math.max(inner + up(pad.l) + up(pad.r), opt.head === false ? 0 : 320) + "px";
 
       return {
-        box: box, remote: capRemoteImgs(target), extraCSS: src.css || "",
+        box: box, remote: capRemoteImgs(target), css: css,
         /* 그림에만 두를 껍데기의 원본 (#123·#125) — wrap 은 시트만 옮기므로 body 도 */
         doc: src.kind === "move" ? document : src.node.ownerDocument, body: src.kind === "move" ? document.body : null,
         restore: function () {
           if (areaLayer) areaLayer.remove();
           stUndo.reverse().forEach((f) => f());
           restoreSticky(); restoreFrozen(); restoreSrc(); box.remove();
+          if (stage) stage.remove();
           /* 옮겼다 돌아온 뒤에 — 스크롤 자리는 붙어 있어야 값이 남는다 (#121) */
           if (src.kind === "move") {
             live.forEach((x) => {
@@ -3149,7 +3175,7 @@ ${HL_CSS}
         holder.style.cssText = "width:" + w + "px;background:#fff";
         holder.appendChild(clone);
         /* CSS 안의 < 와 & 도 XML 을 깨뜨리므로 CDATA 로 감싼다 */
-        const css = capCSS(document) + built.extraCSS;
+        const css = built.css;
         /* rem 은 «문서의 뿌리» 의 글자 크기다 — 그림 틀에서 뿌리는 svg 라 주지 않으면 16px 로 풀린다 (#123) */
         const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + hgt + '"' +
           ' style="font-size:' + capRootPx(built.doc) + '">' +

@@ -1436,8 +1436,10 @@ function check(name, ok, detail) {
     /* 그림 속 기능 설명 표 */
     const tbl = await page.evaluate(async () => {
       let rows = null;
-      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
-        if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) {
+        /* overlay·frame 은 조립 상자가 그림 작업대(액자) 안에 있다 (#126) */
+        const n = nd.classList && nd.classList.contains("ss-cap") ? nd : nd.matches && nd.matches("iframe[data-ss-cap-stage]") ? nd.contentDocument.querySelector(".ss-cap") : null;
+        if (!n) continue;
         rows = [...n.querySelectorAll(".ss-pr-table li.ss-pr-ol")].map((li) => li.textContent.trim());
       } });
       mo.observe(document.body, { childList: true });
@@ -2062,8 +2064,10 @@ function check(name, ok, detail) {
     /* 그림은 구워지고 나면 사라진다 — 조립 상자가 «붙는 순간» 의 계산값을 가로챈다 */
     const bake = (opt) => page.evaluate(async (o) => {
       let cap = null;
-      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
-        if (n.classList && n.classList.contains("ss-cap")) {
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) {
+        /* overlay·frame 은 조립 상자가 그림 작업대(액자) 안에 있다 (#126) */
+        const n = nd.classList && nd.classList.contains("ss-cap") ? nd : nd.matches && nd.matches("iframe[data-ss-cap-stage]") ? nd.contentDocument.querySelector(".ss-cap") : null;
+        if (n) {
           const q = (x) => n.querySelector(x), g = (e, k) => (e ? getComputedStyle(e)[k] : "");
           const btn = q('.ss-cap-body [data-spec="2"]'), div = q('.ss-cap-body [data-spec="1"]'), mk = q(".ss-marker");
           cap = { bg: g(btn, "backgroundColor"), bw: g(btn, "borderTopWidth"), bc: g(btn, "borderTopColor"),
@@ -2156,8 +2160,10 @@ function check(name, ok, detail) {
       await settle(200);
       const k = await page.evaluate(async () => {
         let geo = null;
-        const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
-          if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+        const mo = new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) {
+          /* overlay·frame 은 조립 상자가 그림 작업대(액자) 안에 있다 (#126) */
+          const n = nd.classList && nd.classList.contains("ss-cap") ? nd : nd.matches && nd.matches("iframe[data-ss-cap-stage]") ? nd.contentDocument.querySelector(".ss-cap") : null;
+          if (!n) continue;
           const b = n.getBoundingClientRect(), perm = n.querySelector('.ss-cap-body [data-spec="2"]');
           const pr = perm && perm.getBoundingClientRect();
           geo = { bw: b.width, pc: pr ? { x: pr.left - b.left + pr.width / 2, y: pr.top - b.top + pr.height - 6 } : null };
@@ -2276,8 +2282,10 @@ function check(name, ok, detail) {
     /* 조립 상자가 붙는 순간 상자·대상의 자리를 재고, 구운 PNG 에서 대상 왼쪽 테두리 픽셀을 본다 */
     const bake = (o) => page.evaluate(async (o) => {
       let geo = null;
-      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
-        if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) {
+        /* overlay·frame 은 조립 상자가 그림 작업대(액자) 안에 있다 (#126) */
+        const n = nd.classList && nd.classList.contains("ss-cap") ? nd : nd.matches && nd.matches("iframe[data-ss-cap-stage]") ? nd.contentDocument.querySelector(".ss-cap") : null;
+        if (!n) continue;
         const b = n.getBoundingClientRect();
         const R = (e) => { const r = e.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height }; };
         const tg = {};
@@ -2419,8 +2427,10 @@ function check(name, ok, detail) {
     /* 조립 상자가 붙는 순간 영역 상자의 자리를 재고, 구운 PNG 의 그 세로줄에서 노랑이 어디서 시작·끝나는지 본다 */
     const bake = (o) => page.evaluate(async (o) => {
       let a = null;
-      const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
-        if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+      const mo = new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) {
+        /* overlay·frame 은 조립 상자가 그림 작업대(액자) 안에 있다 (#126) */
+        const n = nd.classList && nd.classList.contains("ss-cap") ? nd : nd.matches && nd.matches("iframe[data-ss-cap-stage]") ? nd.contentDocument.querySelector(".ss-cap") : null;
+        if (!n) continue;
         const b = n.getBoundingClientRect(), e = n.querySelector(".ss-cap-area"), r = e && e.getBoundingClientRect();
         a = r ? { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height } : null;
       } });
@@ -2528,6 +2538,63 @@ function check(name, ok, detail) {
     }
     check("JS 에러 0건", errors.length === 0, errors);
     s24.close();
+  }
+
+  /* ============ 그림 작업대 (#126) ============
+     overlay·frame 은 앱을 옮길 수 없어 body 의 사본을 떠서 조립하는데, 자리를 재려고 그 사본을 앱의 문서에 붙였다.
+     문서를 지켜보는 도구(Alpine)·웹 컴포넌트가 그 사본을 새 앱으로 알고 초기화를 다시 돌렸고(x-init 1 → 2),
+     사본 속 iframe 은 붙는 순간 제 페이지를 불러왔다. 사본은 «사진을 찍으려고 본뜬 모형» 이라 켜질 이유가 없다 —
+     앱 코드가 없는 빈 문서(작업대)에서 조립한다. 재는 것: 뽑기 전후로 앱 쪽 계수기 셋과 서버에 온 요청이 그대로인가 */
+  if (sec("[그림] 작업대 — 사진을 찍어도 앱이 다시 켜지지 않는다 (#126)")) {
+    let probeHits = 0;
+    const APP26 = (mode) => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
+      body{margin:0;font:14px sans-serif;background:#fff}.t{height:40px;margin:20px;background:rgb(255,200,0)}
+      iframe{width:120px;height:40px;border:0}</style>
+      <script>
+        /* 문서를 지켜보는 도구의 흉내 — 새로 붙은 x-init 을 센다 */
+        window.__inits = 0;
+        new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+          if (n.nodeType === 1) window.__inits += (n.matches("[x-init]") ? 1 : 0) + n.querySelectorAll("[x-init]").length;
+        }))).observe(document, { childList: true, subtree: true });
+        /* 웹 컴포넌트 — 만들어지거나 붙을 때마다 센다 */
+        window.__made = 0; window.__conn = 0;
+        customElements.define("ss-probe", class extends HTMLElement {
+          constructor() { super(); window.__made++; }
+          connectedCallback() { window.__conn++; }
+        });
+      <\/script></head><body x-init="1">
+      <div class="t" data-spec="1"></div><ss-probe>컴포넌트</ss-probe><iframe src="/probe126.html"></iframe>
+      <script>window.SCREENSPEC={mode:"${mode}",screens:[{id:"S-126",name:"작업대",specs:[{n:1,target:"1",title:"가",defs:[{t:"a"}]}]}]};
+      <\/script><script src="/screenspec.js"><\/script></body></html>`;
+    const s26 = http.createServer((req, res) => {
+      if (req.url.indexOf("screenspec.js") >= 0) { res.setHeader("content-type", "text/javascript"); res.end(LIB); return; }
+      if (req.url.indexOf("probe126") >= 0) { probeHits++; res.setHeader("content-type", "text/html; charset=utf-8"); res.end("<p>끼워 넣은 페이지</p>"); return; }
+      const m = (req.url.match(/\/(frame|overlay)\.html/) || [])[1] || "overlay";
+      res.setHeader("content-type", "text/html; charset=utf-8"); res.end(APP26(m));
+    });
+    await new Promise((r) => s26.listen(P(4410), r));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const counts = () => page.evaluate(() => ({ inits: window.__inits, made: window.__made, conn: window.__conn }));
+    for (const mode of ["frame", "overlay"]) {
+      await page.goto("http://localhost:" + P(4410) + "/" + mode + ".html");
+      await booted(600);
+      await page.click(mode === "overlay" ? "#ss-ovDoc" : "#ss-mDoc");
+      await settle(600);
+      const c0 = await counts(), h0 = probeHits;
+      const r = await page.evaluate(() => window.ScreenSpec.exportImage({ head: false, table: false })
+        .then((x) => ({ ok: !!(x && x.ok), why: (x && x.why) || "" })));
+      await page.waitForTimeout(500); /* 붙은 iframe 이 요청을 보낼 틈 — 요청이 «안 오는» 것을 재므로 신호가 없다 */
+      const c1 = await counts(), h1 = probeHits;
+      const tag = "[" + mode + "] ";
+      check(tag + "그림은 그대로 나온다", r.ok, JSON.stringify(r));
+      check(tag + "찍어도 앱의 초기화가 다시 돌지 않는다 — 지켜보는 도구·웹 컴포넌트가 모형을 못 본다 (#126)",
+        c1.inits === c0.inits && c1.made === c0.made && c1.conn === c0.conn, JSON.stringify({ c0, c1 }));
+      check(tag + "모형 속 끼워 넣은 페이지(iframe)는 불러오지 않는다", h1 === h0, JSON.stringify({ h0, h1 }));
+      check(tag + "뽑고 나면 작업대가 남지 않는다",
+        (await page.evaluate(() => document.querySelectorAll("iframe[data-ss-cap-stage]").length)) === 0);
+    }
+    check("JS 에러 0건", errors.length === 0, errors);
+    s26.close();
   }
 
   /* ============ 모드를 바꿔도 앱 상태가 남는다 (#121) ============
@@ -2655,8 +2722,10 @@ function check(name, ok, detail) {
       await settle(300);
       const k = await page.evaluate(async () => {
         let mk = null;
-        const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) {
-          if (!(n.classList && n.classList.contains("ss-cap"))) continue;
+        const mo = new MutationObserver((ms) => { for (const m of ms) for (const nd of m.addedNodes) {
+          /* overlay·frame 은 조립 상자가 그림 작업대(액자) 안에 있다 (#126) */
+          const n = nd.classList && nd.classList.contains("ss-cap") ? nd : nd.matches && nd.matches("iframe[data-ss-cap-stage]") ? nd.contentDocument.querySelector(".ss-cap") : null;
+          if (!n) continue;
           const b = n.querySelector(".ss-cap-body"), q = (id) => b.querySelector("#" + id);
           mk = { checked: q("c1") && q("c1").hasAttribute("checked"), value: q("t1") && q("t1").getAttribute("value"),
             text: q("ta") && q("ta").textContent, sel: q("s1") && [].map.call(q("s1").options, (o) => o.hasAttribute("selected")).join(","),
@@ -4089,7 +4158,8 @@ function check(name, ok, detail) {
       /* 캡처 직전 사본에서 무엇이 빠지는지 — 조립 상자를 잡아 확인한다 */
       let seen = null;
       const mo = new MutationObserver(() => {
-        const box = document.querySelector(".ss-cap");
+        const st = document.querySelector("iframe[data-ss-cap-stage]"); /* 조립은 그림 작업대 안에서 한다 (#126) */
+        const box = document.querySelector(".ss-cap") || (st && st.contentDocument && st.contentDocument.querySelector(".ss-cap"));
         if (box && seen === null) seen = box.querySelectorAll(".ss-ov-panel,.ss-pill,.ss-ov-header,.ss-toc").length;
       });
       mo.observe(document.body, { childList: true, subtree: true });
